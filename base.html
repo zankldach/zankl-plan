@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Zankl GmbH – Baustellenplanung</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/static/style.css" rel="stylesheet">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">Zankl GmbH</div>
+  <nav class="tabs">
+    <a href="/year">Jahresplanung</a>
+    <a href="/week">Wochenplanung</a>
+    <a href="/settings">Einstellungen</a>
+  </nav>
+  <div class="right">
+    <a href="/logout">Logout</a>
+  </div>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

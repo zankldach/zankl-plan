@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Login</h1>
+<form method="post" action="/login" class="form">
+  <label>E-Mail <input type="email" name="email" value="admin@demo"></label>
+  <label>Passwort <input type="password" name="password" value="admin123"></label>
+  <button type="submit">Einloggen</button>
+  {% if request.query_params.get('error') %}
+    <p class="error">Login fehlgeschlagen.</p>
+  {% endif %}
+</form>
+<p>Demo-User: admin@demo / admin123 · dispo@demo / write123 · viewer@demo / view123</p>
+{% endblock %}

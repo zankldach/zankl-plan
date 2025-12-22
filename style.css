@@ -1,0 +1,25 @@
+body { font-family: system-ui, Arial, sans-serif; margin: 0; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#1f2937; color:#fff; }
+.topbar .tabs a { color:#fff; margin-right:12px; text-decoration:none; }
+.container { padding:16px; }
+.form label { display:block; margin:8px 0; }
+.form-inline label { margin-right:8px; }
+.error { color:#c00; }
+.standort-tabs .tab { padding:6px 10px; border:1px solid #ddd; margin-right:6px; text-decoration:none; color:#333; }
+.standort-tabs .active { background:#eef; }
+.grid { display:block; }
+.grid-header { display:flex; gap:6px; margin-bottom:6px; }
+.grid-header .col { flex:1; text-align:center; font-weight:bold; }
+.grid-body .row { display:flex; gap:6px; margin-bottom:6px; }
+.cell { flex:1; min-height:60px; padding:4px; background:#fafafa; }
+.job { padding:4px; border-radius:3px; color:#111; }
+.job.free { color:#666; font-style:italic; }
+.sidebar { margin-top:12px; padding:12px; border:1px solid #ddd; background:#f9f9f9; }
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { border:1px solid #ddd; padding:8px; }
+@media print {
+  .topbar, .sidebar, .form, .standort-tabs { display:none !important; }
+  .container { padding:0; }
+  .grid { page-break-inside: avoid; }
+  .grid-body .row { break-inside: avoid; }
+}

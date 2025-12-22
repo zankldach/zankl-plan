@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Jahresplanung {{ year }}</h1>
+
+<p>(MVP) Zwei Standortblöcke untereinander, Ressourcen zwischen den Blöcken. Events in DB: {{ events|length }}.</p>
+
+<div class="year-container">
+  {% for s in standorte %}
+    <h2>{{ s.name }}</h2>
+    <div class="year-block">
+      <p>Workdays & Mitarbeiter-Zeilen siehe Einstellungen.</p>
+      <ul>
+        {% for e in events if e.standort_id == s.id %}
+          <li>{{ e.start_date }}–{{ e.end_date }}: {% if e.title %}{{ e.title }}, {{ e.customer_name }}{% else %}Block{% endif %} {% if e.completed %}(fertig){% endif %} · Farbe: {{ e.color }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+</div>
+
+<h3>Ressourcen (Typen)</h3>
+<ul>
+  {% for r in resource_types %}
+    <li>{{ r.name }}</li>
+  {% endfor %}
+</ul>
+
+<p class="hint">Ausbau: echte Kalender-Matrix (Tage als Spalten, Mitarbeiter-Zeilen inkl. 4 Leihkräfte hellgrau), Drag&Drop & Resize.</p>
+{% endblock %}
