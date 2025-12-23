@@ -1,31 +1,45 @@
+
 {% extends "base.html" %}
+{% block title %}Benutzer-Zuordnung{% endblock %}
 {% block content %}
-<h1>Benutzer-Zuordnung (Viewer → Standort)</h1>
-<table class="table">
-  <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Zugewiesener Standort (nur Viewer)</th></tr></thead>
+
+<h1>Benutzer-Zuordnung Viewer → Standort</h1>
+
+<table class="table" border="1" cellspacing="0" cellpadding="4">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Rolle</th>
+      <th>Aktueller Standort</th>
+      <th>Neu zuordnen</th>
+    </tr>
+  </thead>
   <tbody>
     {% for u in users %}
       <tr>
         <td>{{ u.name }}</td>
-        <td>{{ u.email }}</td>
         <td>{{ u.role }}</td>
+        <td>{{ u.viewer_standort_id }}</td>
         <td>
-          {% if u.role == 'view' %}
-            <form method="post" action="/settings/users/set-viewer-standort" class="form-inline">
-              <input type="hidden" name="user_id" value="{{ u.id }}">
-              <select name="standort_id">
-                {% for s in standorte %}
-                  <option value="{{ s.id }}" {% if u.viewer_standort_id == s.id %}selected{% endif %}>{{ s.name }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit">Speichern</button>
-            </form>
-          {% else %}
-            –
-          {% endif %}
+          /settings/users/set-viewer-standort
+            <input type="hidden" name="user_id" value="{{ u.id }}" />
+            <select name="standort_id">
+              {% for st in standorte %}
+                <option value="{{ st.id }}" {% if st.id == u.viewer_standort_id %}selected{% endif %}>
+                  {{ st.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <button type="submit">Speichern</button>
+          </form>
         </td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
+
+<p style="margin-top:16px;">
+  /settingsZurück zu Einstellungen</a>
+</p>
+
 {% endblock %}
