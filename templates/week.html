@@ -38,27 +38,36 @@
           {% for d in range(workdays) %}
             {% set cell = grid[r][d] %}
             {% set bg = (cell.color if cell and cell.status != 'fertig' and cell.color else '') %}
-            <td style="{% if bg %}background: {{ bg }};{% endif %}">
-              {% if cell and cell.title %}
-                <div class="jobtitle"><b>{{ cell.title }}</b></div>
-                <div class="jobcust">{{ cell.customer_name }}</div>
-              {% else %}
-                <div class="empty">frei</div>
-              {% endif %}
+            
 
-              {% if can_edit %}
-                /api/week/set-cell
-                  <input type="hidden" name="week_plan_id" value="{{ week_plan_id }}">
-                  <input type="hidden" name="day_index" value="{{ d }}">
-                  <input type="hidden" name="row_index" value="{{ r }}">
-                  <select name="job_id">
-                    <option value="">— frei —</option>
-                    {% for j in jobs %}
-                      <option value="{{ j.id }}"
-                        {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
-                        {{ j.title }} ({{ j.customer_name }})
-                      </option>
-                    {% endfor %}
+<td style="{% if bg %}background: {{ bg }};{% endif %}">
+  {% if cell and cell.title %}
+    <div class="jobtitle"><b>{{ cell.title }}</b></div>
+    <div class="jobcust">{{ cell.customer_name }}</div>
+  {% else %}
+    <div class="empty">frei</div>
+  {% endif %}
+
+  {% if can_edit %}
+    /api/week/set-cell
+      <input type="hidden" name="week_plan_id" value="{{ week_plan_id }}">
+      <input type="hidden" name="day_index" value="{{ d }}">
+      <input type="hidden" name="row_index" value="{{ r }}">
+      <select name="job_id">
+        <option value="">— frei —</option>
+        {% for j in jobs %}
+          <option value="{{ j.id }}"
+            {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
+            {{ j.title }} ({{ j.customer_name }})
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit">Setzen</button>
+    </form>
+  {% endif %}
+</td>
+
+
                   </select>
                   <button type="submit">Setzen</button>
                 </form>
