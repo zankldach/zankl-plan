@@ -1,29 +1,45 @@
 {% extends "base.html" %}
+{% block title %}Jahresplanung {{ year }}{% endblock %}
 {% block content %}
+
 <h1>Jahresplanung {{ year }}</h1>
+<p>Rolle: {{ role }}</p>
 
-<p>(MVP) Zwei Standortblöcke untereinander, Ressourcen zwischen den Blöcken. Events in DB: {{ events|length }}.</p>
-
-<div class="year-container">
-  {% for s in standorte %}
-    <h2>{{ s.name }}</h2>
-    <div class="year-block">
-      <p>Workdays & Mitarbeiter-Zeilen siehe Einstellungen.</p>
-      <ul>
-        {% for e in events if e.standort_id == s.id %}
-          <li>{{ e.start_date }}–{{ e.end_date }}: {% if e.title %}{{ e.title }}, {{ e.customer_name }}{% else %}Block{% endif %} {% if e.completed %}(fertig){% endif %} · Farbe: {{ e.color }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endfor %}
-</div>
-
-<h3>Ressourcen (Typen)</h3>
+<h2>Standorte</h2>
 <ul>
-  {% for r in resource_types %}
-    <li>{{ r.name }}</li>
+  {% for st in standorte %}
+    <li>{{ st.name }}</li>
   {% endfor %}
 </ul>
 
-<p class="hint">Ausbau: echte Kalender-Matrix (Tage als Spalten, Mitarbeiter-Zeilen inkl. 4 Leihkräfte hellgrau), Drag&Drop & Resize.</p>
+<h2>Events</h2>
+<table class="table" border="1" cellspacing="0" cellpadding="4">
+  <thead>
+    <tr>
+      <th>Standort</th>
+      <th>Start</th>
+      <th>Ende</th>
+      <th>Job</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in events %}
+      {# Status 'fertig' => keine Farbhinterlegung #}
+      <tr style="background-color: {% if e.status != 'fertig' and e.color %}{{ e.color }}{% else %}#fff{% endif %}">
+        <td>{{ e.standort_id }}</td>
+        <td>{{ e.start_date }}</td>
+        <td>{{ e.end_date }}</td>
+        <td>{{ e.title }} – {{ e.customer_name }}</td>
+        <td>{{ e.status }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p style="margin-top:16px;">
+  /weekZur Wochenansicht</a> |
+  /settingsEinstellungen</a>
+</p>
+
 {% endblock %}
