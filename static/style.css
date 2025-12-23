@@ -1,4 +1,3 @@
-
 /* Grundlayout */
 body {
   font-family: system-ui, Arial, sans-serif;
@@ -141,10 +140,9 @@ a:hover {
 /* Druckansicht */
 @media print {
   .topbar,
-  .sidebar,
-  .form,
   .standort-tabs,
-  .form-inline {
+  .form-inline,
+  .sidebar {
     display: none !important;
   }
   .container {
