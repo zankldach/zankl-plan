@@ -2,20 +2,103 @@
 {% extends "base.html" %}
 {% block content %}
   <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
-  <p>Standort-ID: {{ standort_id }}</p>
 
-  <h3>Tage</h3>
-  <ul>
-    {% for d in days %}
-      <li>{{ d.strftime('%a %d.%m.%Y') }}</li>
-    {% endfor %}
-  </ul>
+  <div class="controls">
+    /week
+      <label>Standort:
+        <select name="standort_id">
+          {% for s in standorte %}
+            <option value="{{ s.id }}" {% if s.id == standort_id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>KW:
+        <input type="number" name="kw" min="1" max="53" value="{{ kw }}">
+      </label>
+      <label>Jahr:
+        <input type="number" name="year" min="2024" max="2030" value="{{ year }}">
+      </label>
+      <button type="submit">Anzeigen</button>
+    </form>
+  </div>
 
-  <h3>Status</h3>
-  <p>Zeilen (Mitarbeiter): {{ employee_lines }}</p>
-  <p>Zellen insgesamt: {{ cells|length }}</p>
-  <p>Jobs offen: {{ jobs|length }}</p>
-  <p>Kleinaufträge: {{ small_jobs|length }}</p>
+  <table class="week">
+    <thead>
+      <tr>
+        <th class="sticky">Zeile</th>
+        {% for d in days %}
+          <th>{{ d.strftime('%a') }}<br><small>{{ d.strftime('%d.%m.%Y') }}</small></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in range(employee_lines) %}
+        <tr>
+          <th class="rowhdr">{{ r + 1 }}</th>
+          {% for d in range(workdays) %}
+            {% set cell = grid[r][d] %}
+            {% set bg = (cell.color if cell and cell.status != 'fertig' and cell.color else '') %}
+            <td style="{% if bg %}background: {{ bg }};{% endif %}">
+              {% if cell and cell.title %}
+                <div class="jobtitle"><b>{{ cell.title }}</b></div>
+                <div class="jobcust">{{ cell.customer_name }}</div>
+              {% else %}
+                <div class="empty">frei</div>
+              {% endif %}
 
-  <pre>Rolle: {{ role }} | Bearbeiten erlaubt: {{ can_edit }}</pre>
+              {% if can_edit %}
+                /api/week/set-cell
+                  <input type="hidden" name="week_plan_id" value="{{ week_plan_id }}">
+                  <input type="hidden" name="day_index" value="{{ d }}">
+                  <input type="hidden" name="row_index" value="{{ r }}">
+                  <select name="job_id">
+                    <option value="">— frei —</option>
+                    {% for j in jobs %}
+                      <option value="{{ j.id }}"
+                        {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
+                        {{ j.title }} ({{ j.customer_name }})
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit">Setzen</button>
+                </form>
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <style>
+    /* kleines, eigenständiges Styling – kann später in static/style.v2.css wandern */
+    table.week { border-collapse: collapse; width: 100%; }
+    table.week th, table.week td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
+    th.sticky { position: sticky; left: 0; background: #f5f5f5; z-index: 2; }
+    th.rowhdr { width: 60px; background: #fafafa; }
+    .jobtitle { line-height: 1.2; }
+    .jobcust { color: #555; font-size: 0.9em; }
+    .empty { color: #999; font-style: italic; }
+    .cellform { margin-top: 6px; }
+    .controls { margin: 10px 0; }
+    @media print {
+      .cellform, .controls, nav { display: none !important; }
+    }
+  </style>
+
+  {% if can_edit %}
+    <h3>Offene Jobs (Standort {{ standort_id }})</h3>
+    <ul>
+      {% for j in jobs %}
+        <li>
+          <b>{{ j.title }}</b> – {{ j.customer_name }}
+          {% if j.color %}<span style="background: {{ j.color }}; padding: 0 6px; margin-left: 6px;">&nbsp;</span>{% endif %}
+        </li>
+      {% endfor %}
+      {% if jobs|length == 0 %}
+        <li><i>Keine offenen Jobs</i></li>
+      {% endif %}
+    </ul>
+  {% endif %}
+
 {% endblock %}
