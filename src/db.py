@@ -1,15 +1,29 @@
+# src/db.py
 import sqlite3
 from pathlib import Path
 from passlib.hash import bcrypt
 
-DB_PATH = Path("data.db")
+# --- Robuster DB-Pfad: Repo-Root/data.db ---
+# /src/db.py  -> parent = /src, parent.parent = / (Repo-Root)
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH = BASE_DIR / "data.db"
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+
+def get_conn() -> sqlite3.Connection:
+    """
+    Öffnet eine SQLite-Connection mit Thread-Freigabe für FastAPI/uvicorn.
+    Row-Factory = sqlite3.Row, damit Spalten per Namen zugreifbar sind (row["id"]).
+    """
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
+
+def init_db() -> None:
+    """
+    Legt alle Tabellen an (wenn nicht vorhanden) und führt Seeds aus.
+    Diese Funktion solltest du einmal beim App-Start aufrufen (FastAPI on_startup).
+    """
     conn = get_conn()
     c = conn.cursor()
 
@@ -171,21 +185,27 @@ def init_db():
 
     conn.commit()
 
-    # Seeds
+    # --- Seeds ---
+
+    # Standorte (Engelbrechts, Groß Gerungs)
     c.execute("SELECT COUNT(*) AS n FROM standorte;")
     if c.fetchone()["n"] == 0:
         c.execute("INSERT INTO standorte(name) VALUES (?)", ("Engelbrechts",))
         c.execute("INSERT INTO standorte(name) VALUES (?)", ("Groß Gerungs",))
         conn.commit()
 
+    # Settings je Standort (Default: 5 Tage, 10 Zeilen)
     c.execute("SELECT id,name FROM standorte;")
     for st in c.fetchall():
         c.execute("SELECT COUNT(*) AS n FROM settings WHERE standort_id=?", (st["id"],))
         if c.fetchone()["n"] == 0:
-            c.execute("INSERT INTO settings(standort_id, workdays, employee_lines) VALUES (?,?,?)",
-                      (st["id"], 5, 10))
+            c.execute("""
+                INSERT INTO settings(standort_id, workdays, employee_lines)
+                VALUES (?,?,?)
+            """, (st["id"], 5, 10))
     conn.commit()
 
+    # Demo-User (admin/dispo/viewer)
     c.execute("SELECT COUNT(*) AS n FROM users;")
     if c.fetchone()["n"] == 0:
         admin_pw = bcrypt.hash("admin123")
@@ -193,14 +213,21 @@ def init_db():
         view_pw  = bcrypt.hash("view123")
         c.execute("SELECT id FROM standorte WHERE name=?", ("Engelbrechts",))
         viewer_st_id = c.fetchone()["id"]
-        c.execute("INSERT INTO users(email,name,role,password_hash,viewer_standort_id) VALUES (?,?,?,?,?)",
-                  ("admin@demo", "Admin", "admin", admin_pw, viewer_st_id))
-        c.execute("INSERT INTO users(email,name,role,password_hash,viewer_standort_id) VALUES (?,?,?,?,?)",
-                  ("dispo@demo", "Disponent", "write", write_pw, viewer_st_id))
-        c.execute("INSERT INTO users(email,name,role,password_hash,viewer_standort_id) VALUES (?,?,?,?,?)",
-                  ("viewer@demo", "Viewer", "view", view_pw, viewer_st_id))
+        c.execute("""
+            INSERT INTO users(email,name,role,password_hash,viewer_standort_id)
+            VALUES (?,?,?,?,?)
+        """, ("admin@demo", "Admin", "admin", admin_pw, viewer_st_id))
+        c.execute("""
+            INSERT INTO users(email,name,role,password_hash,viewer_standort_id)
+            VALUES (?,?,?,?,?)
+        """, ("dispo@demo", "Disponent", "write", write_pw, viewer_st_id))
+        c.execute("""
+            INSERT INTO users(email,name,role,password_hash,viewer_standort_id)
+            VALUES (?,?,?,?,?)
+        """, ("viewer@demo", "Viewer", "view", view_pw, viewer_st_id))
         conn.commit()
 
+    # Demo-Jobs
     c.execute("SELECT COUNT(*) AS n FROM jobs;")
     if c.fetchone()["n"] == 0:
         jobs = [
@@ -209,13 +236,13 @@ def init_db():
             ("Schmidt", "Gmünd", None, 1, "in_arbeit", "#30c060", 0, 1, 0, "Interner Einsatz"),
             ("Urlaub Team A", "Engelbrechts", None, 1, "geplant", "#ff0000", 0, 0, 1, "Urlaub"),
         ]
-        for j in jobs:
-            c.execute("""
-                INSERT INTO jobs(title,customer_name,address,standort_id,status,color,fixed_date,internal,vacation,notes)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
-            """, j)
+        c.executemany("""
+            INSERT INTO jobs(title,customer_name,address,standort_id,status,color,fixed_date,internal,vacation,notes)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, jobs)
         conn.commit()
 
+    # Demo Kleinbaustellen
     c.execute("SELECT COUNT(*) AS n FROM small_jobs;")
     if c.fetchone()["n"] == 0:
         small = [
@@ -230,3 +257,11 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+
+# --- Optional: bequeme Wrapper für Passwort-Hashing (falls in auth.py genutzt) ---
+def hash_password(plain: str) -> str:
+    return bcrypt.hash(plain)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.verify(plain, hashed)
