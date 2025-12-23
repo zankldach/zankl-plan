@@ -1,13 +1,16 @@
 {% extends "base.html" %}
+{% block title %}Login{% endblock %}
 {% block content %}
+
 <h1>Login</h1>
-<form method="post" action="/login" class="form">
-  <label>E-Mail <input type="email" name="email" value="admin@demo"></label>
-  <label>Passwort <input type="password" name="password" value="admin123"></label>
+/auth/login
+  <label>E-Mail:</label>
+  <input type="email" name="email" required />
+  <label>Passwort:</label>
+  <input type="password" name="password" required />
   <button type="submit">Einloggen</button>
-  {% if request.query_params.get('error') %}
-    <p class="error">Login fehlgeschlagen.</p>
-  {% endif %}
 </form>
-<p>Demo-User: admin@demo / admin123 · dispo@demo / write123 · viewer@demo / view123</p>
+
+<p class="hint">Hinweis: Im MVP auto‑loggt die App den Demo‑Viewer, damit du /week gleich testen kannst.</p>
+
 {% endblock %}
