@@ -1,31 +1,36 @@
+
 {% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
 {% block content %}
+
 <h1>Einstellungen</h1>
 
-<table class="table">
-  <thead><tr><th>Standort</th><th>Arbeitstage</th><th>Mitarbeiter-Zeilen</th><th>Aktion</th></tr></thead>
+<table class="table" border="1" cellspacing="0" cellpadding="4">
+  <thead>
+    <tr>
+      <th>Standort</th>
+      <th>Arbeitstage</th>
+      <th>Mitarbeiter-Zeilen</th>
+      <th>Aktion</th>
+    </tr>
+  </thead>
   <tbody>
-    {% for s in standorte %}
-      {% set st = None %}
-      {% for set in settings %}
-        {% if set.standort_id == s.id %}{% set st = set %}{% endif %}
-      {% endfor %}
+    {% for s in settings %}
+      {% set st = (standorte | selectattr('id', 'equalto', s.standort_id) | list)[0] if standorte else None %}
       <tr>
-        <td>{{ s.name }}</td>
-        <td>{{ st.workdays if st else 5 }}</td>
-        <td>{{ st.employee_lines if st else 10 }}</td>
+        <td>{{ st.name if st else s.standort_id }}</td>
+        <td>{{ s.workdays }}</td>
+        <td>{{ s.employee_lines }}</td>
         <td>
-          <form method="post" action="/settings/update" class="form-inline">
-            <input type="hidden" name="standort_id" value="{{ s.id }}">
-            <label>Arbeitstage
-              <select name="workdays">
-                <option value="5" {% if st and st.workdays==5 %}selected{% endif %}>Mo–Fr</option>
-                <option value="4" {% if st and st.workdays==4 %}selected{% endif %}>Mo–Do</option>
-              </select>
-            </label>
-            <label>Mitarbeiter-Zeilen
-              <input type="number" name="employee_lines" value="{{ st.employee_lines if st else 10 }}" min="1" max="40">
-            </label>
+          /settings/update
+            <input type="hidden" name="standort_id" value="{{ s.standort_id }}" />
+            <label>Tage:</label>
+            <select name="workdays">
+              <option value="4" {% if s.workdays == 4 %}selected{% endif %}>4</option>
+              <option value="5" {% if s.workdays == 5 %}selected{% endif %}>5</option>
+            </select>
+            <label>Zeilen:</label>
+            <input type="number" name="employee_lines" value="{{ s.employee_lines }}" min="4" max="40" />
             <button type="submit">Speichern</button>
           </form>
         </td>
@@ -34,5 +39,8 @@
   </tbody>
 </table>
 
-<p><a href="/settings/users">Benutzer-Zuordnung (Viewer → Standort) öffnen</a></p>
+<p style="margin-top:16px;">
+  /settings/usersBenutzer-Zuordnung (Viewer → Standort) öffnen</a>
+</p>
+
 {% endblock %}
