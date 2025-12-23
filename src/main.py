@@ -104,6 +104,17 @@ def on_startup():
 def health():
     return {"status": "ok"}
 
+# -------- Rausnehmen --------
+@app.get("/debug/make-viewer-write")
+def make_viewer_write():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE users SET role='write' WHERE email=?", ("viewer@demo",))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 # -------- Startseite: Redirect auf Wochenansicht --------
 @app.get("/", response_class=RedirectResponse)
 def root():
