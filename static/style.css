@@ -1,48 +1,159 @@
+
 /* Grundlayout */
-body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-a { color: #007bff; text-decoration: none; }
-a:hover { text-decoration: underline; }
+body {
+  font-family: system-ui, Arial, sans-serif;
+  margin: 20px;
+}
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
 
+/* Topbar */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: #f3f3f3; border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #f3f3f3;
+  border-bottom: 1px solid #ddd;
 }
-.topbar .logo { font-weight: 600; }
-.topbar .nav a { margin-right: 12px; }
+.topbar .logo {
+  font-weight: 600;
+}
+.topbar .nav a {
+  margin-right: 12px;
+}
 
-.container { padding: 16px; }
-.hint { color: #666; margin: 8px 0 16px; }
+/* Container */
+.container {
+  padding: 16px;
+}
+.hint {
+  color: #666;
+  margin: 8px 0 16px;
+}
 
-.standort-tabs { margin: 8px 0 12px; }
+/* Tabs für Standorte */
+.standort-tabs {
+  margin: 8px 0 12px;
+}
 .standort-tabs .tab {
-  display: inline-block; padding: 6px 10px; border: 1px solid #bbb; margin-right: 6px;
-  border-radius: 4px; background: #fafafa;
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid #bbb;
+  margin-right: 6px;
+  border-radius: 4px;
+  background: #fafafa;
 }
-.standort-tabs .tab.active { background: #e8f2ff; border-color: #99c5ff; }
+.standort-tabs .tab.active {
+  background: #e8f2ff;
+  border-color: #99c5ff;
+}
 
 /* Grid Wochenansicht */
-.grid { display: flex; flex-direction: column; }
-.grid-header { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
-.grid-body   { display: grid; grid-template-rows: repeat(10, auto); gap: 6px; }
-.row         { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 6px; align-items: stretch; }
-.col, .cell  { padding: 8px; background: #fff; border: 1px solid #ddd; }
-.row-label    { font-weight: 600; background: #f9f9f9; }
-.job          { padding: 6px; color: #fff; font-weight: 600; border-radius: 4px; }
-.job.free     { background: #eee; color: #333; font-weight: normal; }
-
-.form-inline { display: flex; gap: 6px; margin-top: 6px; }
-.form-inline select, .form-inline input[type="number"], .form-inline input[type="text"] {
-  padding: 4px; border: 1px solid #bbb; border-radius: 4px;
+.grid {
+  display: flex;
+  flex-direction: column;
 }
-.form-inline button { padding: 4px 8px; }
+.grid-header {
+  display: grid;
+  grid-template-columns: 140px repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.grid-body {
+  display: grid;
+  grid-template-rows: repeat(10, auto);
+  gap: 6px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 140px repeat(5, 1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+.col,
+.cell {
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #ddd;
+}
+.row-label {
+  font-weight: 600;
+  background: #f9f9f9;
+}
+.job {
+  padding: 6px;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 4px;
+}
+.job.free {
+  background: #eee;
+  color: #333;
+  font-weight: normal;
+}
 
-.table { border-collapse: collapse; width: 100%; }
-.table th, .table td { padding: 8px; border: 1px solid #ddd; }
-.table th { background: #f7f7f7; text-align: left; }
+/* Sidebar */
+.sidebar {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+}
 
-/* Druck */
+/* Tabellen */
+.table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.table th,
+.table td {
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+.table th {
+  background: #f7f7f7;
+  text-align: left;
+}
+
+/* Inline-Formulare */
+.form-inline {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.form-inline select,
+.form-inline input[type="number"],
+.form-inline input[type="text"] {
+  padding: 4px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+.form-inline button {
+  padding: 4px 8px;
+}
+
+/* Druckansicht */
 @media print {
-  .topbar, .standort-tabs, .form-inline, .sidebar { display: none !important; }
-  .container { padding: 0; }
-  .grid-header, .row { gap: 4px; }
+  .topbar,
+  .sidebar,
+  .form,
+  .standort-tabs,
+  .form-inline {
+    display: none !important;
+  }
+  .container {
+    padding: 0;
+  }
+  .grid {
+    page-break-inside: avoid;
+  }
+  .grid-body .row {
+    break-inside: avoid;
+  }
 }
