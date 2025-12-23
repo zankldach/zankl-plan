@@ -1,3 +1,17 @@
+# --- Startup: DB initialisieren ---
+from .db import init_db
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+# --- Healthcheck (nützlich für Render-Logs) ---
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# --- Startseite: Weiterleitung auf Wochenplan (Beispiel) ---
+
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
