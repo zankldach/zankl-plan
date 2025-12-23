@@ -1,17 +1,4 @@
-# --- Startup: DB initialisieren ---
-from .db import init_db
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
-# --- Healthcheck (nützlich für Render-Logs) ---
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-# --- Startseite: Weiterleitung auf Wochenplan (Beispiel) ---
-
+# src/main.py
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,30 +8,19 @@ from starlette.middleware.sessions import SessionMiddleware
 import os
 from pathlib import Path
 
-# ---------------- Pfade korrekt setzen ----------------
-# BASE_DIR = Repo-Root (Ordner, in dem src/, templates/ und static/ liegen)
+# -------- Pfade & Templates/Static --------
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Templates/Static liegen im Root, NICHT in src/
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# Static korrekt mounten (Root/static)
-# WICHTIG: vorher evtl. vorhandenes app.mount mit "src/static" entfernen/ersetzen
+# -------- App, Static, Sessions --------
 app = FastAPI()
-app.mount(
-    "/static",
-    StaticFiles(directory=str(BASE_DIR / "static")),
-    name="static",
-)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-# ---------------- Sessions über Environment ----------------
-SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-key")  # setze auf Render eine Env-Variable
+SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-key")  # auf Render ENV setzen
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
-# ---------------- Importe aus eigenem Paket ----------------
-# Relative Importe funktionieren nur, wenn Start: uvicorn src.main:app
+# -------- Eigene Module (src/*) --------
 from .db import init_db, get_conn
-from .auth import router as auth_router
 from .util import (
     current_kw_and_year,
     next_week_if_after_friday_noon,
@@ -52,11 +28,46 @@ from .util import (
     workdays_auto_dst,
 )
 
-# ... dein weiterer Code (Routen usw.)
+# (optional) Auth-Router, falls vorhanden:
+try:
+    from .auth import router as auth_router
+    app.include_router(auth_router, prefix="/auth")
+except Exception:
+    # Falls noch kein auth.py existiert, App trotzdem starten
+    pass
 
+# -------- Login-Helfer (MVP: auto-login Viewer) --------
+def require_login(request: Request) -> bool:
+    user = request.session.get("user")
+    if user:
+        return True
+    # MVP: automatischer Login des Demo-Viewers, um sofort testen zu können
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE email=?", ("viewer@demo",))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        request.session["user"] = dict(row)
+        return True
+    return False
+
+# -------- Startup: DB initialisieren --------
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+# -------- Healthcheck (einmalig) --------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# -------- Startseite: Redirect auf Wochenansicht --------
+@app.get("/", response_class=RedirectResponse)
+def root():
+    return RedirectResponse(url="/week", status_code=303)
 
 # -------------------- Wochenplanung --------------------
-
 @app.get("/week", response_class=HTMLResponse)
 def week_view(request: Request, standort_id: int = None, year: int = None, kw: int = None):
     if not require_login(request):
@@ -105,8 +116,10 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
     if c.fetchone()["n"] == 0:
         for day in range(workdays):
             for row in range(employee_lines):
-                c.execute("INSERT INTO week_cells(week_plan_id, day_index, row_index, job_id) VALUES (?,?,?,NULL)",
-                          (wp["id"], day, row))
+                c.execute(
+                    "INSERT INTO week_cells(week_plan_id, day_index, row_index, job_id) VALUES (?,?,?,NULL)",
+                    (wp["id"], day, row),
+                )
         conn.commit()
 
     # Daten für die Ansicht
@@ -145,6 +158,7 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
         "role": user["role"]
     })
 
+
 @app.post("/api/week/set-cell")
 def set_cell(request: Request,
              week_plan_id: int = Form(...),
@@ -164,7 +178,6 @@ def set_cell(request: Request,
     return RedirectResponse("/week", status_code=303)
 
 # -------------------- Jahresplanung (MVP) --------------------
-
 @app.get("/year", response_class=HTMLResponse)
 def year_view(request: Request, year: int = None):
     if not require_login(request):
@@ -196,7 +209,6 @@ def year_view(request: Request, year: int = None):
     })
 
 # -------------------- Einstellungen --------------------
-
 @app.get("/settings", response_class=HTMLResponse)
 def settings_view(request: Request):
     if not require_login(request):
@@ -219,6 +231,7 @@ def settings_view(request: Request):
         "settings": settings
     })
 
+
 @app.post("/settings/update")
 def settings_update(request: Request,
                     standort_id: int = Form(...),
@@ -237,7 +250,6 @@ def settings_update(request: Request,
     return RedirectResponse("/settings", status_code=303)
 
 # -------------------- Benutzer-Zuordnung Viewer -> Standort --------------------
-
 from fastapi import Form as _Form
 
 @app.get("/settings/users", response_class=HTMLResponse)
@@ -271,9 +283,3 @@ def set_viewer_standort(request: Request, user_id: int = _Form(...), standort_id
     conn.commit()
     conn.close()
     return RedirectResponse("/settings/users", status_code=303)
-
-# -------------------- Health --------------------
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
