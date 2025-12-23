@@ -1,25 +1,48 @@
-body { font-family: system-ui, Arial, sans-serif; margin: 0; }
-.topbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#1f2937; color:#fff; }
-.topbar .tabs a { color:#fff; margin-right:12px; text-decoration:none; }
-.container { padding:16px; }
-.form label { display:block; margin:8px 0; }
-.form-inline label { margin-right:8px; }
-.error { color:#c00; }
-.standort-tabs .tab { padding:6px 10px; border:1px solid #ddd; margin-right:6px; text-decoration:none; color:#333; }
-.standort-tabs .active { background:#eef; }
-.grid { display:block; }
-.grid-header { display:flex; gap:6px; margin-bottom:6px; }
-.grid-header .col { flex:1; text-align:center; font-weight:bold; }
-.grid-body .row { display:flex; gap:6px; margin-bottom:6px; }
-.cell { flex:1; min-height:60px; padding:4px; background:#fafafa; }
-.job { padding:4px; border-radius:3px; color:#111; }
-.job.free { color:#666; font-style:italic; }
-.sidebar { margin-top:12px; padding:12px; border:1px solid #ddd; background:#f9f9f9; }
-.table { width:100%; border-collapse:collapse; }
-.table th, .table td { border:1px solid #ddd; padding:8px; }
+/* Grundlayout */
+body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+a { color: #007bff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: #f3f3f3; border-bottom: 1px solid #ddd;
+}
+.topbar .logo { font-weight: 600; }
+.topbar .nav a { margin-right: 12px; }
+
+.container { padding: 16px; }
+.hint { color: #666; margin: 8px 0 16px; }
+
+.standort-tabs { margin: 8px 0 12px; }
+.standort-tabs .tab {
+  display: inline-block; padding: 6px 10px; border: 1px solid #bbb; margin-right: 6px;
+  border-radius: 4px; background: #fafafa;
+}
+.standort-tabs .tab.active { background: #e8f2ff; border-color: #99c5ff; }
+
+/* Grid Wochenansicht */
+.grid { display: flex; flex-direction: column; }
+.grid-header { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+.grid-body   { display: grid; grid-template-rows: repeat(10, auto); gap: 6px; }
+.row         { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 6px; align-items: stretch; }
+.col, .cell  { padding: 8px; background: #fff; border: 1px solid #ddd; }
+.row-label    { font-weight: 600; background: #f9f9f9; }
+.job          { padding: 6px; color: #fff; font-weight: 600; border-radius: 4px; }
+.job.free     { background: #eee; color: #333; font-weight: normal; }
+
+.form-inline { display: flex; gap: 6px; margin-top: 6px; }
+.form-inline select, .form-inline input[type="number"], .form-inline input[type="text"] {
+  padding: 4px; border: 1px solid #bbb; border-radius: 4px;
+}
+.form-inline button { padding: 4px 8px; }
+
+.table { border-collapse: collapse; width: 100%; }
+.table th, .table td { padding: 8px; border: 1px solid #ddd; }
+.table th { background: #f7f7f7; text-align: left; }
+
+/* Druck */
 @media print {
-  .topbar, .sidebar, .form, .standort-tabs { display:none !important; }
-  .container { padding:0; }
-  .grid { page-break-inside: avoid; }
-  .grid-body .row { break-inside: avoid; }
+  .topbar, .standort-tabs, .form-inline, .sidebar { display: none !important; }
+  .container { padding: 0; }
+  .grid-header, .row { gap: 4px; }
 }
