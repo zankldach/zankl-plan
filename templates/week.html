@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% block title %}Wochenplanung – KW {{ kw }} / {{ year }}{% endblock %}
 {% block content %}
+
 <h1>Wochenplanung – Standort:
   {% for s in standorte %}
     {% if s.id == standort_id %}<strong>{{ s.name }}</strong>{% endif %}
@@ -8,53 +10,62 @@
 </h1>
 
 {% set sommer = days|length == 4 %}
-<p class="hint">Arbeitstage: {{ days|length }} ({{ 'Sommerzeit: Mo–Do' if sommer else 'Winterzeit: Mo–Fr' }})</p>
+<p class="hint">
+  Arbeitstage: {{ days|length }} –
+  {{ 'Sommerzeit: Mo–Do' if sommer else 'Winterzeit: Mo–Fr' }}
+</p>
 
 <div class="standort-tabs">
   {% for s in standorte %}
     <a class="tab {% if s.id == standort_id %}active{% endif %}"
-       href="/week?standort_id={{ s.id }}&year={{ year }}&kw={{ kw }}">{{ s.name }}</a>
-  {% endfor %}
+       href="/week?stand%}
 </div>
 
 <div class="grid">
   <div class="grid-header">
+    <div class="col">Zeile/Tag</div>
     {% for d in days %}
       <div class="col">{{ d.strftime("%a %d.%m") }}</div>
     {% endfor %}
   </div>
+
   <div class="grid-body">
     {% for row in range(employee_lines) %}
       <div class="row">
-        {% for d in days %}
+        <div class="cell row-label">Zeile {{ row + 1 }}</div>
+
+        {% for d in range(days|length) %}
+          {# Finde die Zelle für (row, d) #}
           {% set cell = None %}
           {% for c in cells %}
-            {% if c.row_index == loop.parent.index0 and c.day_index == loop.index0 %}
+            {% if c.row_index == row and c.day_index == d %}
               {% set cell = c %}
             {% endif %}
           {% endfor %}
-          <div class="cell" style="border:1px solid #bbb;">
+
+          <div class="cell">
             {% if cell and cell.title %}
               <div class="job" style="background: {{ cell.color or '#f0c000' }};">
-                {{ cell.title }}, {{ cell.customer_name }}
+                <strong>{{ cell.title }}</strong><br />
+                <small>{{ cell.customer_name }}</small>
               </div>
             {% else %}
               <div class="job free">frei</div>
             {% endif %}
 
             {% if can_edit %}
-            <form method="post" action="/api/week/set-cell">
-              <input type="hidden" name="week_plan_id" value="{{ cells[0].week_plan_id if cells else 0 }}">
-              <input type="hidden" name="day_index" value="{{ loop.index0 }}">
-              <input type="hidden" name="row_index" value="{{ loop.parent.index0 }}">
-              <select name="job_id">
-                <option value="">frei</option>
-                {% for j in jobs %}
-                  <option value="{{ j.id }}">{{ j.title }}, {{ j.customer_name }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit">Setzen</button>
-            </form>
+              /api/week/set-cell
+                <input type="hidden" name="week_plan_id" value="{{ cells[0].week_plan_id if cells else 0 }}" />
+                <input type="hidden" name="day_index" value="{{ d }}" />
+                <input type="hidden" name="row_index" value="{{ row }}" />
+                <select name="job_id">
+                  <option value="">(leer)</option>
+                  {% for j in jobs %}
+                    <option value="{{ j.id }}">{{ j.title }} – {{ j.customer_name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit">Setzen</button>
+              </form>
             {% endif %}
           </div>
         {% endfor %}
@@ -64,24 +75,30 @@
 </div>
 
 {% if can_edit %}
-<div class="sidebar">
-  <h3>Kleinbaustellen</h3>
-  <ul>
-    {% for sj in small_jobs %}
-      <li>{{ sj.name }} • {{ sj.team_size }} MA • {{ sj.hours }}h</li>
-    {% endfor %}
-  </ul>
+  <aside class="sidebar">
+    <h3>Kleinbaustellen</h3>
+    <ul>
+      {% for sj in small_jobs %}
+        <li>{{ sj.name }} • {{ sj.team_size }} MA • {{ sj.hours }}h</li>
+      {% endfor %}
+    </ul>
 
-  <h3>Nächste Baustellen (aus Jahresplanung / Demo: alle geplant)</h3>
-  <ul>
-    {% for j in jobs %}
-      <li style="color: {{ j.color }}">{{ j.title }} – {{ j.customer_name }}</li>
-    {% endfor %}
-  </ul>
-</div>
+    <h3>Nächste Baustellen (Demo: geplante Jobs)</h3>
+    <ul>
+      {% for j in jobs %}
+        <li style="color: {{ j.color }}">{{ j.title }} – {{ j.customer_name }}</li>
+      {% endfor %}
+    </ul>
+  </aside>
 {% endif %}
 
 {% if role == "view" %}
-<p class="hint">Viewer: Automatische Umschaltung auf nächste Woche ab Freitag 12:00 (Serverzeit).</p>
+  <p class="hint">Viewer: Automatische Umschaltung auf nächste Woche ab Freitag 12:00 (Serverzeit).</p>
 {% endif %}
+
+<p style="margin-top:16px;">
+  <a href="/ahresansicht</a> |
+  /settingsEinstellungen</a>
+</p>
+
 {% endblock %}
