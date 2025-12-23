@@ -4,29 +4,42 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+import os
+from pathlib import Path
+
+# ---------------- Pfade korrekt setzen ----------------
+# BASE_DIR = Repo-Root (Ordner, in dem src/, templates/ und static/ liegen)
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Templates/Static liegen im Root, NICHT in src/
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Static korrekt mounten (Root/static)
+# WICHTIG: vorher evtl. vorhandenes app.mount mit "src/static" entfernen/ersetzen
+app = FastAPI()
+app.mount(
+    "/static",
+    StaticFiles(directory=str(BASE_DIR / "static")),
+    name="static",
+)
+
+# ---------------- Sessions über Environment ----------------
+SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-key")  # setze auf Render eine Env-Variable
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# ---------------- Importe aus eigenem Paket ----------------
+# Relative Importe funktionieren nur, wenn Start: uvicorn src.main:app
 from .db import init_db, get_conn
 from .auth import router as auth_router
-from .util import current_kw_and_year, next_week_if_after_friday_noon, kw_date_range, workdays_auto_dst
+from .util import (
+    current_kw_and_year,
+    next_week_if_after_friday_noon,
+    kw_date_range,
+    workdays_auto_dst,
+)
 
-app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="CHANGE_ME_SECRET_KEY")  # bitte ändern
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
-templates = Jinja2Templates(directory="src/templates")
+# ... dein weiterer Code (Routen usw.)
 
-init_db()
-app.include_router(auth_router)
-
-def require_login(request: Request):
-    user = request.session.get("user")
-    if not user:
-        return False
-    return True
-
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    if not require_login(request):
-        return RedirectResponse("/login")
-    return RedirectResponse("/week")
 
 # -------------------- Wochenplanung --------------------
 
