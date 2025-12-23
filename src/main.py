@@ -111,9 +111,10 @@ def root():
 
 # -------------------- Wochenplanung --------------------
 @app.get("/week", response_class=HTMLResponse)
+
+@app.get("/week", response_class=HTMLResponse)
 def week_view(request: Request, standort_id: int = None, year: int = None, kw: int = None):
     try:
-        # Login sicherstellen
         require_login(request)
         user = request.session.get("user", {"role": "view", "viewer_standort_id": 1})
 
@@ -158,7 +159,7 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
             c.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?", (year, kw, standort_id))
             wp = c.fetchone()
 
-        # Zellen initialisieren
+        # Zellen initialisieren (falls leer)
         c.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (wp["id"],))
         if c.fetchone()["n"] == 0:
             for day in range(workdays):
@@ -187,6 +188,14 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
 
         conn.close()
 
+        # Grid bauen: rows = Mitarbeiterlinien, cols = Arbeitstage
+        grid = [[None for _ in range(workdays)] for _ in range(employee_lines)]
+        for cell in cells:
+            r = cell["row_index"]
+            d = cell["day_index"]
+            if 0 <= r < employee_lines and 0 <= d < workdays:
+                grid[r][d] = dict(cell)
+
         days = kw_date_range(year, kw, workdays)
         can_edit = (user.get("role") in ("admin", "write"))
 
@@ -198,7 +207,9 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
             "kw": kw,
             "days": days,
             "employee_lines": employee_lines,
-            "cells": cells,
+            "workdays": workdays,
+            "grid": grid,                  # << neu: fertiges Grid
+            "week_plan_id": wp["id"],      # << neu: für POST
             "jobs": jobs,
             "small_jobs": small_jobs,
             "can_edit": can_edit,
@@ -206,12 +217,12 @@ def week_view(request: Request, standort_id: int = None, year: int = None, kw: i
         })
 
     except Exception as e:
-        # Freundliche Fehlersicht statt "Internal Server Error"
         print("WEEK ERROR:", repr(e))
         return HTMLResponse(
             content=f"<h1>Fehler in der Wochenansicht</h1><pre>{e}</pre>",
             status_code=200
         )
+
 
 # -------------------- Jahresplanung (MVP) --------------------
 @app.get("/year", response_class=HTMLResponse)
