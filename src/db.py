@@ -1,10 +1,10 @@
+
 # src/db.py
 import sqlite3
 from pathlib import Path
 from passlib.hash import bcrypt
 
 # --- Robuster DB-Pfad: Repo-Root/data.db ---
-# /src/db.py  -> parent = /src, parent.parent = / (Repo-Root)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data.db"
 
@@ -186,15 +186,14 @@ def init_db() -> None:
     conn.commit()
 
     # --- Seeds ---
-
-    # Standorte (Engelbrechts, Groß Gerungs)
+    # Standorte
     c.execute("SELECT COUNT(*) AS n FROM standorte;")
     if c.fetchone()["n"] == 0:
         c.execute("INSERT INTO standorte(name) VALUES (?)", ("Engelbrechts",))
         c.execute("INSERT INTO standorte(name) VALUES (?)", ("Groß Gerungs",))
         conn.commit()
 
-    # Settings je Standort (Default: 5 Tage, 10 Zeilen)
+    # Settings je Standort
     c.execute("SELECT id,name FROM standorte;")
     for st in c.fetchall():
         c.execute("SELECT COUNT(*) AS n FROM settings WHERE standort_id=?", (st["id"],))
@@ -205,7 +204,7 @@ def init_db() -> None:
             """, (st["id"], 5, 10))
     conn.commit()
 
-    # Demo-User (admin/dispo/viewer)
+    # Demo-User
     c.execute("SELECT COUNT(*) AS n FROM users;")
     if c.fetchone()["n"] == 0:
         admin_pw = bcrypt.hash("admin123")
@@ -232,8 +231,8 @@ def init_db() -> None:
     if c.fetchone()["n"] == 0:
         jobs = [
             ("Huber", "Affenhausen", None, 1, "geplant", "#f0c000", 0, 0, 0, "Dachdeckung"),
-            ("Mayer", "Zwettl", None, 2, "geplant", "#00a0f0", 1, 0, 0, "Fixtermin KW 01"),
-            ("Schmidt", "Gmünd", None, 1, "in_arbeit", "#30c060", 0, 1, 0, "Interner Einsatz"),
+            ("Mayer", "Zwettl",      None, 2, "geplant", "#00a0f0", 1, 0, 0, "Fixtermin KW 01"),
+            ("Schmidt", "Gmünd",     None, 1, "in_arbeit", "#30c060", 0, 1, 0, "Interner Einsatz"),
             ("Urlaub Team A", "Engelbrechts", None, 1, "geplant", "#ff0000", 0, 0, 1, "Urlaub"),
         ]
         c.executemany("""
@@ -246,9 +245,9 @@ def init_db() -> None:
     c.execute("SELECT COUNT(*) AS n FROM small_jobs;")
     if c.fetchone()["n"] == 0:
         small = [
-            (1, "Dachrinne reinigen", 2, 4, ""),
+            (1, "Dachrinne reinigen",      2, 4, ""),
             (1, "Kaminabdeckung tauschen", 2, 3, ""),
-            (2, "Kleines Blechdetail", 1, 2, ""),
+            (2, "Kleines Blechdetail",     1, 2, ""),
         ]
         c.executemany("""
             INSERT INTO small_jobs(standort_id,name,team_size,hours,notes)
@@ -259,9 +258,10 @@ def init_db() -> None:
     conn.close()
 
 
-# --- Optional: bequeme Wrapper für Passwort-Hashing (falls in auth.py genutzt) ---
+# --- Optional: Wrapper für Passwort-Hashing ---
 def hash_password(plain: str) -> str:
     return bcrypt.hash(plain)
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.verify(plain, hashed)
+``
