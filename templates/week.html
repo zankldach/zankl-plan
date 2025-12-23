@@ -1,100 +1,111 @@
 
-<!-- BEGIN: DIV-Grid ersetzt die bisherige <table class="week"> ... </table> -->
-<div class="standort-tabs">
-  {% for s in standorte %}
-    <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}"
-       class="tab {% if s.id == standort_id %}active{% endif %}"standort_id" value="{{ standort_id }}">
-  <label>KW
-    <input type="number" name="kw" min="1" max="53" value="{{ kw }}">
-  </label>
-  <label>Jahr
-    <input type="number" name="year" min="2024" max="2030" value="{{ year }}">
-  </label>
-  <button type="submit">Anzeigen</button>
-</form>
-<div class="hint">Sommer/Winter automatisch: {{ workdays }} Arbeitstage.</div>
+{% extends "base.html" %}
+{% block content %}
+  <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
 
-<div class="grid">
-
-  <!-- Kopfzeile: "Zeile" + repeat(workdays) Spalten -->
-  <div class="grid-header" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
-    <div class="col row-label">Zeile</div>
-    {% for d in days %}
-      <div class="col">
-        <div><strong>{{ d.strftime('%a') }}</strong></div>
-        <div class="hint">{{ d.strftime('%d.%m.%Y') }}</div>
-      </div>
+  <!-- Standort-Tabs -->
+  <div class="standort-tabs">
+    {% for s in standorte %}
+      <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ yearame }}</a>
     {% endfor %}
   </div>
 
-  <!-- Körper: employee_lines x workdays -->
-  <div class="grid-body">
-    {% for r in range(employee_lines) %}
-      <div class="row" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
-        <div class="col row-label">{{ r + 1 }}</div>
+  <!-- Filter/Steuerung -->
+  <form method="get" action="/week"me="standort_id" value="{{ standort_id }}">
+    <label>KW
+      <input type="number" name="kw" min="1" max="53" value="{{ kw }}">
+    </label>
+    <label>Jahr
+      <input type="number" name="year" min="2024" max="2030" value="{{ year }}">
+    </label>
+    <button type="submit">Anzeigen</button>
+  </form>
+  <div class="hint">Sommer/Winter automatisch: {{ workdays }} Arbeitstage.</div>
 
-        {% for d in range(workdays) %}
-          {% set cell = grid[r][d] %}
-          {% set is_free = not cell or not cell.title %}
-          {% set is_done = (cell and cell.status == 'fertig') %}
-          {% set bg = ('' if is_done else (cell.color or '')) %}
+  <!-- GRID -->
+  <div class="grid">
 
-          <div class="cell">
-            {% if is_free %}
-              <div class="job free">frei</div>
-            {% else %}
-              <div class="job"
-                   style="background: {{ bg if bg else '#eee' }}; color: {{ '#000' if bg and bg|lower in ['#ffec99','#ffffcc','#ffeebb','#fff2b2'] else '#fff' }};">
-                <div><strong>{{ cell.title }}</strong></div>
-                <div>{{ cell.customer_name }}</div>
-              </div>
-            {% endif %}
+    <!-- Kopfzeile: "Zeile" + repeat(workdays) Spalten -->
+    <div class="grid-header" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
+      <div class="col row-label">Zeile</div>
+      {% for d in days %}
+        <div class="col">
+          <div><strong>{{ d.strftime('%a') }}</strong></div>
+          <div class="hint">{{ d.strftime('%d.%m.%Y') }}</div>
+        </div>
+      {% endfor %}
+    </div>
 
-            {% if can_edit %}
-              <form method="post" action="/api/week/set-cell" class="forme="week_plan_id" value="{{ week_plan_id }}">
-                <input type="hidden" name="day_index" value="{{ d }}">
-                <input type="hidden" name="row_index" value="{{ r }}">
-                <select name="job_id">
-                  <option value="">— frei —</option>
-                  {% for j in jobs %}
-                    <option value="{{ j.id }}" {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
-                      {{ j.title }} ({{ j.customer_name }})
-                    </option>
-                  {% endfor %}
-                </select>
-                <button type="submit">Setzen</button>
-              </form>
-            {% endif %}
-          </div>
-        {% endfor %}
-      </div>
-    {% endfor %}
-  </div>
-</div>
+    <!-- Körper: employee_lines x workdays -->
+    <div class="grid-body">
+      {% for r in range(employee_lines) %}
+        <div class="row" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
+          <div class="col row-label">{{ r + 1 }}</div>
 
-{% if can_edit %}
-  <div class="sidebar">
-    <h3>Offene Jobs</h3>
-    <table class="table">
-      <thead><tr><th>Job</th><th>Kunde</th><th>Farbe</th></tr></thead>
-      <tbody>
-        {% for j in jobs %}
-          <tr>
-            <td>{{ j.title }}</td>
-            <td>{{ j.customer_name }}</td>
-            <td>
-              {% if j.color %}
-                <span style="display:inline-block;width:16px;height:16px;background:{{ j.color }};border:1px solid #ccc;"></span>
-                <small>{{ j.color }}</small>
+          {% for d in range(workdays) %}
+            {% set cell = grid[r][d] %}
+            {% set is_free = not cell or not cell.title %}
+            {% set is_done = (cell and cell.status == 'fertig') %}
+            {% set bg = ('' if is_done else (cell.color or '')) %}
+
+            <div class="cell">
+              {% if is_free %}
+                <div class="job free">frei</div>
+              {% else %}
+                <div class="job"
+                     style="background: {{ bg if bg else '#eee' }}; color: {{ '#000' if bg and bg|lower in ['#ffec99','#ffffcc','#ffeebb','#fff2b2'] else '#fff' }};">
+                  <div><strong>{{ cell.title }}</strong></div>
+                  <div>{{ cell.customer_name }}</div>
+                </div>
               {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        {% if jobs|length == 0 %}
-          <tr><td colspan="3"><em>Keine offenen Jobs</em></td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+
+              {% if can_edit %}
+                /api/week/set-cell
+                  <input type="hidden" name="week_plan_id" value="{{ week_plan_id }}">
+                  <input type="hidden" name="day_index" value="{{ d }}">
+                  <input type="hidden" name="row_index" value="{{ r }}">
+                  <select name="job_id">
+                    <option value="">— frei —</option>
+                    {% for j in jobs %}
+                      <option value="{{ j.id }}" {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
+                        {{ j.title }} ({{ j.customer_name }})
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit">Setzen</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
   </div>
-{% endif %}
-<!-- END: DIV-Grid -->
+
+  {% if can_edit %}
+    <div class="sidebar">
+      <h3>Offene Jobs</h3>
+      <table class="table">
+        <thead><tr><th>Job</th><th>Kunde</th><th>Farbe</th></tr></thead>
+        <tbody>
+          {% for j in jobs %}
+            <tr>
+              <td>{{ j.title }}</td>
+              <td>{{ j.customer_name }}</td>
+              <td>
+                {% if j.color %}
+                  <span style="display:inline-block;width:16px;height:16px;background:{{ j.color }};border:1px solid #ccc;"></span>
+                  <small>{{ j.color }}</small>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          {% if jobs|length == 0 %}
+            <tr><td colspan="3"><em>Keine offenen Jobs</em></td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}
+``
