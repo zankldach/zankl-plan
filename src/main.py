@@ -36,6 +36,34 @@ except Exception:
     # Falls noch kein auth.py existiert, App trotzdem starten
     pass
 
+# --- Diagnose-Endpunkte ---
+@app.get("/debug/env")
+def debug_env():
+    import os
+    return {
+        "SESSION_SECRET_set": bool(os.getenv("SESSION_SECRET")),
+    }
+
+@app.get("/debug/db")
+def debug_db():
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [r["name"] for r in c.fetchall()]
+        counts = {}
+        for t in ["users","standorte","settings","week_plans","week_cells","jobs","small_jobs","resource_types","year_events"]:
+            try:
+                c.execute(f"SELECT COUNT(*) AS n FROM {t}")
+                counts[t] = c.fetchone()["n"]
+            except Exception as e:
+                counts[t] = f"ERR: {e}"
+        conn.close()
+        return {"ok": True, "tables": tables, "counts": counts}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # -------- Login-Helfer (MVP: auto-login Viewer) --------
 def require_login(request: Request) -> bool:
     user = request.session.get("user")
