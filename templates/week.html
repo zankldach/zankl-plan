@@ -6,12 +6,13 @@
   <!-- Standort-Tabs -->
   <div class="standort-tabs">
     {% for s in standorte %}
-      <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ yearame }}</a>
+      <a href="/week_id={{ s.id }}&kw={{ kw }}&year={{ year }}{{ s.name }}</a>
     {% endfor %}
   </div>
 
   <!-- Filter/Steuerung -->
-  <form method="get" action="/week"me="standort_id" value="{{ standort_id }}">
+  /week
+    <input type="hidden" name="standort_id" value="{{ standort_id }}">
     <label>KW
       <input type="number" name="kw" min="1" max="53" value="{{ kw }}">
     </label>
@@ -108,4 +109,3 @@
     </div>
   {% endif %}
 {% endblock %}
-``
