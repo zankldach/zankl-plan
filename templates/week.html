@@ -1,96 +1,117 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8" />
   <title>Zankl Plan – Baustellenplanung</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Sicherer absoluter Pfad inkl. Cache-Buster -->
-  <link rel="stylesheet" href="/static/style.v2.css class="topbar">
-    <div class="logo">Zankl GmbH</div>
-    <nav class="nav">
-      <aeekWochenplanung</a>
-      <a href="/splanung</a>
-      /settingsEinstellungen</a>
-    </nav>
-    <div class="user">
-      <!-- optional -->
-      /auth/logoutLogout</a>
-    </div>
-  </header>
 
-  <main class="container">
-    <h2>Wochenansicht – KW 1 / 2026</h2>
+  <!-- CSS -->
+  <link rel="stylesheet" href="/static/style.v2.css">
+</head>
 
-    <!-- Standort-Tabs -->
-    <div class="standort-tabs">
-      <a class="tab" href="/week?standort_id=1&kw=1&year=2026  <a class="tab" href="/week?standort_id=2&kw=1&year
-    </div>
+<body>
 
-    <!-- Filter/Steuerung -->
-    <form class="filter" action="/week" method="get_id" value="1">
-      <label>
-        KW
-        <input type="number" name="kw" min="1" max="53" value="1">
-      </label>
-      <label>
-        Jahr
-        <input type="number" name="year" min="2024" max="2030" value="2026">
-      </label>
-      <button type="submit">Anzeigen</button>
-    </form>
-    <div class="hint">Sommer/Winter automatisch: 5 Arbeitstage.</div>
+<header class="topbar">
+  <div class="logo">Zankl GmbH</div>
 
-    <!-- GRID -->
-    <div class="grid">
-      <!-- Kopfzeile: "Zeile" + 5 Spalten -->
-      <div class="grid-header" style="grid-template-columns: 140px repeat(5, 1fr)">
-        <div class="col row-label">Zeile</div>
-        <div class="col">
-          <div><strong>Mon</strong></div>
-          <div class="hint">29.12.2025</div>
-        </div>
-        <div class="col">
-          <div><strong>Tue</strong></div>
-          <div class="hint">30.12.2025</div>
-        </div>
-        <div class="col">
-          <div><strong>Wed</strong></div>
-          <div class="hint">31.12.2025</div>
-        </div>
-        <div class="col">
-          <div><strong>Thu</strong></div>
-          <div class="hint">01.01.2026</div>
-        </div>
-        <div class="col">
-          <div><strong>Fri</strong></div>
-          <div class="hint">02.01.2026</div>
-        </div>
+  <nav class="nav">
+    <a href="/week">Wochenplanung</a>
+    <a href="/splanung">Standortplanung</a>
+    <a href="/settings">Einstellungen</a>
+  </nav>
+
+  <div class="user">
+    <a href="/auth/logout">Logout</a>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Wochenansicht – KW 1 / 2026</h2>
+
+  <!-- Standort Tabs -->
+  <div class="standort-tabs">
+    <a class="tab active" href="/week?standort_id=1&kw=1&year=2026">Standort 1</a>
+    <a class="tab" href="/week?standort_id=2&kw=1&year=2026">Standort 2</a>
+  </div>
+
+  <!-- Filter -->
+  <form class="filter" action="/week" method="get">
+    <input type="hidden" name="standort_id" value="1">
+
+    <label>
+      KW
+      <input type="number" name="kw" min="1" max="53" value="1">
+    </label>
+
+    <label>
+      Jahr
+      <input type="number" name="year" min="2024" max="2030" value="2026">
+    </label>
+
+    <button type="submit">Anzeigen</button>
+  </form>
+
+  <div class="hint">Sommer/Winter automatisch: 5 Arbeitstage</div>
+
+  <!-- GRID -->
+  <div class="grid">
+
+    <!-- Header -->
+    <div class="grid-header" style="grid-template-columns: 140px repeat(5, 1fr)">
+      <div class="col row-label">Zeile</div>
+
+      <div class="col">
+        <strong>Mo</strong>
+        <div class="hint">29.12.2025</div>
       </div>
 
-      <!-- Körper: Beispiel für 2 Mitarbeiter-Zeilen -->
-      <div class="grid-body">
-        <!-- Zeile 1 -->
-        <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
-          <div class="col row-label">1</div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-        </div>
+      <div class="col">
+        <strong>Di</strong>
+        <div class="hint">30.12.2025</div>
+      </div>
 
-        <!-- Zeile 2 -->
-        <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
-          <div class="col row-label">2</div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-          <div class="cell"><div class="job free">frei</div></div>
-        </div>
+      <div class="col">
+        <strong>Mi</strong>
+        <div class="hint">31.12.2025</div>
+      </div>
+
+      <div class="col">
+        <strong>Do</strong>
+        <div class="hint">01.01.2026</div>
+      </div>
+
+      <div class="col">
+        <strong>Fr</strong>
+        <div class="hint">02.01.2026</div>
       </div>
     </div>
-  </main>
+
+    <!-- Body -->
+    <div class="grid-body">
+
+      <!-- Zeile 1 -->
+      <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
+        <div class="col row-label">1</div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+      </div>
+
+      <!-- Zeile 2 -->
+      <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
+        <div class="col row-label">2</div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+        <div class="cell"><div class="job free">frei</div></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
 </body>
 </html>
