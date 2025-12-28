@@ -122,8 +122,6 @@ def root():
 
 # -------------------- Wochenplanung --------------------
 @app.get("/week", response_class=HTMLResponse)
-
-@app.get("/week", response_class=HTMLResponse)
 def week_view(request: Request, standort_id: int = None, year: int = None, kw: int = None):
     try:
         require_login(request)
