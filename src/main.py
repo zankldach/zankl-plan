@@ -11,7 +11,6 @@ from pathlib import Path
 # Pfade
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # --------------------------------------------------
@@ -26,7 +25,7 @@ static_dir = BASE_DIR / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # --------------------------------------------------
-# Sessions (MVP: immer aktiv)
+# Sessions
 # --------------------------------------------------
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -43,30 +42,31 @@ from .util import (
 )
 
 # --------------------------------------------------
-# Startup: DB initialisieren
+# Startup
 # --------------------------------------------------
 @app.on_event("startup")
 def startup():
     init_db()
 
 # --------------------------------------------------
-# MVP Login (immer write, damit Testen möglich ist)
+# MVP Login (immer aktiv)
 # --------------------------------------------------
 def require_login(request: Request):
-    request.session["user"] = {
-        "role": "write",          # <-- bewusst write
-        "viewer_standort_id": 1
-    }
+    if "user" not in request.session:
+        request.session["user"] = {
+            "role": "write",
+            "viewer_standort_id": 1,
+        }
 
 # --------------------------------------------------
-# Healthcheck
+# Health
 # --------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 # --------------------------------------------------
-# Startseite → Wochenansicht
+# Root → week
 # --------------------------------------------------
 @app.get("/", response_class=RedirectResponse)
 def root():
@@ -83,14 +83,16 @@ def week_view(
     kw: int | None = None,
 ):
     require_login(request)
-    user = request.session["user"]
 
     conn = get_conn()
     c = conn.cursor()
 
+    # -----------------------------
     # Standorte
+    # -----------------------------
     c.execute("SELECT * FROM standorte")
     standorte = c.fetchall()
+
     if not standorte:
         c.executemany(
             "INSERT INTO standorte(name) VALUES (?)",
@@ -100,28 +102,37 @@ def week_view(
         c.execute("SELECT * FROM standorte")
         standorte = c.fetchall()
 
-    # Default Standort
     standort_id = standort_id or standorte[0]["id"]
 
+    # -----------------------------
     # KW / Jahr
+    # -----------------------------
     cur_kw, cur_year = current_kw_and_year()
     year = year or cur_year
+
     if next_week_if_after_friday_noon():
         cur_kw += 1
+
     kw = kw or cur_kw
 
+    # -----------------------------
     # Settings
+    # -----------------------------
     c.execute("SELECT * FROM settings WHERE standort_id=?", (standort_id,))
     settings = c.fetchone()
+
     employee_lines = settings["employee_lines"] if settings else 10
     workdays = workdays_auto_dst()
 
-    # WeekPlan
+    # -----------------------------
+    # Week Plan
+    # -----------------------------
     c.execute(
         "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?",
         (year, kw, standort_id),
     )
     wp = c.fetchone()
+
     if not wp:
         c.execute(
             "INSERT INTO week_plans(year, kw, standort_id) VALUES (?,?,?)",
@@ -134,8 +145,13 @@ def week_view(
         )
         wp = c.fetchone()
 
-    # WeekCells initialisieren
-    c.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (wp["id"],))
+    # -----------------------------
+    # Week Cells initialisieren
+    # -----------------------------
+    c.execute(
+        "SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?",
+        (wp["id"],),
+    )
     if c.fetchone()["n"] == 0:
         for d in range(workdays):
             for r in range(employee_lines):
@@ -149,7 +165,9 @@ def week_view(
                 )
         conn.commit()
 
+    # -----------------------------
     # Cells laden
+    # -----------------------------
     c.execute(
         """
         SELECT wc.*, j.title, j.customer_name, j.color, j.status
@@ -167,7 +185,9 @@ def week_view(
     for cell in cells:
         grid[cell["row_index"]][cell["day_index"]] = dict(cell)
 
+    # -----------------------------
     # Jobs
+    # -----------------------------
     c.execute("SELECT * FROM jobs WHERE standort_id=?", (standort_id,))
     jobs = c.fetchall()
 
@@ -203,12 +223,13 @@ def set_cell(
     week_plan_id: int = Form(...),
     day_index: int = Form(...),
     row_index: int = Form(...),
-    job_id: int = Form(None),
+    job_id: int | None = Form(None),
 ):
     require_login(request)
 
     conn = get_conn()
     c = conn.cursor()
+
     c.execute(
         """
         UPDATE week_cells
@@ -217,6 +238,7 @@ def set_cell(
         """,
         (job_id, week_plan_id, day_index, row_index),
     )
+
     conn.commit()
     conn.close()
 
