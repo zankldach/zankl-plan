@@ -3,22 +3,18 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>{% block title %}Zankl-Plan – Baustellenplanung{% endblock %}</title>
+  <title>{% block title %}Zankl Plan – Baustellenplanung{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Alt: <link rel="le.css -->
-<link rel="stylesheet" href="/static
-  /static/app.js</script>
-</head>
-<body>
-  <header class="topbar">
+  {# WICHTIG: url_for('static', path='...') generiert den korrekten /static‑Pfad #}
+  <link rel="stylesheet" href="{{ url_for('static',r">
     <div class="logo">Zankl GmbH</div>
     <nav class="nav">
       /weekWochenplanung</a>
-      <a href="/yearnung</a>
+      /yearJahresplanung</a>
       /settingsEinstellungen</a>
     </nav>
     <div class="user">
-      <!-- Optional: Logout nur wenn Auth aktiv -->
+      <!-- optional Login/Logout, wenn Auth kommt -->
       /auth/logoutLogout</a>
     </div>
   </header>
@@ -26,5 +22,5 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
-</body>
-</html>
+
+  <!-- optional: <script src="{{ url_for('static', path='/app.js')
