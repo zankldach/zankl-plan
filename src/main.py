@@ -243,3 +243,24 @@ def set_cell(
     conn.close()
 
     return RedirectResponse("/week", status_code=303)
+
+@app.get("/debug/db")
+def debug_db():
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+
+        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [r["name"] for r in c.fetchall()]
+
+        conn.close()
+        return {
+            "ok": True,
+            "tables": tables,
+        }
+
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+        }
