@@ -1,26 +1,8 @@
 
-<!doctype html>
-<html lang="de">
 <head>
   <meta charset="utf-8" />
   <title>{% block title %}Zankl Plan – Baustellenplanung{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  {# WICHTIG: url_for('static', path='...') generiert den korrekten /static‑Pfad #}
-  <link rel="stylesheet" href="{{ url_for('static',r">
-    <div class="logo">Zankl GmbH</div>
-    <nav class="nav">
-      /weekWochenplanung</a>
-      /yearJahresplanung</a>
-      /settingsEinstellungen</a>
-    </nav>
-    <div class="user">
-      <!-- optional Login/Logout, wenn Auth kommt -->
-      /auth/logoutLogout</a>
-    </div>
-  </header>
 
-  <main class="container">
-    {% block content %}{% endblock %}
-  </main>
-
-  <!-- optional: <script src="{{ url_for('static', path='/app.js')
+  {# Wichtig: ohne führenden Slash im path und mit request im Template-Kontext #}
+  <link rel="stylesheet
