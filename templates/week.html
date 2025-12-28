@@ -4,7 +4,6 @@
     <meta charset="utf-8">
     <title>Zankl Plan – Wochenplanung</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="stylesheet" href="/static/style.v2.css">
 </head>
 
@@ -18,7 +17,7 @@
 
     <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
 
-    <!-- Standort -->
+    <!-- Standorte -->
     <div class="standorte">
         {% for s in standorte %}
             <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
@@ -52,7 +51,10 @@
             <tr>
                 <th>Zeile</th>
                 {% for day in days %}
-                    <th>{{ day.label }}<br>{{ day.date }}</th>
+                    <th>
+                        {{ day.label }}<br>
+                        <small>{{ day.date }}</small>
+                    </th>
                 {% endfor %}
             </tr>
         </thead>
@@ -64,8 +66,9 @@
 
                     {% for d in range(workdays) %}
                         <td>
-                            {% if grid[r][d] and grid[r][d].title %}
-                                {{ grid[r][d].title }}
+                            {% set cell = grid[r][d] %}
+                            {% if cell and cell.job_id %}
+                                <strong>{{ cell.title }}</strong>
                             {% else %}
                                 frei
                             {% endif %}
