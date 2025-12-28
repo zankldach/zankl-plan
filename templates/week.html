@@ -1,116 +1,81 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <title>Zankl Plan – Baustellenplanung</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8">
+    <title>Zankl Plan – Wochenplanung</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="/static/style.v2.css">
+    <link rel="stylesheet" href="/static/style.v2.css">
 </head>
 
 <body>
 
 <header class="topbar">
-  <div class="logo">Zankl GmbH</div>
-
-  <nav class="nav">
-    <a href="/week">Wochenplanung</a>
-    <a href="/splanung">Standortplanung</a>
-    <a href="/settings">Einstellungen</a>
-  </nav>
-
-  <div class="user">
-    <a href="/auth/logout">Logout</a>
-  </div>
+    <div class="logo">Zankl GmbH</div>
 </header>
 
 <main class="container">
-  <h2>Wochenansicht – KW 1 / 2026</h2>
 
-  <!-- Standort Tabs -->
-  <div class="standort-tabs">
-    <a class="tab active" href="/week?standort_id=1&kw=1&year=2026">Standort 1</a>
-    <a class="tab" href="/week?standort_id=2&kw=1&year=2026">Standort 2</a>
-  </div>
+    <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
 
-  <!-- Filter -->
-  <form class="filter" action="/week" method="get">
-    <input type="hidden" name="standort_id" value="1">
-
-    <label>
-      KW
-      <input type="number" name="kw" min="1" max="53" value="1">
-    </label>
-
-    <label>
-      Jahr
-      <input type="number" name="year" min="2024" max="2030" value="2026">
-    </label>
-
-    <button type="submit">Anzeigen</button>
-  </form>
-
-  <div class="hint">Sommer/Winter automatisch: 5 Arbeitstage</div>
-
-  <!-- GRID -->
-  <div class="grid">
-
-    <!-- Header -->
-    <div class="grid-header" style="grid-template-columns: 140px repeat(5, 1fr)">
-      <div class="col row-label">Zeile</div>
-
-      <div class="col">
-        <strong>Mo</strong>
-        <div class="hint">29.12.2025</div>
-      </div>
-
-      <div class="col">
-        <strong>Di</strong>
-        <div class="hint">30.12.2025</div>
-      </div>
-
-      <div class="col">
-        <strong>Mi</strong>
-        <div class="hint">31.12.2025</div>
-      </div>
-
-      <div class="col">
-        <strong>Do</strong>
-        <div class="hint">01.01.2026</div>
-      </div>
-
-      <div class="col">
-        <strong>Fr</strong>
-        <div class="hint">02.01.2026</div>
-      </div>
+    <!-- Standort -->
+    <div class="standorte">
+        {% for s in standorte %}
+            <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
+                {{ s.name }}
+            </a>
+        {% endfor %}
     </div>
 
-    <!-- Body -->
-    <div class="grid-body">
+    <!-- Steuerung -->
+    <form action="/week" method="get">
+        <input type="hidden" name="standort_id" value="{{ standort_id }}">
 
-      <!-- Zeile 1 -->
-      <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
-        <div class="col row-label">1</div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-      </div>
+        <label>
+            KW:
+            <input type="number" name="kw" value="{{ kw }}" min="1" max="53">
+        </label>
 
-      <!-- Zeile 2 -->
-      <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
-        <div class="col row-label">2</div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-        <div class="cell"><div class="job free">frei</div></div>
-      </div>
+        <label>
+            Jahr:
+            <input type="number" name="year" value="{{ year }}">
+        </label>
 
-    </div>
-  </div>
+        <button type="submit">Anzeigen</button>
+    </form>
+
+    <hr>
+
+    <!-- GRID -->
+    <table border="1" cellpadding="6">
+        <thead>
+            <tr>
+                <th>Zeile</th>
+                {% for day in days %}
+                    <th>{{ day.label }}<br>{{ day.date }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for r in range(employee_lines) %}
+                <tr>
+                    <td>{{ r + 1 }}</td>
+
+                    {% for d in range(workdays) %}
+                        <td>
+                            {% if grid[r][d] and grid[r][d].title %}
+                                {{ grid[r][d].title }}
+                            {% else %}
+                                frei
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
 </main>
 
 </body>
