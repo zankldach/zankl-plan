@@ -1,111 +1,96 @@
 
-{% extends "base.html" %}
-{% block content %}
-  <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Zankl Plan – Baustellenplanung</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Sicherer absoluter Pfad inkl. Cache-Buster -->
+  <link rel="stylesheet" href="/static/style.v2.css class="topbar">
+    <div class="logo">Zankl GmbH</div>
+    <nav class="nav">
+      <aeekWochenplanung</a>
+      <a href="/splanung</a>
+      /settingsEinstellungen</a>
+    </nav>
+    <div class="user">
+      <!-- optional -->
+      /auth/logoutLogout</a>
+    </div>
+  </header>
 
-  <!-- Standort-Tabs -->
-  <div class="standort-tabs">
-    {% for s in standorte %}
-      <a href="/week_id={{ s.id }}&kw={{ kw }}&year={{ year }}{{ s.name }}</a>
-    {% endfor %}
-  </div>
+  <main class="container">
+    <h2>Wochenansicht – KW 1 / 2026</h2>
 
-  <!-- Filter/Steuerung -->
-  /week
-    <input type="hidden" name="standort_id" value="{{ standort_id }}">
-    <label>KW
-      <input type="number" name="kw" min="1" max="53" value="{{ kw }}">
-    </label>
-    <label>Jahr
-      <input type="number" name="year" min="2024" max="2030" value="{{ year }}">
-    </label>
-    <button type="submit">Anzeigen</button>
-  </form>
-  <div class="hint">Sommer/Winter automatisch: {{ workdays }} Arbeitstage.</div>
+    <!-- Standort-Tabs -->
+    <div class="standort-tabs">
+      <a class="tab" href="/week?standort_id=1&kw=1&year=2026  <a class="tab" href="/week?standort_id=2&kw=1&year
+    </div>
 
-  <!-- GRID -->
-  <div class="grid">
+    <!-- Filter/Steuerung -->
+    <form class="filter" action="/week" method="get_id" value="1">
+      <label>
+        KW
+        <input type="number" name="kw" min="1" max="53" value="1">
+      </label>
+      <label>
+        Jahr
+        <input type="number" name="year" min="2024" max="2030" value="2026">
+      </label>
+      <button type="submit">Anzeigen</button>
+    </form>
+    <div class="hint">Sommer/Winter automatisch: 5 Arbeitstage.</div>
 
-    <!-- Kopfzeile: "Zeile" + repeat(workdays) Spalten -->
-    <div class="grid-header" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
-      <div class="col row-label">Zeile</div>
-      {% for d in days %}
+    <!-- GRID -->
+    <div class="grid">
+      <!-- Kopfzeile: "Zeile" + 5 Spalten -->
+      <div class="grid-header" style="grid-template-columns: 140px repeat(5, 1fr)">
+        <div class="col row-label">Zeile</div>
         <div class="col">
-          <div><strong>{{ d.strftime('%a') }}</strong></div>
-          <div class="hint">{{ d.strftime('%d.%m.%Y') }}</div>
+          <div><strong>Mon</strong></div>
+          <div class="hint">29.12.2025</div>
         </div>
-      {% endfor %}
-    </div>
-
-    <!-- Körper: employee_lines x workdays -->
-    <div class="grid-body">
-      {% for r in range(employee_lines) %}
-        <div class="row" style="grid-template-columns: 140px repeat({{ workdays }}, 1fr)">
-          <div class="col row-label">{{ r + 1 }}</div>
-
-          {% for d in range(workdays) %}
-            {% set cell = grid[r][d] %}
-            {% set is_free = not cell or not cell.title %}
-            {% set is_done = (cell and cell.status == 'fertig') %}
-            {% set bg = ('' if is_done else (cell.color or '')) %}
-
-            <div class="cell">
-              {% if is_free %}
-                <div class="job free">frei</div>
-              {% else %}
-                <div class="job"
-                     style="background: {{ bg if bg else '#eee' }}; color: {{ '#000' if bg and bg|lower in ['#ffec99','#ffffcc','#ffeebb','#fff2b2'] else '#fff' }};">
-                  <div><strong>{{ cell.title }}</strong></div>
-                  <div>{{ cell.customer_name }}</div>
-                </div>
-              {% endif %}
-
-              {% if can_edit %}
-                /api/week/set-cell
-                  <input type="hidden" name="week_plan_id" value="{{ week_plan_id }}">
-                  <input type="hidden" name="day_index" value="{{ d }}">
-                  <input type="hidden" name="row_index" value="{{ r }}">
-                  <select name="job_id">
-                    <option value="">— frei —</option>
-                    {% for j in jobs %}
-                      <option value="{{ j.id }}" {% if cell and cell.job_id and j.id == cell.job_id %}selected{% endif %}>
-                        {{ j.title }} ({{ j.customer_name }})
-                      </option>
-                    {% endfor %}
-                  </select>
-                  <button type="submit">Setzen</button>
-                </form>
-              {% endif %}
-            </div>
-          {% endfor %}
+        <div class="col">
+          <div><strong>Tue</strong></div>
+          <div class="hint">30.12.2025</div>
         </div>
-      {% endfor %}
-    </div>
-  </div>
+        <div class="col">
+          <div><strong>Wed</strong></div>
+          <div class="hint">31.12.2025</div>
+        </div>
+        <div class="col">
+          <div><strong>Thu</strong></div>
+          <div class="hint">01.01.2026</div>
+        </div>
+        <div class="col">
+          <div><strong>Fri</strong></div>
+          <div class="hint">02.01.2026</div>
+        </div>
+      </div>
 
-  {% if can_edit %}
-    <div class="sidebar">
-      <h3>Offene Jobs</h3>
-      <table class="table">
-        <thead><tr><th>Job</th><th>Kunde</th><th>Farbe</th></tr></thead>
-        <tbody>
-          {% for j in jobs %}
-            <tr>
-              <td>{{ j.title }}</td>
-              <td>{{ j.customer_name }}</td>
-              <td>
-                {% if j.color %}
-                  <span style="display:inline-block;width:16px;height:16px;background:{{ j.color }};border:1px solid #ccc;"></span>
-                  <small>{{ j.color }}</small>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-          {% if jobs|length == 0 %}
-            <tr><td colspan="3"><em>Keine offenen Jobs</em></td></tr>
-          {% endif %}
-        </tbody>
-      </table>
+      <!-- Körper: Beispiel für 2 Mitarbeiter-Zeilen -->
+      <div class="grid-body">
+        <!-- Zeile 1 -->
+        <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
+          <div class="col row-label">1</div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+        </div>
+
+        <!-- Zeile 2 -->
+        <div class="row" style="grid-template-columns: 140px repeat(5, 1fr)">
+          <div class="col row-label">2</div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+          <div class="cell"><div class="job free">frei</div></div>
+        </div>
+      </div>
     </div>
-  {% endif %}
-{% endblock %}
+  </main>
+</body>
+</html>
