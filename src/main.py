@@ -70,8 +70,10 @@ def debug_db():
 
 # -------- Login-Helfer (MVP: auto-login Viewer) --------
 def require_login(request: Request) -> bool:
-    # Session schon gesetzt?
-    if request.session.get("user"):
+    request.session["user"] = {
+        "role": "write",          # <-- WICHTIG
+        "viewer_standort_id": 1
+    }
         return True
 
     # Versuch: Demo-Viewer aus DB
