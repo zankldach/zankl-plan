@@ -56,7 +56,7 @@ def init_db():
             color TEXT,
             status TEXT,
             standort_id INTEGER,
-            is_manual INTEGER DEFAULT 0
+            is_popup INTEGER DEFAULT 1
         )
     """)
     conn.commit()
@@ -75,33 +75,15 @@ def require_login(request: Request):
         request.session["user"] = {"role": "write", "viewer_standort_id": 1}
 
 # ---------------- Helpers ----------------
+DE_WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr"]
+
 def get_week_days(year: int, kw: int, workdays=5):
     monday = date.fromisocalendar(year, kw, 1)
     days = []
     for i in range(workdays):
         d = monday + timedelta(days=i)
-        days.append({"date": d.strftime("%d.%m.%Y"), "label": d.strftime("%a")})
+        days.append({"date": d.strftime("%d.%m.%Y"), "label": DE_WOCHENTAGE[i]})
     return days
-
-COLOR_PALETTE = [
-    "#FFB6C1", "#ADD8E6", "#90EE90", "#FFD700", "#FFA07A", "#DA70D6",
-    "#87CEFA", "#32CD32", "#FF69B4", "#FFA500", "#20B2AA"
-]
-
-def assign_colors(cells):
-    # Konvertiere sqlite3.Row zu dict
-    cell_dicts = [dict(cell) for cell in cells]
-    job_colors = {}
-    color_index = 0
-    for cell in cell_dicts:
-        title = cell.get("title") or ""
-        if title and title not in job_colors:
-            job_colors[title] = COLOR_PALETTE[color_index % len(COLOR_PALETTE)]
-            color_index += 1
-    for cell in cell_dicts:
-        title = cell.get("title") or ""
-        cell["color"] = job_colors.get(title, "")
-    return cell_dicts
 
 # ---------------- Root ----------------
 @app.get("/", response_class=RedirectResponse)
@@ -111,100 +93,97 @@ def root():
 # ---------------- Wochenansicht ----------------
 @app.get("/week", response_class=HTMLResponse)
 def week_view(request: Request, standort_id: int = None, kw: int = None, year: int = None):
-    try:
-        require_login(request)
-        user = request.session["user"]
+    require_login(request)
+    user = request.session["user"]
 
-        conn = get_conn()
-        c = conn.cursor()
+    conn = get_conn()
+    c = conn.cursor()
 
-        # Standorte
+    # Standorte
+    c.execute("SELECT * FROM standorte")
+    standorte = c.fetchall()
+    if not standorte:
+        c.executemany("INSERT INTO standorte(name) VALUES (?)", [("Engelbrechts",), ("Groß Gerungs",)])
+        conn.commit()
         c.execute("SELECT * FROM standorte")
         standorte = c.fetchall()
-        if not standorte:
-            c.executemany("INSERT INTO standorte(name) VALUES (?)", [("Engelbrechts",), ("Groß Gerungs",)])
-            conn.commit()
-            c.execute("SELECT * FROM standorte")
-            standorte = c.fetchall()
-        standort_id = standort_id or standorte[0]["id"]
 
-        # KW/Jahr
-        today = date.today()
-        cur_kw = today.isocalendar()[1]
-        cur_year = today.year
-        kw = kw or cur_kw
-        year = year or cur_year
+    standort_id = standort_id or standorte[0]["id"]
 
-        # Tage & Grid
-        workdays = 5
-        employee_lines = 10
-        days = get_week_days(year, kw, workdays)
+    # KW/Jahr
+    today = date.today()
+    cur_kw = today.isocalendar()[1]
+    cur_year = today.year
+    kw = kw or cur_kw
+    year = year or cur_year
 
-        # Weekplan
+    # Tage & Grid
+    workdays = 5
+    employee_lines = 10
+    days = get_week_days(year, kw, workdays)
+    days_with_index = list(enumerate(days))  # Für Template
+
+    # Weekplan
+    c.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?", (year, kw, standort_id))
+    wp = c.fetchone()
+    if not wp:
+        c.execute("INSERT INTO week_plans(year, kw, standort_id) VALUES (?,?,?)", (year, kw, standort_id))
+        conn.commit()
         c.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?", (year, kw, standort_id))
         wp = c.fetchone()
-        if not wp:
-            c.execute("INSERT INTO week_plans(year, kw, standort_id) VALUES (?,?,?)", (year, kw, standort_id))
-            conn.commit()
-            c.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?", (year, kw, standort_id))
-            wp = c.fetchone()
-        week_plan_id = wp["id"]
+    week_plan_id = wp["id"]
 
-        # Week Cells initialisieren
-        c.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (week_plan_id,))
-        if c.fetchone()["n"] == 0:
-            for d in range(workdays):
-                for r in range(employee_lines):
-                    c.execute(
-                        "INSERT INTO week_cells(week_plan_id, day_index, row_index, job_id) VALUES (?,?,?,NULL)",
-                        (week_plan_id, d, r)
-                    )
-            conn.commit()
+    # Week Cells
+    c.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (week_plan_id,))
+    if c.fetchone()["n"] == 0:
+        for d in range(workdays):
+            for r in range(employee_lines):
+                c.execute(
+                    "INSERT INTO week_cells(week_plan_id, day_index, row_index, job_id) VALUES (?,?,?,NULL)",
+                    (week_plan_id, d, r)
+                )
+        conn.commit()
 
-        # Cells laden
-        c.execute("""
-            SELECT wc.*, j.title, j.customer_name, j.color, j.status, j.is_manual
-            FROM week_cells wc
-            LEFT JOIN jobs j ON wc.job_id=j.id
-            WHERE wc.week_plan_id=?
-            ORDER BY wc.row_index, wc.day_index
-        """, (week_plan_id,))
-        cells = c.fetchall()
-        cells = assign_colors(cells)
+    # Cells laden
+    c.execute("""
+        SELECT wc.*, j.title, j.customer_name, j.color, j.status
+        FROM week_cells wc
+        LEFT JOIN jobs j ON wc.job_id=j.id
+        WHERE wc.week_plan_id=?
+        ORDER BY wc.row_index, wc.day_index
+    """, (week_plan_id,))
+    cells = c.fetchall()
 
-        # Grid bauen
-        grid = [[None for _ in range(workdays)] for _ in range(employee_lines)]
-        for cell in cells:
-            r = cell["row_index"]
-            d = cell["day_index"]
-            grid[r][d] = cell
+    # Grid bauen
+    grid = [[dict(cell) for cell in cells if cell["row_index"] == r and cell["day_index"] == d][0] if any(cell["row_index"] == r and cell["day_index"] == d for cell in cells) else None for r in range(employee_lines) for d in range(workdays)]
+    grid2 = []
+    for r in range(employee_lines):
+        grid2.append([grid[r*workdays + d] for d in range(workdays)])
 
-        # Jobs: nur Kleinaufträge + Jahresplanung
-        c.execute("SELECT * FROM jobs WHERE standort_id=? AND is_manual=0 ORDER BY title ASC", (standort_id,))
-        jobs = [dict(j) for j in c.fetchall()]
+    # Jobs (Popup: nur is_popup=1)
+    c.execute("SELECT * FROM jobs WHERE standort_id=? AND is_popup=1 ORDER BY title", (standort_id,))
+    jobs = c.fetchall()
 
-        conn.close()
+    conn.close()
 
-        return templates.TemplateResponse(
-            "week.html",
-            {
-                "request": request,
-                "standorte": standorte,
-                "standort_id": standort_id,
-                "year": year,
-                "kw": kw,
-                "days": days,
-                "grid": grid,
-                "employee_lines": employee_lines,
-                "workdays": workdays,
-                "week_plan_id": week_plan_id,
-                "jobs": jobs,
-                "can_edit": True,
-                "role": user["role"],
-            }
-        )
-    except Exception as e:
-        return HTMLResponse(f"<h1>Internal Server Error</h1><pre>{str(e)}</pre>", status_code=500)
+    return templates.TemplateResponse(
+        "week.html",
+        {
+            "request": request,
+            "standorte": standorte,
+            "standort_id": standort_id,
+            "year": year,
+            "kw": kw,
+            "days_with_index": days_with_index,
+            "grid": grid2,
+            "employee_lines": employee_lines,
+            "workdays": workdays,
+            "week_plan_id": week_plan_id,
+            "jobs": jobs,
+            "can_edit": True,
+            "role": user["role"],
+        }
+    )
 
 # ---------------- Dummy-Routen für base.html ----------------
 @app.get("/year")
@@ -228,15 +207,15 @@ def set_cell(
     day_index: int = Form(...),
     row_index: int = Form(...),
     job_id: int = Form(None),
-    job_title: str = Form(None)
+    job_title: str = Form(None)  # neuer Jobname
 ):
     require_login(request)
     conn = get_conn()
     c = conn.cursor()
 
-    # Wenn ein neuer Jobname angegeben ist, anlegen
+    # Neuen Job anlegen, falls job_title angegeben
     if job_title and not job_id:
-        c.execute("INSERT INTO jobs(title, is_manual) VALUES (?,1)", (job_title,))
+        c.execute("INSERT INTO jobs(title, is_popup) VALUES (?,1)", (job_title,))
         conn.commit()
         job_id = c.lastrowid
 
