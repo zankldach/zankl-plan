@@ -1,29 +1,57 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>Zankl Plan – Wochenplanung</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/style.v2.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        /* Modal Styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 350px;
+        }
+        .modal-close { float: right; cursor: pointer; font-weight: bold; }
+        .job-item { cursor: pointer; padding: 4px; }
+        .job-item:hover { background-color: #eee; }
+        #newJobInput { width: 100%; margin-top: 10px; }
+        #addJobBtn { margin-top: 5px; width: 100%; }
+    </style>
+</head>
+<body>
 
-{% block title %}Zankl Plan – Wochenplanung{% endblock %}
+<header class="topbar">
+    <div class="logo">Zankl GmbH</div>
+</header>
 
-{% block content %}
+<main class="container">
+
 <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
 
+<!-- Standorte -->
 <div class="standorte">
     {% for s in standorte %}
-        <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}"
-           class="{% if s.id == standort_id %}active{% endif %}">
-            {{ s.name }}
-        </a>
+        <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">{{ s.name }}</a>
     {% endfor %}
 </div>
 
-<form action="/week" method="get" class="week-form">
-    <input type="hidden" name="standort_id" value="{{ standort_id }}">
-    <label>KW: <input type="number" name="kw" value="{{ kw }}" min="1" max="53"></label>
-    <label>Jahr: <input type="number" name="year" value="{{ year }}"></label>
-    <button type="submit">Anzeigen</button>
-</form>
-
 <hr>
 
-<table class="week-grid" border="1" cellpadding="6">
+<!-- GRID -->
+<table border="1" cellpadding="6">
     <thead>
         <tr>
             <th>Zeile</th>
@@ -34,79 +62,97 @@
     </thead>
     <tbody>
         {% for r in range(employee_lines) %}
-            <tr>
-                <td>{{ r + 1 }}</td>
-                {% for d in range(workdays) %}
-                    {% set cell = grid[r][d] %}
-                    <td class="cell" data-row="{{ r }}" data-day="{{ d }}"
-                        {% if cell and cell.color %}style="background-color: {{ cell.color }}"{% endif %}>
-                        {% if cell and cell.title %}
-                            <strong>{{ cell.title }}</strong><br>
-                            <small>{{ cell.customer_name }}</small>
-                        {% else %}
-                            frei
-                        {% endif %}
-                    </td>
-                {% endfor %}
-            </tr>
+        <tr>
+            <td>{{ r + 1 }}</td>
+            {% for d in range(workdays) %}
+            <td class="cell" data-row="{{ r }}" data-day="{{ d }}">
+                {% set cell = grid[r][d] %}
+                {% if cell and cell.title %}
+                    <strong>{{ cell.title }}</strong>
+                {% else %}
+                    frei
+                {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
         {% endfor %}
     </tbody>
 </table>
 
-<!-- Modal -->
-<div id="job-modal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%);
-     background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
-    <h3>Job auswählen</h3>
-    <select id="job-select">
-        <option value="">frei</option>
-        {% for job in jobs|sort(attribute='title') %}
-            <option value="{{ job.id }}">{{ job.title }} ({{ job.customer_name }})</option>
-        {% endfor %}
-    </select>
-    <button id="save-job">Speichern</button>
-    <button id="cancel-job">Abbrechen</button>
+</main>
+
+<!-- Modal für Job-Auswahl / Neu -->
+<div id="jobModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <h3>Job auswählen oder neuen Job eintragen</h3>
+
+        <div id="jobList">
+            {% for job in jobs|sort(attribute='title') %}
+                <div class="job-item" data-job-id="{{ job.id }}">{{ job.title }}</div>
+            {% endfor %}
+            <div class="job-item" data-job-id="">frei</div>
+        </div>
+
+        <input type="text" id="newJobInput" placeholder="Neuen Job eintragen">
+        <button id="addJobBtn">Job hinzufügen</button>
+    </div>
 </div>
-<div id="overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-     background:rgba(0,0,0,0.5); z-index:900;"></div>
 
 <script>
-let selectedCell = null;
+$(document).ready(function() {
+    let selectedCell = null;
 
-document.querySelectorAll('.cell').forEach(cell => {
-    cell.addEventListener('click', () => {
-        selectedCell = cell;
-        const jobId = cell.dataset.jobId || '';
-        document.getElementById('job-select').value = jobId;
-        document.getElementById('job-modal').style.display = 'block';
-        document.getElementById('overlay').style.display = 'block';
-    });
-});
-
-document.getElementById('cancel-job').addEventListener('click', () => {
-    document.getElementById('job-modal').style.display = 'none';
-    document.getElementById('overlay').style.display = 'none';
-});
-
-document.getElementById('save-job').addEventListener('click', async () => {
-    if (!selectedCell) return;
-
-    const row = selectedCell.dataset.row;
-    const day = selectedCell.dataset.day;
-    const jobId = document.getElementById('job-select').value;
-
-    const formData = new FormData();
-    formData.append('week_plan_id', {{ week_plan_id }});
-    formData.append('row_index', row);
-    formData.append('day_index', day);
-    formData.append('job_id', jobId);
-
-    const res = await fetch("/api/week/set-cell", {
-        method: "POST",
-        body: formData
+    // Zelle anklicken → Modal öffnen
+    $(".cell").click(function() {
+        selectedCell = $(this);
+        $("#jobModal").show();
     });
 
-    if (res.ok) location.reload();
-    else alert("Fehler beim Setzen der Zelle");
+    // Modal schließen
+    $(".modal-close").click(function() {
+        $("#jobModal").hide();
+    });
+
+    function saveCell(jobId, jobTitle) {
+        const weekPlanId = {{ week_plan_id }};
+        const row = selectedCell.data("row");
+        const day = selectedCell.data("day");
+
+        $.post("/api/week/set-cell", {
+            week_plan_id: weekPlanId,
+            row_index: row,
+            day_index: day,
+            job_id: jobId,
+            job_title: jobTitle  // nur für neue Jobs
+        }, function(response) {
+            if (response.success) {
+                selectedCell.html("<strong>" + response.title + "</strong>");
+            } else {
+                alert("Fehler beim Setzen der Zelle: " + response.error);
+            }
+            $("#jobModal").hide();
+        }, "json");
+    }
+
+    // Job aus Liste auswählen
+    $(".job-item").click(function() {
+        const jobId = $(this).data("job-id");
+        const jobTitle = $(this).text();
+        saveCell(jobId, null);
+    });
+
+    // Neuen Job anlegen
+    $("#addJobBtn").click(function() {
+        const newJob = $("#newJobInput").val().trim();
+        if (newJob === "") {
+            alert("Bitte Jobname eingeben.");
+            return;
+        }
+        saveCell(null, newJob);
+    });
 });
 </script>
-{% endblock %}
+
+</body>
+</html>
