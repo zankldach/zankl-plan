@@ -1,40 +1,24 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="utf-8">
-    <title>Zankl Plan – Wochenplanung</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.v2.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        /* Modal Styling */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal-content {
-            background-color: #fff;
-            margin: 10% auto;
-            padding: 20px;
-            border-radius: 8px;
-            width: 350px;
-        }
-        .modal-close { float: right; cursor: pointer; font-weight: bold; }
-        .job-item { cursor: pointer; padding: 4px; }
-        .job-item:hover { background-color: #eee; }
-        #newJobInput { width: 100%; margin-top: 10px; }
-        #addJobBtn { margin-top: 5px; width: 100%; }
-    </style>
+<meta charset="utf-8">
+<title>Zankl Plan – Wochenplanung</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.v2.css?v=3">
+<style>
+  table.week-grid { border-collapse: collapse; width: 100%; }
+  table.week-grid th, table.week-grid td { border: 1px solid #ccc; text-align: center; padding: 6px; min-width: 100px; cursor: pointer; }
+  table.week-grid th { background-color: #f0f0f0; }
+  .job-cell { color: #fff; font-weight: bold; }
+  .popup { position: absolute; background: #fff; border: 1px solid #333; padding: 10px; display: none; max-height: 300px; overflow-y: auto; z-index: 1000; }
+  .popup div { padding: 4px; cursor: pointer; }
+  .popup div:hover { background-color: #eee; }
+</style>
 </head>
 <body>
 
 <header class="topbar">
-    <div class="logo">Zankl GmbH</div>
+  <div class="logo">Zankl GmbH</div>
 </header>
 
 <main class="container">
@@ -43,116 +27,106 @@
 
 <!-- Standorte -->
 <div class="standorte">
-    {% for s in standorte %}
-        <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">{{ s.name }}</a>
-    {% endfor %}
+{% for s in standorte %}
+  <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
+    {{ s.name }}
+  </a>
+{% endfor %}
 </div>
+
+<!-- Steuerung -->
+<form action="/week" method="get">
+  <input type="hidden" name="standort_id" value="{{ standort_id }}">
+  <label>KW:<input type="number" name="kw" value="{{ kw }}" min="1" max="53"></label>
+  <label>Jahr:<input type="number" name="year" value="{{ year }}"></label>
+  <button type="submit">Anzeigen</button>
+</form>
 
 <hr>
 
 <!-- GRID -->
-<table border="1" cellpadding="6">
-    <thead>
-        <tr>
-            <th>Zeile</th>
-            {% for day in days %}
-                <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-            {% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-        {% for r in range(employee_lines) %}
-        <tr>
-            <td>{{ r + 1 }}</td>
-            {% for d in range(workdays) %}
-            <td class="cell" data-row="{{ r }}" data-day="{{ d }}">
-                {% set cell = grid[r][d] %}
-                {% if cell and cell.title %}
-                    <strong>{{ cell.title }}</strong>
-                {% else %}
-                    frei
-                {% endif %}
-            </td>
-            {% endfor %}
-        </tr>
-        {% endfor %}
-    </tbody>
+<table class="week-grid">
+<thead>
+<tr>
+  <th>Mitarbeiter</th>
+  {% for day in days %}
+    <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+  {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for r in range(employee_lines) %}
+<tr data-row="{{ r }}">
+  <td contenteditable="true" class="employee-name">{{ r+1 }}</td>
+  {% for d in range(workdays) %}
+  {% set cell = grid[r][d] %}
+  <td class="job-cell" data-day="{{ d }}" data-row="{{ r }}" data-job-id="{{ cell.job_id if cell else '' }}">
+    {{ cell.title if cell and cell.title else 'frei' }}
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
 </table>
 
-</main>
-
-<!-- Modal für Job-Auswahl / Neu -->
-<div id="jobModal" class="modal">
-    <div class="modal-content">
-        <span class="modal-close">&times;</span>
-        <h3>Job auswählen oder neuen Job eintragen</h3>
-
-        <div id="jobList">
-            {% for job in jobs|sort(attribute='title') %}
-                <div class="job-item" data-job-id="{{ job.id }}">{{ job.title }}</div>
-            {% endfor %}
-            <div class="job-item" data-job-id="">frei</div>
-        </div>
-
-        <input type="text" id="newJobInput" placeholder="Neuen Job eintragen">
-        <button id="addJobBtn">Job hinzufügen</button>
-    </div>
-</div>
+<!-- Popup -->
+<div id="job-popup" class="popup"></div>
 
 <script>
-$(document).ready(function() {
-    let selectedCell = null;
+const jobs = {{ jobs|tojson }};
+let currentCell = null;
 
-    // Zelle anklicken → Modal öffnen
-    $(".cell").click(function() {
-        selectedCell = $(this);
-        $("#jobModal").show();
+// Job-Popup anzeigen
+document.querySelectorAll('.job-cell').forEach(td => {
+  td.addEventListener('click', e => {
+    currentCell = td;
+    const popup = document.getElementById('job-popup');
+    popup.innerHTML = '';
+    jobs.sort((a,b) => a.title.localeCompare(b.title)).forEach(job => {
+      const div = document.createElement('div');
+      div.textContent = job.title;
+      div.style.backgroundColor = job.color || '#007bff';
+      div.style.color = '#fff';
+      div.addEventListener('click', () => {
+        setJob(currentCell.dataset.row, currentCell.dataset.day, job.id, job.title);
+        popup.style.display = 'none';
+      });
+      popup.appendChild(div);
     });
-
-    // Modal schließen
-    $(".modal-close").click(function() {
-        $("#jobModal").hide();
-    });
-
-    function saveCell(jobId, jobTitle) {
-        const weekPlanId = {{ week_plan_id }};
-        const row = selectedCell.data("row");
-        const day = selectedCell.data("day");
-
-        $.post("/api/week/set-cell", {
-            week_plan_id: weekPlanId,
-            row_index: row,
-            day_index: day,
-            job_id: jobId,
-            job_title: jobTitle  // nur für neue Jobs
-        }, function(response) {
-            if (response.success) {
-                selectedCell.html("<strong>" + response.title + "</strong>");
-            } else {
-                alert("Fehler beim Setzen der Zelle: " + response.error);
-            }
-            $("#jobModal").hide();
-        }, "json");
-    }
-
-    // Job aus Liste auswählen
-    $(".job-item").click(function() {
-        const jobId = $(this).data("job-id");
-        const jobTitle = $(this).text();
-        saveCell(jobId, null);
-    });
-
-    // Neuen Job anlegen
-    $("#addJobBtn").click(function() {
-        const newJob = $("#newJobInput").val().trim();
-        if (newJob === "") {
-            alert("Bitte Jobname eingeben.");
-            return;
-        }
-        saveCell(null, newJob);
-    });
+    popup.style.top = (td.getBoundingClientRect().bottom + window.scrollY) + 'px';
+    popup.style.left = (td.getBoundingClientRect().left + window.scrollX) + 'px';
+    popup.style.display = 'block';
+  });
 });
+
+// Klick außerhalb schließt Popup
+document.addEventListener('click', e => {
+  const popup = document.getElementById('job-popup');
+  if (!popup.contains(e.target) && !e.target.classList.contains('job-cell')) {
+    popup.style.display = 'none';
+  }
+});
+
+// Job setzen via AJAX
+function setJob(row, day, jobId, jobTitle) {
+  fetch('/api/week/set-cell', {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: `week_plan_id={{ week_plan_id }}&row_index=${row}&day_index=${day}&job_id=${jobId}`
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      const cell = document.querySelector(`.job-cell[data-row='${row}'][data-day='${day}']`);
+      cell.textContent = jobTitle;
+      cell.style.backgroundColor = jobs.find(j=>j.id==jobId)?.color || '#007bff';
+    } else {
+      alert('Fehler beim Setzen der Zelle');
+    }
+  });
+}
 </script>
 
+</main>
 </body>
 </html>
