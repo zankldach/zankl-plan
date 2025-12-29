@@ -209,20 +209,27 @@ def set_cell(
     week_plan_id: int = Form(...),
     day_index: int = Form(...),
     row_index: int = Form(...),
-    job_id: str = Form(None),
+    job_id: int = Form(None),
+    job_title: str = Form(None)  # neu für neuen Job
 ):
     require_login(request)
-    if job_id == "" or job_id is None:
-        job_id_db = None
-    else:
-        job_id_db = int(job_id)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute(
-        "UPDATE week_cells SET job_id=? WHERE week_plan_id=? AND day_index=? AND row_index=?",
-        (job_id_db, week_plan_id, day_index, row_index),
-    )
-    conn.commit()
-    conn.close()
-    return JSONResponse({"success": True})
+
+    # Wenn ein neuer Jobname angegeben ist, anlegen
+    if job_title and not job_id:
+        c.execute("INSERT INTO jobs(title) VALUES (?)", (job_title,))
+        conn.commit()
+        job_id = c.lastrowid
+
+    try:
+        c.execute(
+            "UPDATE week_cells SET job_id=? WHERE week_plan_id=? AND day_index=? AND row_index=?",
+            (job_id, week_plan_id, day_index, row_index),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "title": job_title if job_title else ""}
+    except Exception as e:
+        conn.close()
+        return {"success": False, "error": str(e)}
