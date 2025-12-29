@@ -1,11 +1,12 @@
+import os
+import sqlite3
+from datetime import date, timedelta
+
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from datetime import date, timedelta
-import sqlite3
-import os
 
 # ---------------- App ----------------
 app = FastAPI(title="Zankl Plan")
@@ -13,9 +14,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
 
-DB_PATH = "database.db"
+# ---------------- DB ----------------
+DB_PATH = os.path.join(os.getcwd(), "database.db")  # Render-kompatibler Pfad
 
-# ---------------- DB Helper ----------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -24,7 +25,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
-    # Tabellen anlegen, falls nicht existieren
     c.execute("""
         CREATE TABLE IF NOT EXISTS standorte (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,14 +63,19 @@ def init_db():
 
 @app.on_event("startup")
 def startup():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print("DB init failed:", e)
 
-# ---------------- Login Helper ----------------
+
+# ---------------- Login ----------------
 def require_login(request: Request):
     if "user" not in request.session:
         request.session["user"] = {"role": "write", "viewer_standort_id": 1}
 
-# ---------------- Weekdays Helper ----------------
+
+# ---------------- Helpers ----------------
 def get_week_days(year: int, kw: int, workdays=5):
     monday = date.fromisocalendar(year, kw, 1)
     days = []
@@ -79,10 +84,12 @@ def get_week_days(year: int, kw: int, workdays=5):
         days.append({"date": d.strftime("%d.%m.%Y"), "label": d.strftime("%a")})
     return days
 
+
 # ---------------- Root ----------------
 @app.get("/", response_class=RedirectResponse)
 def root():
     return RedirectResponse("/week", status_code=303)
+
 
 # ---------------- Wochenansicht ----------------
 @app.get("/week", response_class=HTMLResponse, name="week_view")
@@ -104,14 +111,14 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
 
     standort_id = standort_id or standorte[0]["id"]
 
-    # Kalenderwoche / Jahr
+    # KW/Jahr
     today = date.today()
     cur_kw = today.isocalendar()[1]
     cur_year = today.year
     kw = kw or cur_kw
     year = year or cur_year
 
-    # Wochentage & Grid
+    # Tage & Grid
     workdays = 5
     employee_lines = 10
     days = get_week_days(year, kw, workdays)
@@ -124,7 +131,6 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         conn.commit()
         c.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort_id=?", (year, kw, standort_id))
         wp = c.fetchone()
-
     week_plan_id = wp["id"]
 
     # Week Cells
@@ -180,6 +186,7 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         }
     )
 
+
 # ---------------- Dummy-Routen für base.html ----------------
 @app.get("/year", name="year_view")
 def year_view(request: Request):
@@ -193,6 +200,7 @@ def settings_view(request: Request):
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/week")
+
 
 # ---------------- API: Zelle setzen ----------------
 @app.post("/api/week/set-cell")
