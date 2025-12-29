@@ -1,96 +1,86 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>Wochenplanung</title>
-<link rel="stylesheet" href="/static/style.v2.css?v=4">
-<script src="/static/app.js?v=2"></script>
-<style>
-  table { width: 100%; table-layout: fixed; }
-  th, td { text-align: center; border: 1px solid #ccc; }
-  td.job-cell { cursor: pointer; user-select: none; }
-</style>
+    <meta charset="UTF-8">
+    <title>Wochenplanung</title>
+    <link rel="stylesheet" href="/static/style.v2.css">
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; min-width: 120px; }
+        th { background-color: #f0f0f0; }
+        .job-cell { cursor: pointer; user-select: none; }
+    </style>
 </head>
 <body>
-<h1>Wochenplanung KW {{ kw }} / {{ year }}</h1>
+    <h1>Wochenplanung {{ year }} KW {{ kw }} - Standort: {{ standort_id }}</h1>
 
-<table id="week-table">
-  <thead>
-    <tr>
-      <th>Mitarbeiter</th>
-      {% for day in days %}
-        <th>{{ day.label }}</th>
-      {% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for r, employee in enumerate(employees) %}
-      <tr data-row="{{ r }}">
-        <td contenteditable="true" class="employee-name">{{ employee.name }}</td>
-        {% for d in range(workdays) %}
-          {% set cell = grid[r][d] %}
-          <td class="job-cell" data-row="{{ r }}" data-day="{{ d }}" style="background-color: {{ cell.color or '#fff' }}">
-            {{ cell.title or 'frei' }}
-          </td>
-        {% endfor %}
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    <table>
+        <thead>
+            <tr>
+                <th>Mitarbeiter</th>
+                {% for day in days %}
+                    <th>{{ day.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(employee_lines) %}
+                <tr>
+                    <td contenteditable="true" class="employee-name">
+                        {% if employees and employees|length > i %}
+                            {{ employees[i] }}
+                        {% else %}
+                            Mitarbeiter {{ i + 1 }}
+                        {% endif %}
+                    </td>
+                    {% for d in range(workdays) %}
+                        {% set cell = grid[i][d] %}
+                        <td class="job-cell" contenteditable="true"
+                            data-row="{{ i }}" data-day="{{ d }}" style="background-color: {{ cell.color if cell and cell.color else '' }}">
+                            {% if cell %}
+                                {% if cell.title %}{{ cell.title }}{% endif %}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-<!-- Pop-up für Jobs -->
-<div id="job-popup" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; padding:5px; z-index:1000;">
-  <ul id="job-list">
-    {% for job in jobs|sort(attribute='title') %}
-      <li data-job-id="{{ job.id }}" data-color="{{ job.color or '#eee' }}">{{ job.title }}</li>
-    {% endfor %}
-  </ul>
-</div>
+    <script>
+        $(document).ready(function(){
+            // Job-Zellen editieren
+            $(".job-cell").on("input", function(){
+                const row = $(this).data("row");
+                const day = $(this).data("day");
+                const title = $(this).text();
+                const cell = $(this);
 
-<script>
-const jobCells = document.querySelectorAll('.job-cell');
-const popup = document.getElementById('job-popup');
-let currentCell = null;
+                $.post("/api/week/set-cell", {
+                    week_plan_id: {{ week_plan_id }},
+                    row_index: row,
+                    day_index: day,
+                    job_title: title
+                }, function(data){
+                    if(data.success){
+                        // Hintergrundfarbe gleich für gleiche Jobs
+                        $(".job-cell").each(function(){
+                            if($(this).text() === title && title !== ""){
+                                $(this).css("background-color", "#ffd700"); // Gelb als Standard
+                            }
+                        });
+                    }
+                });
+            });
 
-jobCells.forEach(cell => {
-  cell.addEventListener('click', e => {
-    currentCell = e.target;
-    const rect = currentCell.getBoundingClientRect();
-    popup.style.top = rect.bottom + "px";
-    popup.style.left = rect.left + "px";
-    popup.style.display = "block";
-  });
-});
-
-// Job auswählen
-document.querySelectorAll('#job-list li').forEach(li => {
-  li.addEventListener('click', e => {
-    const jobId = li.dataset.jobId;
-    const color = li.dataset.color;
-    const title = li.textContent;
-
-    currentCell.textContent = title;
-    currentCell.style.backgroundColor = color;
-
-    // AJAX: speichern
-    const row = currentCell.dataset.row;
-    const day = currentCell.dataset.day;
-    const weekPlanId = {{ week_plan_id }};
-    fetch('/api/week/set-cell', {
-      method: 'POST',
-      body: new URLSearchParams({ week_plan_id: weekPlanId, row_index: row, day_index: day, job_id: jobId })
-    });
-
-    popup.style.display = 'none';
-  });
-});
-
-// Klick außerhalb schließt das Pop-up
-document.addEventListener('click', e => {
-  if (!popup.contains(e.target) && !e.target.classList.contains('job-cell')) {
-    popup.style.display = 'none';
-  }
-});
-</script>
+            // Mitarbeiter ziehen / kopieren
+            $(".employee-name").on("input", function(){
+                const val = $(this).text();
+                const row = $(this).closest("tr").index();
+                // hier könntest du speichern via API, falls gewünscht
+            });
+        });
+    </script>
 </body>
 </html>
