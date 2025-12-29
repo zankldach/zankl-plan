@@ -1,132 +1,96 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<title>Zankl Plan – Wochenplanung</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/static/style.v2.css?v=3">
+<meta charset="UTF-8">
+<title>Wochenplanung</title>
+<link rel="stylesheet" href="/static/style.v2.css?v=4">
+<script src="/static/app.js?v=2"></script>
 <style>
-  table.week-grid { border-collapse: collapse; width: 100%; }
-  table.week-grid th, table.week-grid td { border: 1px solid #ccc; text-align: center; padding: 6px; min-width: 100px; cursor: pointer; }
-  table.week-grid th { background-color: #f0f0f0; }
-  .job-cell { color: #fff; font-weight: bold; }
-  .popup { position: absolute; background: #fff; border: 1px solid #333; padding: 10px; display: none; max-height: 300px; overflow-y: auto; z-index: 1000; }
-  .popup div { padding: 4px; cursor: pointer; }
-  .popup div:hover { background-color: #eee; }
+  table { width: 100%; table-layout: fixed; }
+  th, td { text-align: center; border: 1px solid #ccc; }
+  td.job-cell { cursor: pointer; user-select: none; }
 </style>
 </head>
 <body>
+<h1>Wochenplanung KW {{ kw }} / {{ year }}</h1>
 
-<header class="topbar">
-  <div class="logo">Zankl GmbH</div>
-</header>
-
-<main class="container">
-
-<h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
-
-<!-- Standorte -->
-<div class="standorte">
-{% for s in standorte %}
-  <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
-    {{ s.name }}
-  </a>
-{% endfor %}
-</div>
-
-<!-- Steuerung -->
-<form action="/week" method="get">
-  <input type="hidden" name="standort_id" value="{{ standort_id }}">
-  <label>KW:<input type="number" name="kw" value="{{ kw }}" min="1" max="53"></label>
-  <label>Jahr:<input type="number" name="year" value="{{ year }}"></label>
-  <button type="submit">Anzeigen</button>
-</form>
-
-<hr>
-
-<!-- GRID -->
-<table class="week-grid">
-<thead>
-<tr>
-  <th>Mitarbeiter</th>
-  {% for day in days %}
-    <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-  {% endfor %}
-</tr>
-</thead>
-<tbody>
-{% for r in range(employee_lines) %}
-<tr data-row="{{ r }}">
-  <td contenteditable="true" class="employee-name">{{ r+1 }}</td>
-  {% for d in range(workdays) %}
-  {% set cell = grid[r][d] %}
-  <td class="job-cell" data-day="{{ d }}" data-row="{{ r }}" data-job-id="{{ cell.job_id if cell else '' }}">
-    {{ cell.title if cell and cell.title else 'frei' }}
-  </td>
-  {% endfor %}
-</tr>
-{% endfor %}
-</tbody>
+<table id="week-table">
+  <thead>
+    <tr>
+      <th>Mitarbeiter</th>
+      {% for day in days %}
+        <th>{{ day.label }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r, employee in enumerate(employees) %}
+      <tr data-row="{{ r }}">
+        <td contenteditable="true" class="employee-name">{{ employee.name }}</td>
+        {% for d in range(workdays) %}
+          {% set cell = grid[r][d] %}
+          <td class="job-cell" data-row="{{ r }}" data-day="{{ d }}" style="background-color: {{ cell.color or '#fff' }}">
+            {{ cell.title or 'frei' }}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>
 
-<!-- Popup -->
-<div id="job-popup" class="popup"></div>
+<!-- Pop-up für Jobs -->
+<div id="job-popup" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; padding:5px; z-index:1000;">
+  <ul id="job-list">
+    {% for job in jobs|sort(attribute='title') %}
+      <li data-job-id="{{ job.id }}" data-color="{{ job.color or '#eee' }}">{{ job.title }}</li>
+    {% endfor %}
+  </ul>
+</div>
 
 <script>
-const jobs = {{ jobs|tojson }};
+const jobCells = document.querySelectorAll('.job-cell');
+const popup = document.getElementById('job-popup');
 let currentCell = null;
 
-// Job-Popup anzeigen
-document.querySelectorAll('.job-cell').forEach(td => {
-  td.addEventListener('click', e => {
-    currentCell = td;
-    const popup = document.getElementById('job-popup');
-    popup.innerHTML = '';
-    jobs.sort((a,b) => a.title.localeCompare(b.title)).forEach(job => {
-      const div = document.createElement('div');
-      div.textContent = job.title;
-      div.style.backgroundColor = job.color || '#007bff';
-      div.style.color = '#fff';
-      div.addEventListener('click', () => {
-        setJob(currentCell.dataset.row, currentCell.dataset.day, job.id, job.title);
-        popup.style.display = 'none';
-      });
-      popup.appendChild(div);
-    });
-    popup.style.top = (td.getBoundingClientRect().bottom + window.scrollY) + 'px';
-    popup.style.left = (td.getBoundingClientRect().left + window.scrollX) + 'px';
-    popup.style.display = 'block';
+jobCells.forEach(cell => {
+  cell.addEventListener('click', e => {
+    currentCell = e.target;
+    const rect = currentCell.getBoundingClientRect();
+    popup.style.top = rect.bottom + "px";
+    popup.style.left = rect.left + "px";
+    popup.style.display = "block";
   });
 });
 
-// Klick außerhalb schließt Popup
+// Job auswählen
+document.querySelectorAll('#job-list li').forEach(li => {
+  li.addEventListener('click', e => {
+    const jobId = li.dataset.jobId;
+    const color = li.dataset.color;
+    const title = li.textContent;
+
+    currentCell.textContent = title;
+    currentCell.style.backgroundColor = color;
+
+    // AJAX: speichern
+    const row = currentCell.dataset.row;
+    const day = currentCell.dataset.day;
+    const weekPlanId = {{ week_plan_id }};
+    fetch('/api/week/set-cell', {
+      method: 'POST',
+      body: new URLSearchParams({ week_plan_id: weekPlanId, row_index: row, day_index: day, job_id: jobId })
+    });
+
+    popup.style.display = 'none';
+  });
+});
+
+// Klick außerhalb schließt das Pop-up
 document.addEventListener('click', e => {
-  const popup = document.getElementById('job-popup');
   if (!popup.contains(e.target) && !e.target.classList.contains('job-cell')) {
     popup.style.display = 'none';
   }
 });
-
-// Job setzen via AJAX
-function setJob(row, day, jobId, jobTitle) {
-  fetch('/api/week/set-cell', {
-    method: 'POST',
-    headers: {'Content-Type':'application/x-www-form-urlencoded'},
-    body: `week_plan_id={{ week_plan_id }}&row_index=${row}&day_index=${day}&job_id=${jobId}`
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      const cell = document.querySelector(`.job-cell[data-row='${row}'][data-day='${day}']`);
-      cell.textContent = jobTitle;
-      cell.style.backgroundColor = jobs.find(j=>j.id==jobId)?.color || '#007bff';
-    } else {
-      alert('Fehler beim Setzen der Zelle');
-    }
-  });
-}
 </script>
-
-</main>
 </body>
 </html>
