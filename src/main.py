@@ -16,7 +16,99 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # --------------------------------------------------
 # App
-# --------------------------------------------------
+# --------------------------------------------------from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import sqlite3
+from datetime import date, timedelta
+
+app = FastAPI()
+
+# Static & Templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+DB_PATH = "database.db"
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def get_week_days(year: int, kw: int):
+    """
+    Liefert Montag–Freitag einer Kalenderwoche
+    """
+    monday = date.fromisocalendar(year, kw, 1)
+    days = []
+    for i in range(5):
+        d = monday + timedelta(days=i)
+        days.append({
+            "date": d,
+            "label": d.strftime("%A"),
+            "short": d.strftime("%d.%m.")
+        })
+    return days
+
+
+@app.get("/week", response_class=HTMLResponse)
+def week_view(
+    request: Request,
+    standort_id: int = 1,
+    kw: int = 1,
+    year: int = 2025
+):
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Standorte laden
+    standorte = cur.execute(
+        "SELECT id, name FROM standorte"
+    ).fetchall()
+
+    # Wochentage berechnen
+    days = get_week_days(year, kw)
+
+    # Zeilen (fix 10)
+    rows = list(range(1, 11))
+
+    # Zellen vorbereiten (noch leer)
+    cells = {}
+    for r in rows:
+        for i in range(5):
+            cells[(r, i)] = "frei"
+
+    conn.close()
+
+    return templates.TemplateResponse(
+        "week.html",
+        {
+            "request": request,
+            "standorte": standorte,
+            "standort_id": standort_id,
+            "kw": kw,
+            "year": year,
+            "days": days,
+            "rows": rows,
+            "cells": cells
+        }
+    )
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+    <html>
+        <head>
+            <meta http-equiv="refresh" content="0; url=/week">
+        </head>
+        <body></body>
+    </html>
+    """
+
 app = FastAPI(title="Zankl Plan")
 
 # --------------------------------------------------
