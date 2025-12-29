@@ -56,7 +56,7 @@ def init_db():
             color TEXT,
             status TEXT,
             standort_id INTEGER,
-            is_manual INTEGER DEFAULT 0  -- 1=manuell erstellter Job
+            is_manual INTEGER DEFAULT 0
         )
     """)
     conn.commit()
@@ -83,24 +83,25 @@ def get_week_days(year: int, kw: int, workdays=5):
         days.append({"date": d.strftime("%d.%m.%Y"), "label": d.strftime("%a")})
     return days
 
-# Farbpalette für Jobs
 COLOR_PALETTE = [
     "#FFB6C1", "#ADD8E6", "#90EE90", "#FFD700", "#FFA07A", "#DA70D6",
     "#87CEFA", "#32CD32", "#FF69B4", "#FFA500", "#20B2AA"
 ]
 
 def assign_colors(cells):
+    # Konvertiere sqlite3.Row zu dict
+    cell_dicts = [dict(cell) for cell in cells]
     job_colors = {}
     color_index = 0
-    for cell in cells:
-        title = cell["title"] or ""
+    for cell in cell_dicts:
+        title = cell.get("title") or ""
         if title and title not in job_colors:
             job_colors[title] = COLOR_PALETTE[color_index % len(COLOR_PALETTE)]
             color_index += 1
-    for cell in cells:
-        title = cell["title"] or ""
+    for cell in cell_dicts:
+        title = cell.get("title") or ""
         cell["color"] = job_colors.get(title, "")
-    return cells
+    return cell_dicts
 
 # ---------------- Root ----------------
 @app.get("/", response_class=RedirectResponse)
@@ -136,7 +137,7 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
 
         # Tage & Grid
         workdays = 5
-        employee_lines = 10  # später erweiterbar
+        employee_lines = 10
         days = get_week_days(year, kw, workdays)
 
         # Weekplan
@@ -176,11 +177,11 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         for cell in cells:
             r = cell["row_index"]
             d = cell["day_index"]
-            grid[r][d] = dict(cell)
+            grid[r][d] = cell
 
-        # Jobs: nur Kleinaufträge + Jahresplanung (nicht manuelle)
+        # Jobs: nur Kleinaufträge + Jahresplanung
         c.execute("SELECT * FROM jobs WHERE standort_id=? AND is_manual=0 ORDER BY title ASC", (standort_id,))
-        jobs = c.fetchall()
+        jobs = [dict(j) for j in c.fetchall()]
 
         conn.close()
 
