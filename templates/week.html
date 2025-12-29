@@ -18,17 +18,8 @@
 <!-- Steuerung -->
 <form action="/week" method="get" class="week-form">
     <input type="hidden" name="standort_id" value="{{ standort_id }}">
-
-    <label>
-        KW:
-        <input type="number" name="kw" value="{{ kw }}" min="1" max="53">
-    </label>
-
-    <label>
-        Jahr:
-        <input type="number" name="year" value="{{ year }}">
-    </label>
-
+    <label>KW: <input type="number" name="kw" value="{{ kw }}" min="1" max="53"></label>
+    <label>Jahr: <input type="number" name="year" value="{{ year }}"></label>
     <button type="submit">Anzeigen</button>
 </form>
 
@@ -44,16 +35,14 @@
             {% endfor %}
         </tr>
     </thead>
-
     <tbody>
         {% for r in range(employee_lines) %}
             <tr>
                 <td>{{ r + 1 }}</td>
                 {% for d in range(workdays) %}
                     {% set cell = grid[r][d] %}
-                    <td
-                        {% if cell and cell.color %}style="background-color: {{ cell.color }}"{% endif %}
-                    >
+                    <td class="cell" data-row="{{ r }}" data-day="{{ d }}" 
+                        {% if cell and cell.color %}style="background-color: {{ cell.color }}"{% endif %}>
                         {% if cell and cell.title %}
                             <strong>{{ cell.title }}</strong><br>
                             <small>{{ cell.customer_name }}</small>
@@ -66,5 +55,39 @@
         {% endfor %}
     </tbody>
 </table>
+
+<!-- Auswahl Job -->
+<select id="job-select" style="display:none;">
+    <option value="">frei</option>
+    {% for job in jobs %}
+        <option value="{{ job.id }}">{{ job.title }} ({{ job.customer_name }})</option>
+    {% endfor %}
+</select>
+
+<script>
+document.querySelectorAll('.cell').forEach(cell => {
+    cell.addEventListener('click', async () => {
+        const row = cell.dataset.row;
+        const day = cell.dataset.day;
+        const jobId = prompt("Job-ID eingeben oder leer für frei:", "");
+
+        if (jobId !== null) {
+            const formData = new FormData();
+            formData.append('week_plan_id', {{ week_plan_id }});
+            formData.append('row_index', row);
+            formData.append('day_index', day);
+            formData.append('job_id', jobId || '');
+
+            const res = await fetch("/api/week/set-cell", {
+                method: "POST",
+                body: formData
+            });
+
+            if (res.ok) location.reload();
+            else alert("Fehler beim Setzen der Zelle");
+        }
+    });
+});
+</script>
 
 {% endblock %}
