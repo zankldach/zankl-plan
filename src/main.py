@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -15,7 +15,7 @@ templates = Jinja2Templates(directory="templates")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
 
 # ---------------- DB ----------------
-DB_PATH = os.path.join(os.getcwd(), "database.db")  # Render-kompatibler Pfad
+DB_PATH = os.path.join(os.getcwd(), "database.db")
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
@@ -92,7 +92,7 @@ def root():
 
 
 # ---------------- Wochenansicht ----------------
-@app.get("/week", response_class=HTMLResponse, name="week_view")
+@app.get("/week", response_class=HTMLResponse)
 def week_view(request: Request, standort_id: int = None, kw: int = None, year: int = None):
     require_login(request)
     user = request.session["user"]
@@ -188,15 +188,15 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
 
 
 # ---------------- Dummy-Routen für base.html ----------------
-@app.get("/year", name="year_view")
+@app.get("/year")
 def year_view(request: Request):
     return HTMLResponse("<h1>Jahresplanung</h1>")
 
-@app.get("/settings", name="settings_view")
+@app.get("/settings")
 def settings_view(request: Request):
     return HTMLResponse("<h1>Einstellungen</h1>")
 
-@app.get("/auth/logout", name="logout")
+@app.get("/auth/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/week")
@@ -209,15 +209,20 @@ def set_cell(
     week_plan_id: int = Form(...),
     day_index: int = Form(...),
     row_index: int = Form(...),
-    job_id: int = Form(None),
+    job_id: str = Form(None),
 ):
     require_login(request)
+    if job_id == "" or job_id is None:
+        job_id_db = None
+    else:
+        job_id_db = int(job_id)
+
     conn = get_conn()
     c = conn.cursor()
     c.execute(
         "UPDATE week_cells SET job_id=? WHERE week_plan_id=? AND day_index=? AND row_index=?",
-        (job_id, week_plan_id, day_index, row_index),
+        (job_id_db, week_plan_id, day_index, row_index),
     )
     conn.commit()
     conn.close()
-    return RedirectResponse("/week", status_code=303)
+    return JSONResponse({"success": True})
