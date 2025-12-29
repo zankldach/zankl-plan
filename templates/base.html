@@ -1,24 +1,22 @@
-
 <!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8" />
   <title>{% block title %}Zankl Plan – Baustellenplanung{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Stur & sicher: absoluter Pfad, ohne Jinja, mit Cache-Buster -->
-  /static/style.v2.css?v=3
+  <!-- CSS mit Cache-Buster -->
+  <link rel="stylesheet" href="{{ url_for('static', path='style.v2.css') }}?v=3">
 </head>
 <body>
   <header class="topbar">
     <div class="logo">Zankl GmbH</div>
     <nav class="nav">
-      /weekWochenplanung</a>
-      /yearJahresplanung</a>
-      /settingsEinstellungen</a>
+      <a href="{{ url_for('week_view') }}">Wochenplanung</a>
+      <a href="{{ url_for('year_view') }}">Jahresplanung</a>
+      <a href="{{ url_for('settings_view') }}">Einstellungen</a>
     </nav>
     <div class="user">
-      <!-- optional -->
-      /auth/logoutLogout</a>
+      <a href="{{ url_for('logout') }}">Logout</a>
     </div>
   </header>
 
@@ -26,6 +24,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- optional: /static/app.js?v=1</script> -->
+  <!-- JS mit Cache-Buster -->
+  <script src="{{ url_for('static', path='app.js') }}?v=1"></script>
 </body>
 </html>
