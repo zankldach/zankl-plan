@@ -51,7 +51,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
+            title TEXT NOT NULL,
             customer_name TEXT,
             color TEXT,
             status TEXT,
@@ -161,8 +161,8 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         d = cell["day_index"]
         grid[r][d] = dict(cell)
 
-    # Jobs
-    c.execute("SELECT * FROM jobs WHERE standort_id=?", (standort_id,))
+    # Jobs (für Pop-up alphabetisch)
+    c.execute("SELECT * FROM jobs WHERE standort_id=? ORDER BY title ASC", (standort_id,))
     jobs = c.fetchall()
 
     conn.close()
@@ -218,7 +218,10 @@ def set_cell(
 
     # Wenn ein neuer Jobname angegeben ist, anlegen
     if job_title and not job_id:
-        c.execute("INSERT INTO jobs(title) VALUES (?)", (job_title,))
+        c.execute(
+            "INSERT INTO jobs(title) VALUES (?)",
+            (job_title,)
+        )
         conn.commit()
         job_id = c.lastrowid
 
@@ -229,7 +232,7 @@ def set_cell(
         )
         conn.commit()
         conn.close()
-        return {"success": True, "title": job_title if job_title else ""}
+        return JSONResponse({"success": True, "title": job_title if job_title else ""})
     except Exception as e:
         conn.close()
-        return {"success": False, "error": str(e)}
+        return JSONResponse({"success": False, "error": str(e)})
