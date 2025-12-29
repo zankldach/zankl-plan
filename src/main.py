@@ -148,7 +148,22 @@ def week_view(
             grid[r][d] = dict(cell)
 
         # days
-        days = kw_date_range(year, kw, workdays)
+       raw_days = kw_date_range(year, kw, workdays)
+
+days = []
+for d in raw_days:
+    # Fall 1: Tuple (date, label)
+    if isinstance(d, (list, tuple)) and len(d) == 2:
+        date_obj, label = d
+    else:
+        # Fall 2: nur date
+        date_obj = d
+        label = date_obj.strftime("%a")
+
+    days.append({
+        "label": label,
+        "date": date_obj.strftime("%d.%m.%Y")
+    })
         if not days:
             raise Exception("kw_date_range() returned None or empty")
 
