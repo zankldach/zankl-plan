@@ -5,7 +5,6 @@
 {% block content %}
 <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
 
-<!-- Standorte -->
 <div class="standorte">
     {% for s in standorte %}
         <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}"
@@ -15,7 +14,6 @@
     {% endfor %}
 </div>
 
-<!-- Steuerung -->
 <form action="/week" method="get" class="week-form">
     <input type="hidden" name="standort_id" value="{{ standort_id }}">
     <label>KW: <input type="number" name="kw" value="{{ kw }}" min="1" max="53"></label>
@@ -25,7 +23,6 @@
 
 <hr>
 
-<!-- GRID -->
 <table class="week-grid" border="1" cellpadding="6">
     <thead>
         <tr>
@@ -41,7 +38,7 @@
                 <td>{{ r + 1 }}</td>
                 {% for d in range(workdays) %}
                     {% set cell = grid[r][d] %}
-                    <td class="cell" data-row="{{ r }}" data-day="{{ d }}" 
+                    <td class="cell" data-row="{{ r }}" data-day="{{ d }}"
                         {% if cell and cell.color %}style="background-color: {{ cell.color }}"{% endif %}>
                         {% if cell and cell.title %}
                             <strong>{{ cell.title }}</strong><br>
@@ -56,38 +53,60 @@
     </tbody>
 </table>
 
-<!-- Auswahl Job -->
-<select id="job-select" style="display:none;">
-    <option value="">frei</option>
-    {% for job in jobs %}
-        <option value="{{ job.id }}">{{ job.title }} ({{ job.customer_name }})</option>
-    {% endfor %}
-</select>
+<!-- Modal -->
+<div id="job-modal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%);
+     background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
+    <h3>Job auswählen</h3>
+    <select id="job-select">
+        <option value="">frei</option>
+        {% for job in jobs|sort(attribute='title') %}
+            <option value="{{ job.id }}">{{ job.title }} ({{ job.customer_name }})</option>
+        {% endfor %}
+    </select>
+    <button id="save-job">Speichern</button>
+    <button id="cancel-job">Abbrechen</button>
+</div>
+<div id="overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+     background:rgba(0,0,0,0.5); z-index:900;"></div>
 
 <script>
+let selectedCell = null;
+
 document.querySelectorAll('.cell').forEach(cell => {
-    cell.addEventListener('click', async () => {
-        const row = cell.dataset.row;
-        const day = cell.dataset.day;
-        const jobId = prompt("Job-ID eingeben oder leer für frei:", "");
-
-        if (jobId !== null) {
-            const formData = new FormData();
-            formData.append('week_plan_id', {{ week_plan_id }});
-            formData.append('row_index', row);
-            formData.append('day_index', day);
-            formData.append('job_id', jobId || '');
-
-            const res = await fetch("/api/week/set-cell", {
-                method: "POST",
-                body: formData
-            });
-
-            if (res.ok) location.reload();
-            else alert("Fehler beim Setzen der Zelle");
-        }
+    cell.addEventListener('click', () => {
+        selectedCell = cell;
+        const jobId = cell.dataset.jobId || '';
+        document.getElementById('job-select').value = jobId;
+        document.getElementById('job-modal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
     });
 });
-</script>
 
+document.getElementById('cancel-job').addEventListener('click', () => {
+    document.getElementById('job-modal').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+});
+
+document.getElementById('save-job').addEventListener('click', async () => {
+    if (!selectedCell) return;
+
+    const row = selectedCell.dataset.row;
+    const day = selectedCell.dataset.day;
+    const jobId = document.getElementById('job-select').value;
+
+    const formData = new FormData();
+    formData.append('week_plan_id', {{ week_plan_id }});
+    formData.append('row_index', row);
+    formData.append('day_index', day);
+    formData.append('job_id', jobId);
+
+    const res = await fetch("/api/week/set-cell", {
+        method: "POST",
+        body: formData
+    });
+
+    if (res.ok) location.reload();
+    else alert("Fehler beim Setzen der Zelle");
+});
+</script>
 {% endblock %}
