@@ -1,86 +1,209 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>Wochenplanung</title>
-    <link rel="stylesheet" href="/static/style.v2.css">
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; min-width: 120px; }
-        th { background-color: #f0f0f0; }
-        .job-cell { cursor: pointer; user-select: none; }
-    </style>
+<meta charset="UTF-8">
+<title>Zankl Plan – Wochenübersicht</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background: #f4f6f8;
+}
+
+header {
+    background: #003a8f;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+select {
+    padding: 5px;
+    font-size: 14px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 6px;
+    text-align: center;
+    min-width: 110px;
+}
+
+th {
+    background: #eef2f6;
+}
+
+td {
+    cursor: pointer;
+}
+
+td input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 14px;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    max-width: 400px;
+    margin: 10% auto;
+    border-radius: 6px;
+}
+</style>
 </head>
+
 <body>
-    <h1>Wochenplanung {{ year }} KW {{ kw }} - Standort: {{ standort_id }}</h1>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Mitarbeiter</th>
-                {% for day in days %}
-                    <th>{{ day.label }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for i in range(employee_lines) %}
-                <tr>
-                    <td contenteditable="true" class="employee-name">
-                        {% if employees and employees|length > i %}
-                            {{ employees[i] }}
-                        {% else %}
-                            Mitarbeiter {{ i + 1 }}
-                        {% endif %}
-                    </td>
-                    {% for d in range(workdays) %}
-                        {% set cell = grid[i][d] %}
-                        <td class="job-cell" contenteditable="true"
-                            data-row="{{ i }}" data-day="{{ d }}" style="background-color: {{ cell.color if cell and cell.color else '' }}">
-                            {% if cell %}
-                                {% if cell.title %}{{ cell.title }}{% endif %}
-                            {% endif %}
-                        </td>
-                    {% endfor %}
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<header>
+    <strong>Wochenplanung</strong>
+    <div>
+        KW:
+        <select id="kw"></select>
+        Jahr:
+        <select id="year"></select>
+    </div>
+</header>
 
-    <script>
-        $(document).ready(function(){
-            // Job-Zellen editieren
-            $(".job-cell").on("input", function(){
-                const row = $(this).data("row");
-                const day = $(this).data("day");
-                const title = $(this).text();
-                const cell = $(this);
+<table id="weekTable">
+    <thead>
+        <tr>
+            <th>Mitarbeiter</th>
+            <th>Mo<br><span class="date"></span></th>
+            <th>Di<br><span class="date"></span></th>
+            <th>Mi<br><span class="date"></span></th>
+            <th>Do<br><span class="date"></span></th>
+            <th>Fr<br><span class="date"></span></th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
 
-                $.post("/api/week/set-cell", {
-                    week_plan_id: {{ week_plan_id }},
-                    row_index: row,
-                    day_index: day,
-                    job_title: title
-                }, function(data){
-                    if(data.success){
-                        // Hintergrundfarbe gleich für gleiche Jobs
-                        $(".job-cell").each(function(){
-                            if($(this).text() === title && title !== ""){
-                                $(this).css("background-color", "#ffd700"); // Gelb als Standard
-                            }
-                        });
-                    }
-                });
-            });
+<!-- Popup vorbereitet -->
+<div class="modal" id="popup">
+    <div class="modal-content">
+        <h3>Baustelle</h3>
+        <p>Hier kommen später Details rein.</p>
+        <button onclick="closePopup()">Schließen</button>
+    </div>
+</div>
 
-            // Mitarbeiter ziehen / kopieren
-            $(".employee-name").on("input", function(){
-                const val = $(this).text();
-                const row = $(this).closest("tr").index();
-                // hier könntest du speichern via API, falls gewünscht
-            });
-        });
-    </script>
+<script>
+/* ---------- Grunddaten ---------- */
+const SPECIAL_RED = ['urlaub','krank','za','xxx'];
+const colors = {};
+const palette = [
+    '#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0',
+    '#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'
+];
+let colorIndex = 0;
+let dragValue = null;
+
+/* ---------- KW & Jahr ---------- */
+const kwSelect = document.getElementById('kw');
+const yearSelect = document.getElementById('year');
+
+for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
+for (let y=2024;y<=2027;y++) yearSelect.innerHTML += `<option>${y}</option>`;
+
+kwSelect.value = new URLSearchParams(location.search).get('kw') || 1;
+yearSelect.value = new URLSearchParams(location.search).get('year') || new Date().getFullYear();
+
+kwSelect.onchange = yearSelect.onchange = () => {
+    location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
+};
+
+/* ---------- Tabelle ---------- */
+const tbody = document.querySelector('#weekTable tbody');
+const employees = ['Mitarbeiter 1','Mitarbeiter 2','Mitarbeiter 3'];
+
+employees.forEach(emp => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<th>${emp}</th>`;
+    for (let i=0;i<5;i++) {
+        const td = document.createElement('td');
+        const input = document.createElement('input');
+
+        input.oninput = () => applyColor(td, input.value);
+        input.onchange = () => saveCell(emp, i, input.value);
+
+        input.onmousedown = () => dragValue = input.value;
+        input.onmouseover = () => {
+            if (dragValue !== null) {
+                input.value = dragValue;
+                applyColor(td, dragValue);
+                saveCell(emp, i, dragValue);
+            }
+        };
+        input.onmouseup = () => dragValue = null;
+
+        td.appendChild(input);
+        tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+});
+
+/* ---------- Farben ---------- */
+function applyColor(td, value) {
+    if (!value) {
+        td.style.background = '';
+        return;
+    }
+
+    const v = value.toLowerCase();
+
+    if (SPECIAL_RED.includes(v)) {
+        td.style.background = '#f28b82';
+        return;
+    }
+
+    if (!colors[v]) {
+        colors[v] = palette[colorIndex % palette.length];
+        colorIndex++;
+    }
+
+    td.style.background = colors[v];
+}
+
+/* ---------- Speicherung ---------- */
+async function saveCell(emp, day, value) {
+    await fetch('/api/week/save', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            employee: emp,
+            day,
+            value,
+            kw: kwSelect.value,
+            year: yearSelect.value
+        })
+    });
+}
+
+/* ---------- Popup ---------- */
+function closePopup() {
+    document.getElementById('popup').style.display = 'none';
+}
+</script>
+
 </body>
 </html>
