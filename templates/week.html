@@ -1,18 +1,8 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="utf-8">
-    <title>Zankl Plan – Wochenplanung</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/style.v2.css">
-</head>
+{% extends "base.html" %}
 
-<body>
+{% block title %}Zankl Plan – Wochenplanung{% endblock %}
 
-<header class="topbar">
-    <div class="logo">Zankl GmbH</div>
-</header>
-
+{% block content %}
 <main class="container">
 
     <h2>Wochenansicht – KW {{ kw }} / {{ year }}</h2>
@@ -20,14 +10,14 @@
     <!-- Standorte -->
     <div class="standorte">
         {% for s in standorte %}
-            <a href="/week?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
+            <a href="{{ url_for('week_view') }}?standort_id={{ s.id }}&kw={{ kw }}&year={{ year }}">
                 {{ s.name }}
             </a>
         {% endfor %}
     </div>
 
     <!-- Steuerung -->
-    <form action="/week" method="get">
+    <form action="{{ url_for('week_view') }}" method="get">
         <input type="hidden" name="standort_id" value="{{ standort_id }}">
 
         <label>
@@ -80,6 +70,4 @@
     </table>
 
 </main>
-
-</body>
-</html>
+{% endblock %}
