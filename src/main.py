@@ -32,6 +32,14 @@ def init_db():
         )
     """)
     c.execute("""
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            standort_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            row_index INTEGER NOT NULL
+        )
+    """)
+    c.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             year INTEGER NOT NULL,
@@ -51,7 +59,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
+            title TEXT,
             customer_name TEXT,
             color TEXT,
             status TEXT,
@@ -79,9 +87,10 @@ def require_login(request: Request):
 def get_week_days(year: int, kw: int, workdays=5):
     monday = date.fromisocalendar(year, kw, 1)
     days = []
+    weekday_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
     for i in range(workdays):
         d = monday + timedelta(days=i)
-        days.append({"date": d.strftime("%d.%m.%Y"), "label": d.strftime("%a")})
+        days.append({"date": d.strftime("%d.%m.%Y"), "label": weekday_names[d.weekday()]})
     return days
 
 
@@ -108,7 +117,6 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         conn.commit()
         c.execute("SELECT * FROM standorte")
         standorte = c.fetchall()
-
     standort_id = standort_id or standorte[0]["id"]
 
     # KW/Jahr
@@ -118,9 +126,19 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
     kw = kw or cur_kw
     year = year or cur_year
 
-    # Tage & Grid
     workdays = 5
     employee_lines = 10
+
+    # Mitarbeiter-Liste laden oder initialisieren
+    c.execute("SELECT * FROM employees WHERE standort_id=? ORDER BY row_index", (standort_id,))
+    employees = c.fetchall()
+    if not employees:
+        for r in range(employee_lines):
+            c.execute("INSERT INTO employees(standort_id, name, row_index) VALUES (?,?,?)", (standort_id, f"Mitarbeiter {r+1}", r))
+        conn.commit()
+        c.execute("SELECT * FROM employees WHERE standort_id=? ORDER BY row_index", (standort_id,))
+        employees = c.fetchall()
+
     days = get_week_days(year, kw, workdays)
 
     # Weekplan
@@ -161,8 +179,8 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
         d = cell["day_index"]
         grid[r][d] = dict(cell)
 
-    # Jobs (für Pop-up alphabetisch)
-    c.execute("SELECT * FROM jobs WHERE standort_id=? ORDER BY title ASC", (standort_id,))
+    # Jobs
+    c.execute("SELECT * FROM jobs WHERE standort_id=?", (standort_id,))
     jobs = c.fetchall()
 
     conn.close()
@@ -181,25 +199,11 @@ def week_view(request: Request, standort_id: int = None, kw: int = None, year: i
             "workdays": workdays,
             "week_plan_id": week_plan_id,
             "jobs": jobs,
+            "employees": employees,
             "can_edit": True,
             "role": user["role"],
         }
     )
-
-
-# ---------------- Dummy-Routen für base.html ----------------
-@app.get("/year")
-def year_view(request: Request):
-    return HTMLResponse("<h1>Jahresplanung</h1>")
-
-@app.get("/settings")
-def settings_view(request: Request):
-    return HTMLResponse("<h1>Einstellungen</h1>")
-
-@app.get("/auth/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/week")
 
 
 # ---------------- API: Zelle setzen ----------------
@@ -210,18 +214,15 @@ def set_cell(
     day_index: int = Form(...),
     row_index: int = Form(...),
     job_id: int = Form(None),
-    job_title: str = Form(None)  # neu für neuen Job
+    job_title: str = Form(None)  # optional neuer Job
 ):
     require_login(request)
     conn = get_conn()
     c = conn.cursor()
 
-    # Wenn ein neuer Jobname angegeben ist, anlegen
+    # Neuer Job, falls angegeben
     if job_title and not job_id:
-        c.execute(
-            "INSERT INTO jobs(title) VALUES (?)",
-            (job_title,)
-        )
+        c.execute("INSERT INTO jobs(title) VALUES (?)", (job_title,))
         conn.commit()
         job_id = c.lastrowid
 
@@ -236,3 +237,18 @@ def set_cell(
     except Exception as e:
         conn.close()
         return JSONResponse({"success": False, "error": str(e)})
+
+# ---------------- Mitarbeiter-Namen speichern ----------------
+@app.post("/api/employees/set-name")
+def set_employee_name(
+    request: Request,
+    standort_id: int = Form(...),
+    row_index: int = Form(...),
+    name: str = Form(...)
+):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE employees SET name=? WHERE standort_id=? AND row_index=?", (name, standort_id, row_index))
+    conn.commit()
+    conn.close()
+    return JSONResponse({"success": True})
