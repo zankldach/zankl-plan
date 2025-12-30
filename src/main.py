@@ -2,7 +2,7 @@ import os
 import sqlite3
 from datetime import date, timedelta
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,18 +21,15 @@ app.add_middleware(
 # ---------------- DB ----------------
 DB_PATH = os.path.join(os.getcwd(), "database.db")
 
-
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
-
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
-    # Wochenpläne
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,6 @@ def init_db():
         )
     """)
 
-    # Zellen
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,24 +52,20 @@ def init_db():
         )
     """)
 
-    # Mitarbeiterliste
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            standort TEXT NOT NULL,
             name TEXT NOT NULL,
-            position INTEGER NOT NULL
+            standort TEXT NOT NULL
         )
     """)
 
     conn.commit()
     conn.close()
 
-
 @app.on_event("startup")
 def startup():
     init_db()
-
 
 # ---------------- Helpers ----------------
 def get_prev_week(year: int, kw: int):
@@ -81,10 +73,9 @@ def get_prev_week(year: int, kw: int):
         return year, kw - 1
     return year - 1, 52
 
-
 def get_week_days(year: int, kw: int):
     monday = date.fromisocalendar(year, kw, 1)
-    labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
+    labels = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"]
     return [
         {
             "label": labels[i],
@@ -93,12 +84,10 @@ def get_week_days(year: int, kw: int):
         for i in range(5)
     ]
 
-
 # ---------------- Root ----------------
 @app.get("/", response_class=RedirectResponse)
 def root():
     return RedirectResponse("/week", status_code=303)
-
 
 # ---------------- Wochenansicht ----------------
 @app.get("/week", response_class=HTMLResponse)
@@ -124,12 +113,20 @@ def week_view(
 
     # Falls neue Woche → Struktur aus Vorwoche übernehmen
     if not plan:
-        row_count = 5
+        py, pkw = get_prev_week(year, kw)
+        cur.execute(
+            "SELECT row_count FROM week_plans WHERE year=? AND kw=? AND standort=?",
+            (py, pkw, standort),
+        )
+        prev = cur.fetchone()
+        row_count = prev["row_count"] if prev else 5
+
         cur.execute(
             "INSERT INTO week_plans (year, kw, standort, row_count) VALUES (?,?,?,?)",
             (year, kw, standort, row_count),
         )
         conn.commit()
+
         cur.execute(
             "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
             (year, kw, standort),
@@ -140,7 +137,11 @@ def week_view(
     row_count = plan["row_count"]
 
     # Grid vorbereiten
-    grid = [[{"text": ""} for _ in range(5)] for _ in range(row_count)]
+    grid = [
+        [{"text": ""} for _ in range(5)]
+        for _ in range(row_count)
+    ]
+
     cur.execute(
         "SELECT row_index, day_index, text FROM week_cells WHERE week_plan_id=?",
         (plan_id,),
@@ -150,13 +151,8 @@ def week_view(
             grid[r][d]["text"] = text
 
     # Mitarbeiterliste
-    cur.execute(
-        "SELECT name FROM employees WHERE standort=? ORDER BY position ASC",
-        (standort,),
-    )
+    cur.execute("SELECT * FROM employees WHERE standort=? ORDER BY id", (standort,))
     employees = [row["name"] for row in cur.fetchall()]
-    if len(employees) < row_count:
-        employees += [f"Mitarbeiter {i+1}" for i in range(len(employees), row_count)]
 
     conn.close()
 
@@ -169,10 +165,9 @@ def week_view(
             "kw": kw,
             "year": year,
             "standort": standort,
-            "employees": employees,
+            "employees": employees
         },
     )
-
 
 # ---------------- API: Zelle speichern ----------------
 @app.post("/api/week/set-cell")
@@ -208,79 +203,81 @@ async def set_cell(request: Request):
 
     return {"ok": True}
 
-
-# ---------------- API: Zeile + / - ----------------
+# ---------------- API: Zeile + ----------------
 @app.post("/api/week/add-row")
 async def add_row(request: Request):
     data = await request.json()
+
     conn = get_conn()
     cur = conn.cursor()
+
     cur.execute(
-        "UPDATE week_plans SET row_count=row_count+1 WHERE year=? AND kw=? AND standort=?",
+        "UPDATE week_plans SET row_count = row_count + 1 WHERE year=? AND kw=? AND standort=?",
         (data["year"], data["kw"], data.get("standort", "Engelbrechts")),
     )
+
     conn.commit()
     conn.close()
     return {"ok": True}
 
-
+# ---------------- API: Zeile - ----------------
 @app.post("/api/week/remove-row")
 async def remove_row(request: Request):
     data = await request.json()
+
     conn = get_conn()
     cur = conn.cursor()
+
     cur.execute(
         "SELECT id, row_count FROM week_plans WHERE year=? AND kw=? AND standort=?",
         (data["year"], data["kw"], data.get("standort", "Engelbrechts")),
     )
     plan = cur.fetchone()
+
     if not plan or plan["row_count"] <= 1:
         return {"ok": False}
+
     last_row = plan["row_count"] - 1
+
     cur.execute(
         "DELETE FROM week_cells WHERE week_plan_id=? AND row_index=?",
         (plan["id"], last_row),
     )
+
     cur.execute(
-        "UPDATE week_plans SET row_count=row_count-1 WHERE id=?",
+        "UPDATE week_plans SET row_count = row_count - 1 WHERE id=?",
         (plan["id"],),
     )
+
     conn.commit()
     conn.close()
     return {"ok": True}
 
-
-# ---------------- Einstellungen Mitarbeiter ----------------
+# ---------------- Einstellungen: Mitarbeiter ----------------
 @app.get("/settings/employees", response_class=HTMLResponse)
-def settings_employees(request: Request, standort: str = "Engelbrechts"):
+def settings_employees(request: Request):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT name FROM employees WHERE standort=? ORDER BY position ASC",
-        (standort,),
-    )
+    cur.execute("SELECT * FROM employees ORDER BY id")
     employees = [row["name"] for row in cur.fetchall()]
     conn.close()
     return templates.TemplateResponse(
         "settings_employees.html",
-        {"request": request, "employees": employees, "standort": standort}
+        {"request": request, "employees": employees}
     )
 
+@app.post("/api/settings/employees")
+async def save_employees(request: Request):
+    data = await request.json()
+    names = data.get("names", [])
+    standort = data.get("standort", "Engelbrechts")
 
-@app.post("/settings/employees")
-def save_employees(request: Request, standort: str = Form(...), names: str = Form(...)):
-    """
-    Speichert die Mitarbeiterliste als JSON-String, kommagetrennt.
-    """
-    names_list = [n.strip() for n in names.split(",") if n.strip()]
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM employees WHERE standort=?", (standort,))
-    for i, n in enumerate(names_list):
-        cur.execute(
-            "INSERT INTO employees (standort,name,position) VALUES (?,?,?)",
-            (standort, n, i),
-        )
+    for name in names:
+        cur.execute("INSERT INTO employees (name, standort) VALUES (?, ?)", (name, standort))
+
     conn.commit()
     conn.close()
-    return RedirectResponse(f"/settings/employees?standort={standort}", status_code=303)
+    return {"ok": True}
