@@ -17,11 +17,11 @@ td input {
     border: none;
     background: transparent;
     font-size: 14px;
-    text-align: left; /* Cursor immer links */
+    text-align: left;
     padding-left: 4px;
     box-sizing: border-box;
 }
-#settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; }
+#settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; margin-left: 10px; }
 </style>
 </head>
 <body>
@@ -53,6 +53,8 @@ td input {
 /* ---------- Einstellungen ---------- */
 const WORKDAYS = 5;
 let dragValue = null;
+
+// Mitarbeiterliste (kann in /settings/employees geändert werden)
 let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
     "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
 ];
@@ -62,17 +64,19 @@ const yearSelect = document.getElementById('year');
 for(let i=1;i<=53;i++) kwSelect.innerHTML+=`<option>${i}</option>`;
 for(let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML+=`<option>${y}</option>`;
 
-const params=new URLSearchParams(location.search);
-let currentKW = params.get('kw')||1;
-let currentYear = params.get('year')||new Date().getFullYear();
-kwSelect.value=currentKW;
-yearSelect.value=currentYear;
+const params = new URLSearchParams(location.search);
+let currentKW = params.get('kw') || 1;
+let currentYear = params.get('year') || new Date().getFullYear();
+kwSelect.value = currentKW;
+yearSelect.value = currentYear;
 
-kwSelect.onchange=yearSelect.onchange=()=>{ location.href=`?kw=${kwSelect.value}&year=${yearSelect.value}`; }
+kwSelect.onchange = yearSelect.onchange = () => {
+    location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
+}
 
 /* Zahnrad-Button */
 document.getElementById('settingsButton').onclick = () => {
-    window.location.href = '/settings/employees';
+    window.location.href = '/settings/employees'; // Backend-Route muss existieren
 }
 
 /* ---------- Datum + Wochentag ---------- */
@@ -96,47 +100,51 @@ const dates = getWeekDates(currentYear,currentKW);
 ['mo','di','mi','do','fr'].forEach((id,i)=>document.getElementById(id).innerText=dates[i]);
 
 /* ---------- Farben ---------- */
-const SPECIAL_RED=['urlaub','krank','za','xxx'];
-const colors={};
-const palette=['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
-let colorIndex=0;
+const SPECIAL_RED = ['urlaub','krank','za','xxx'];
+const colors = {};
+const palette = ['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
+let colorIndex = 0;
 
 /* ---------- Tabelle ---------- */
-const tbody=document.querySelector('#weekTable tbody');
+const tbody = document.querySelector('#weekTable tbody');
 let storageKey = `weekGrid_${currentYear}_${currentKW}`;
 let currentGrid = JSON.parse(localStorage.getItem(storageKey)) || [];
 
-function createEmptyGrid(lines=employeeNames.length){
-    return Array.from({length:lines},()=>Array.from({length:WORKDAYS},()=>({text:''})));
+function createEmptyGrid(lines = employeeNames.length){
+    return Array.from({length:lines}, ()=> Array.from({length:WORKDAYS}, ()=> ({text:''})));
 }
 
 function buildTable(grid){
-    if(!Array.isArray(grid)||grid.length===0) grid=createEmptyGrid();
-    currentGrid=grid;
-    tbody.innerHTML='';
-    for(let r=0;r<employeeNames.length;r++){
-        const tr=document.createElement('tr');
-        tr.innerHTML=`<th>${employeeNames[r]||"Mitarbeiter "+(r+1)}</th>`;
-        for(let d=0;d<WORKDAYS;d++){
-            const td=document.createElement('td');
-            const input=document.createElement('input');
-            const value=grid[r]?.[d]?.text||'';
-            input.value=value;
-            applyColor(td,value);
+    if(!Array.isArray(grid) || grid.length === 0) grid = createEmptyGrid();
+    currentGrid = grid;
+    tbody.innerHTML = '';
 
-            input.dataset.row=r;
-            input.dataset.day=d;
+    for(let r=0; r<employeeNames.length; r++){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<th>${employeeNames[r] || "Mitarbeiter "+(r+1)}</th>`;
 
-            // Drag mit linker Maustaste
-            input.onmousedown = (e) => { if(e.button === 0) dragValue=input.value; };
-            input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
-            input.onmouseover = (e) => {
-                if(dragValue===null) return;
-                input.value = dragValue;
-                applyColor(td,dragValue);
-                saveCell(parseInt(input.dataset.row), parseInt(input.dataset.day), dragValue);
+        for(let d=0; d<WORKDAYS; d++){
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+            const value = grid[r]?.[d]?.text || '';
+            input.value = value;
+            applyColor(td, value);
+
+            input.dataset.row = r;
+            input.dataset.day = d;
+
+            // Drag Events
+            input.onmousedown = (e) => { if(e.button === 0) dragValue = input.value; };
+            input.onmouseover = () => {
+                if(dragValue !== null){
+                    input.value = dragValue;
+                    applyColor(td, dragValue);
+                    saveCell(r,d,dragValue);
+                }
             };
-            input.onmouseup = () => dragValue=null;
+            input.onmouseup = () => dragValue = null;
+
+            input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
 
             td.appendChild(input);
             tr.appendChild(td);
@@ -145,20 +153,23 @@ function buildTable(grid){
     }
 }
 
+// Drag abbrechen, falls Maus Table verlässt
+document.querySelector('#weekTable').onmouseleave = () => dragValue = null;
+
 /* Farben */
-function applyColor(td,value){
-    if(!value){td.style.background=''; return;}
-    const v=value.toLowerCase();
-    if(SPECIAL_RED.includes(v)){td.style.background='#f28b82'; return;}
-    if(!colors[v]){colors[v]=palette[colorIndex%palette.length]; colorIndex++;}
-    td.style.background=colors[v];
+function applyColor(td, value){
+    if(!value){ td.style.background=''; return; }
+    const v = value.toLowerCase();
+    if(SPECIAL_RED.includes(v)){ td.style.background='#f28b82'; return; }
+    if(!colors[v]){ colors[v] = palette[colorIndex % palette.length]; colorIndex++; }
+    td.style.background = colors[v];
 }
 
 /* Speichern */
 function saveCell(row,day,value){
-    if(!currentGrid[row]) currentGrid[row]=[];
-    currentGrid[row][day]={text:value};
-    localStorage.setItem(storageKey,JSON.stringify(currentGrid));
+    if(!currentGrid[row]) currentGrid[row] = [];
+    currentGrid[row][day] = {text:value};
+    localStorage.setItem(storageKey, JSON.stringify(currentGrid));
 }
 
 /* Init */
