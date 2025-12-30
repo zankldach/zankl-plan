@@ -12,7 +12,15 @@ table { width: 100%; border-collapse: collapse; background: white; margin-top: 1
 th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
 th { background: #eef2f6; }
 td { cursor: pointer; }
-td input { width: 100%; border: none; background: transparent; text-align: center; font-size: 14px; }
+td input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    text-align: left; /* Cursor immer links */
+    padding-left: 4px;
+    box-sizing: border-box;
+}
 #settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; }
 </style>
 </head>
@@ -113,10 +121,13 @@ function buildTable(grid){
             const value=grid[r]?.[d]?.text||'';
             input.value=value;
             applyColor(td,value);
-            input.oninput=()=>{applyColor(td,input.value); saveCell(r,d,input.value);}
-            input.onmousedown=()=>dragValue=input.value;
-            input.onmouseover=()=>{if(dragValue!==null){input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue);}};
-            input.onmouseup=()=>dragValue=null;
+
+            // Drag nur mit linker Maustaste
+            input.onmousedown = (e) => { if(e.button === 0) dragValue=input.value; };
+            input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
+            input.onmouseover = () => { if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); }};
+            input.onmouseup = () => dragValue=null;
+
             td.appendChild(input);
             tr.appendChild(td);
         }
