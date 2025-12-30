@@ -6,14 +6,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
-header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-select { padding: 5px; font-size: 14px; }
-table { width: 100%; border-collapse: collapse; background: white; }
-th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
-th { background: #eef2f6; }
-td { cursor: pointer; }
-td input { width: 100%; border: none; background: transparent; text-align: center; font-size: 14px; }
+body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
+header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; position:relative; }
+select { padding:5px; font-size:14px; }
+table { width:100%; border-collapse:collapse; background:white; }
+th, td { border:1px solid #ddd; padding:6px; text-align:center; min-width:110px; }
+th { background:#eef2f6; }
+td { cursor:pointer; position:relative; }
+td input { 
+    width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; 
+}
+#settingsGear {
+    position:absolute;
+    right:20px;
+    top:50%;
+    transform:translateY(-50%);
+    cursor:pointer;
+    font-size:20px;
+}
 </style>
 </head>
 
@@ -27,6 +37,7 @@ td input { width: 100%; border: none; background: transparent; text-align: cente
         Jahr:
         <select id="year"></select>
     </div>
+    <div id="settingsGear" title="Einstellungen">⚙️</div>
 </header>
 
 <table id="weekTable">
@@ -58,45 +69,35 @@ const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
 for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
 for (let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+2;y++) yearSelect.innerHTML += `<option>${y}</option>`;
-
 kwSelect.value = {{ kw }};
 yearSelect.value = {{ year }};
-
-kwSelect.onchange = yearSelect.onchange = () => {
-    location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
-};
+kwSelect.onchange = yearSelect.onchange = () => { location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`; };
 
 /* ---------- Tabelle ---------- */
 const tbody = document.querySelector('#weekTable tbody');
-
-/* Mitarbeiterliste aus DB laden */
 let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
-if(employeeNames.length === 0){
-    employeeNames = Array.from({length: EMPLOYEE_LINES}, (_,i)=>`Mitarbeiter ${i+1}`);
-}
+if(employeeNames.length===0){ employeeNames = Array.from({length: EMPLOYEE_LINES}, (_,i)=>`Mitarbeiter ${i+1}`); }
 
 function buildTable(grid){
-    tbody.innerHTML = '';
-    EMPLOYEE_LINES = Math.max(grid.length, employeeNames.length);
-
+    tbody.innerHTML='';
+    EMPLOYEE_LINES=Math.max(grid.length,employeeNames.length);
     for(let r=0;r<EMPLOYEE_LINES;r++){
-        const tr = document.createElement('tr');
+        const tr=document.createElement('tr');
         const name = employeeNames[r] || `Mitarbeiter ${r+1}`;
         tr.innerHTML = `<th>${name}</th>`;
+        for(let d=0;d<WORKDAYS;d++){
+            const td=document.createElement('td');
+            const input=document.createElement('input');
+            input.value=grid[r]?.[d]?.text || '';
+            applyColor(td,input.value);
 
-        for(let d=0; d<WORKDAYS; d++){
-            const td = document.createElement('td');
-            const input = document.createElement('input');
-            const value = grid[r]?.[d]?.text || '';
-            input.value = value;
-            applyColor(td,value);
+            input.oninput=()=>applyColor(td,input.value);
+            input.onchange=()=>saveCell(r,d,input.value);
 
-            input.oninput = () => applyColor(td,input.value);
-            input.onchange = () => saveCell(r,d,input.value);
+            input.onmousedown=(e)=>{ if(e.button===2) dragValue=input.value; };
+            input.onmouseover=()=>{ if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); } };
+            input.onmouseup=()=>dragValue=null;
 
-            input.onmousedown = (e)=>{ if(e.button===2) dragValue=input.value; };
-            input.onmouseover = ()=>{ if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); } };
-            input.onmouseup = ()=>dragValue=null;
             td.appendChild(input);
             tr.appendChild(td);
         }
@@ -124,12 +125,15 @@ async function saveCell(row,day,value){
     }catch(e){ console.warn('Speichern fehlgeschlagen'); }
 }
 
-/* ---------- Initialisieren ---------- */
+/* ---------- Init ---------- */
 const initialGrid = {{ grid|tojson }};
 buildTable(initialGrid);
 
 /* Kontextmenü für Drag unterdrücken */
 document.addEventListener('contextmenu', e=>{ if(e.target.tagName==='INPUT') e.preventDefault(); });
+
+/* ---------- Zahnrad: Einstellungen öffnen ---------- */
+document.getElementById('settingsGear').onclick=()=>{ window.location.href='/settings/employees'; };
 </script>
 
 </body>
