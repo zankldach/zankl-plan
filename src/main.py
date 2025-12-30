@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from db import get_conn, init_db
+from .db import get_conn, init_db
 
 # --------------------------------------------------
 # App
