@@ -9,8 +9,8 @@ body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
 header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
 select { padding: 5px; font-size: 14px; margin-left: 5px; }
 table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
-th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
-th { background: #eef2f6; }
+th, td { border: 1px solid #ddd; padding: 6px; min-width: 110px; }
+th { background: #eef2f6; text-align: center; }
 td { cursor: pointer; }
 td input {
     width: 100%;
@@ -72,20 +72,22 @@ kwSelect.onchange=yearSelect.onchange=()=>{ location.href=`?kw=${kwSelect.value}
 
 /* Zahnrad-Button */
 document.getElementById('settingsButton').onclick = () => {
-    window.location.href = '/settings/employees'; // Route muss serverseitig existieren
+    window.location.href = '/settings/employees';
 }
 
-/* ---------- Datum berechnen ---------- */
+/* ---------- Datum + Wochentag ---------- */
 function getWeekDates(year, week) {
     const d = new Date(year,0,1 + (week-1)*7);
     const day = d.getDay();
     const diff = (day<=4?1:8)-day; 
     d.setDate(d.getDate()+diff);
+    const weekdays = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
     let dates = [];
     for(let i=0;i<WORKDAYS;i++){
         let dd = new Date(d);
         dd.setDate(d.getDate()+i);
-        dates.push(`${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`);
+        const dateStr = `${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`;
+        dates.push(`${weekdays[i]} ${dateStr}`);
     }
     return dates;
 }
@@ -122,10 +124,18 @@ function buildTable(grid){
             input.value=value;
             applyColor(td,value);
 
-            // Drag nur mit linker Maustaste
+            input.dataset.row=r;
+            input.dataset.day=d;
+
+            // Drag mit linker Maustaste
             input.onmousedown = (e) => { if(e.button === 0) dragValue=input.value; };
             input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
-            input.onmouseover = () => { if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); }};
+            input.onmouseover = (e) => {
+                if(dragValue===null) return;
+                input.value = dragValue;
+                applyColor(td,dragValue);
+                saveCell(parseInt(input.dataset.row), parseInt(input.dataset.day), dragValue);
+            };
             input.onmouseup = () => dragValue=null;
 
             td.appendChild(input);
