@@ -5,12 +5,6 @@
 <h1>Mitarbeiterverwaltung</h1>
 
 <div id="settings">
-    <label for="standort">Standort:</label>
-    <select id="standort">
-        <option value="Engelbrechts" selected>Engelbrechts</option>
-        <!-- Weitere Standorte hier einfügen, falls nötig -->
-    </select>
-
     <h3>Mitarbeiterliste</h3>
     <div id="employeeList"></div>
     <button id="addEmployee">+ Mitarbeiter</button>
@@ -19,7 +13,6 @@
 
 <script>
 const MAX_EMPLOYEES = 15;
-
 let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
 
 const employeeListDiv = document.getElementById('employeeList');
@@ -28,21 +21,19 @@ function renderEmployeeList() {
     employeeListDiv.innerHTML = '';
     employeeNames.forEach((name,index)=>{
         const div = document.createElement('div');
-        div.style.marginBottom = '4px';
-
+        div.style.display='flex';
+        div.style.marginBottom='4px';
         const input = document.createElement('input');
         input.value = name;
-        input.style.width = '200px';
-        input.oninput = () => { employeeNames[index] = input.value; };
-
+        input.style.flex='1';
+        input.style.padding='6px';
+        input.oninput = () => { employeeNames[index]=input.value; };
         const delBtn = document.createElement('button');
         delBtn.innerText = '–';
-        delBtn.style.marginLeft = '6px';
         delBtn.onclick = () => {
             employeeNames.splice(index,1);
             renderEmployeeList();
         };
-
         div.appendChild(input);
         div.appendChild(delBtn);
         employeeListDiv.appendChild(div);
@@ -56,22 +47,15 @@ document.getElementById('addEmployee').onclick = () => {
 }
 
 document.getElementById('saveEmployees').onclick = async () => {
-    const standort = document.getElementById('standort').value;
     try {
-        const res = await fetch('/api/settings/employees', {
+        await fetch('/settings/employees',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({names: employeeNames, standort})
+            body: JSON.stringify({employees: employeeNames})
         });
-        const data = await res.json();
-        if(data.ok){
-            alert('Mitarbeiter erfolgreich gespeichert!');
-        } else {
-            alert('Fehler beim Speichern');
-        }
-    } catch(e){
-        alert('Fehler beim Speichern');
-        console.error(e);
+        alert('Mitarbeiter gespeichert!');
+    } catch(e) {
+        alert('Speichern fehlgeschlagen!');
     }
 }
 
