@@ -43,10 +43,6 @@ th {
     background: #eef2f6;
 }
 
-td {
-    cursor: pointer;
-}
-
 td input {
     width: 100%;
     border: none;
@@ -63,9 +59,17 @@ td input {
     <strong>Wochenplanung – Engelbrechts</strong>
     <div>
         KW:
-        <select id="kw"></select>
+        <select id="kw">
+            {% for i in range(1,54) %}
+                <option value="{{ i }}" {% if i == kw %}selected{% endif %}>{{ i }}</option>
+            {% endfor %}
+        </select>
         Jahr:
-        <select id="year"></select>
+        <select id="year">
+            {% for y in range(year-1, year+3) %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
     </div>
 </header>
 
@@ -73,22 +77,30 @@ td input {
     <thead>
         <tr>
             <th>Mitarbeiter</th>
-            <th>Mo</th>
-            <th>Di</th>
-            <th>Mi</th>
-            <th>Do</th>
-            <th>Fr</th>
+            {% for d in days %}
+                <th>{{ d.label }}<br><small>{{ d.date }}</small></th>
+            {% endfor %}
         </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+        {% for row in grid %}
+        <tr>
+            <th>Mitarbeiter {{ loop.index }}</th>
+            {% for cell in row %}
+            <td>
+                <input
+                    value="{{ cell.text }}"
+                    data-row="{{ loop.parent.index0 }}"
+                    data-day="{{ loop.index0 }}"
+                >
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 
 <script>
-/* ---------- Einstellungen ---------- */
-const WORKDAYS = 5;
-let EMPLOYEE_LINES = 3;   // kommt später aus Backend
-let dragValue = null;
-
 /* ---------- Farben ---------- */
 const SPECIAL_RED = ['urlaub','krank','za','xxx'];
 const colors = {};
@@ -97,59 +109,40 @@ const palette = [
     '#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'
 ];
 let colorIndex = 0;
+let dragValue = null;
 
 /* ---------- KW & Jahr ---------- */
 const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
 
-for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
-for (let y=2024;y<=2027;y++) yearSelect.innerHTML += `<option>${y}</option>`;
-
-kwSelect.value = new URLSearchParams(location.search).get('kw') || 1;
-yearSelect.value = new URLSearchParams(location.search).get('year') || new Date().getFullYear();
-
 kwSelect.onchange = yearSelect.onchange = () => {
     location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
 };
 
-/* ---------- Tabelle ---------- */
-const tbody = document.querySelector('#weekTable tbody');
+/* ---------- Initiale Farben setzen ---------- */
+document.querySelectorAll('td input').forEach(input => {
+    applyColor(input.parentElement, input.value);
+});
 
-function buildTable(grid) {
-    tbody.innerHTML = '';
+/* ---------- Events ---------- */
+document.querySelectorAll('td input').forEach(input => {
 
-    EMPLOYEE_LINES = grid.length;
+    input.oninput = () => applyColor(input.parentElement, input.value);
 
-    for (let r = 0; r < EMPLOYEE_LINES; r++) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<th>Mitarbeiter ${r+1}</th>`;
+    input.onchange = () => saveCell(input);
 
-        for (let d = 0; d < WORKDAYS; d++) {
-            const td = document.createElement('td');
-            const input = document.createElement('input');
+    input.onmousedown = () => dragValue = input.value;
 
-            input.value = grid[r][d].text || '';
-            applyColor(td, input.value);
-
-            input.oninput = () => applyColor(td, input.value);
-            input.onchange = () => saveCell(r, d, input.value);
-
-            input.onmousedown = () => dragValue = input.value;
-            input.onmouseover = () => {
-                if (dragValue !== null) {
-                    input.value = dragValue;
-                    applyColor(td, dragValue);
-                    saveCell(r, d, dragValue);
-                }
-            };
-            input.onmouseup = () => dragValue = null;
-
-            td.appendChild(input);
-            tr.appendChild(td);
+    input.onmouseover = () => {
+        if (dragValue !== null) {
+            input.value = dragValue;
+            applyColor(input.parentElement, dragValue);
+            saveCell(input);
         }
-        tbody.appendChild(tr);
-    }
-}
+    };
+
+    input.onmouseup = () => dragValue = null;
+});
 
 /* ---------- Farben ---------- */
 function applyColor(td, value) {
@@ -173,30 +166,19 @@ function applyColor(td, value) {
     td.style.background = colors[v];
 }
 
-/* ---------- Laden ---------- */
-async function loadWeek() {
-    const res = await fetch(`/api/week/view?kw=${kwSelect.value}&year=${yearSelect.value}`);
-    const data = await res.json();
-    buildTable(data.grid);
-}
-
 /* ---------- Speichern ---------- */
-async function saveCell(row, day, value) {
+async function saveCell(input) {
     await fetch('/api/week/set-cell', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-            kw: kwSelect.value,
-            year: yearSelect.value,
-            row_index: row,
-            day_index: day,
-            text: value
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+            week_plan_id: {{ week_plan_id }},
+            row_index: input.dataset.row,
+            day_index: input.dataset.day,
+            text: input.value
         })
     });
 }
-
-/* ---------- Init ---------- */
-loadWeek();
 </script>
 
 </body>
