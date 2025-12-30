@@ -5,15 +5,15 @@
 <title>Zankl Plan – Wochenübersicht</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
-header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-select { padding: 5px; font-size: 14px; margin-left: 5px; }
-table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
-th, td { border: 1px solid #ddd; padding: 6px; min-width: 110px; text-align: center; }
-th { background: #eef2f6; }
-td { cursor: pointer; }
-td input { width: 100%; border: none; background: transparent; font-size: 14px; text-align: left; padding-left: 4px; box-sizing: border-box; }
-#settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; margin-left: 10px; }
+body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
+header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+select { padding:5px; font-size:14px; margin-left:5px; }
+table { width:100%; border-collapse:collapse; background:white; margin-top:10px; }
+th, td { border:1px solid #ddd; padding:6px; min-width:110px; text-align:center; }
+th { background:#eef2f6; }
+td { cursor:pointer; }
+td input { width:100%; border:none; background:transparent; font-size:14px; text-align:left; padding-left:4px; box-sizing:border-box; }
+#settingsButton { background:transparent; border:none; color:white; font-size:20px; cursor:pointer; margin-left:10px; }
 </style>
 </head>
 <body>
@@ -46,11 +46,12 @@ td input { width: 100%; border: none; background: transparent; font-size: 14px; 
 const WORKDAYS = 5;
 let dragValue = null;
 
-// Mitarbeiterliste aus LocalStorage
+// Mitarbeiterliste
 let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
     "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
 ];
 
+// KW/Jahr
 const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
 for(let i=1;i<=53;i++) kwSelect.innerHTML+=`<option>${i}</option>`;
@@ -62,81 +63,85 @@ let currentYear = params.get('year') || new Date().getFullYear();
 kwSelect.value = currentKW;
 yearSelect.value = currentYear;
 
-kwSelect.onchange = yearSelect.onchange = () => {
-    location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
-}
+kwSelect.onchange = yearSelect.onchange = ()=>location.href=`?kw=${kwSelect.value}&year=${yearSelect.value}`;
 
-/* Zahnrad-Button */
-document.getElementById('settingsButton').onclick = () => {
-    window.location.href = '/settings/employees'; // Backend-Route muss existieren
-}
+/* Zahnrad */
+document.getElementById('settingsButton').onclick = ()=>window.location.href='/settings/employees';
 
-/* ---------- Datum + Wochentag ---------- */
-function getWeekDates(year, week) {
-    const d = new Date(year,0,1 + (week-1)*7);
-    const day = d.getDay();
-    const diff = (day<=4?1:8)-day; 
+/* Wochentage */
+function getWeekDates(year, week){
+    const d=new Date(year,0,1+(week-1)*7);
+    const day=d.getDay();
+    const diff=(day<=4?1:8)-day;
     d.setDate(d.getDate()+diff);
-    const weekdays = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
-    let dates = [];
+    const weekdays=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
+    let dates=[];
     for(let i=0;i<WORKDAYS;i++){
-        let dd = new Date(d);
+        let dd=new Date(d);
         dd.setDate(d.getDate()+i);
-        const dateStr = `${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`;
+        const dateStr=`${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`;
         dates.push(`${weekdays[i]} ${dateStr}`);
     }
     return dates;
 }
 
-const dates = getWeekDates(currentYear,currentKW);
+const dates=getWeekDates(currentYear,currentKW);
 ['mo','di','mi','do','fr'].forEach((id,i)=>document.getElementById(id).innerText=dates[i]);
 
-/* ---------- Farben ---------- */
-const SPECIAL_RED = ['urlaub','krank','za','xxx'];
-const colors = {};
-const palette = ['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
-let colorIndex = 0;
+/* Farben */
+const SPECIAL_RED=['urlaub','krank','za','xxx'];
+const colors={};
+const palette=['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
+let colorIndex=0;
 
-/* ---------- Tabelle ---------- */
-const tbody = document.querySelector('#weekTable tbody');
-let storageKey = `weekGrid_${currentYear}_${currentKW}`;
-let currentGrid = JSON.parse(localStorage.getItem(storageKey)) || [];
+/* Tabelle */
+const tbody=document.querySelector('#weekTable tbody');
+let storageKey=`weekGrid_${currentYear}_${currentKW}`;
+let currentGrid=JSON.parse(localStorage.getItem(storageKey)) || [];
 
-function createEmptyGrid(lines = employeeNames.length){
-    return Array.from({length:lines}, ()=> Array.from({length:WORKDAYS}, ()=> ({text:''})));
+function createEmptyGrid(lines=employeeNames.length){
+    return Array.from({length:lines},()=>Array.from({length:WORKDAYS},()=>({text:''})));
 }
 
 function buildTable(grid){
-    if(!Array.isArray(grid) || grid.length === 0) grid = createEmptyGrid();
-    currentGrid = grid;
-    tbody.innerHTML = '';
+    if(!Array.isArray(grid)||grid.length===0) grid=createEmptyGrid();
+    currentGrid=grid;
+    tbody.innerHTML='';
 
-    for(let r=0; r<employeeNames.length; r++){
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<th>${employeeNames[r] || "Mitarbeiter "+(r+1)}</th>`;
+    for(let r=0;r<employeeNames.length;r++){
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<th>${employeeNames[r]||"Mitarbeiter "+(r+1)}</th>`;
 
-        for(let d=0; d<WORKDAYS; d++){
-            const td = document.createElement('td');
-            const input = document.createElement('input');
-            const value = grid[r]?.[d]?.text || '';
-            input.value = value;
-            applyColor(td, value);
+        for(let d=0;d<WORKDAYS;d++){
+            const td=document.createElement('td');
+            const input=document.createElement('input');
+            const value=grid[r]?.[d]?.text||'';
+            input.value=value;
+            applyColor(td,value);
 
-            input.dataset.row = r;
-            input.dataset.day = d;
+            input.dataset.row=r;
+            input.dataset.day=d;
 
-            // Drag Events (linke Maustaste)
-            input.onmousedown = (e) => { if(e.button===0) dragValue=input.value; };
-            input.onmouseover = () => {
+            // Drag rechte Maustaste
+            input.onmousedown=(e)=>{
+                if(e.button===2){ // rechts
+                    dragValue=input.value;
+                    e.preventDefault();
+                }
+            };
+            input.onmouseover=()=>{
                 if(dragValue!==null){
                     input.value=dragValue;
-                    applyColor(td, dragValue);
+                    applyColor(td,dragValue);
                     saveCell(r,d,dragValue);
                 }
             };
-            input.onmouseup = () => dragValue=null;
+            input.onmouseup=()=>dragValue=null;
 
-            input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
+            // Browser-Kontextmenü verhindern
+            input.oncontextmenu=e=>e.preventDefault();
+
+            input.oninput=()=>{ applyColor(td,input.value); saveCell(r,d,input.value); };
 
             td.appendChild(input);
             tr.appendChild(td);
@@ -145,23 +150,21 @@ function buildTable(grid){
     }
 }
 
-// Drag abbrechen, falls Maus Table verlässt
-document.querySelector('#weekTable').onmouseleave = () => dragValue = null;
+// Drag abbrechen, Maus verlässt Tabelle
+document.querySelector('#weekTable').onmouseleave=()=>dragValue=null;
 
-/* Farben */
-function applyColor(td, value){
+function applyColor(td,value){
     if(!value){ td.style.background=''; return; }
-    const v = value.toLowerCase();
+    const v=value.toLowerCase();
     if(SPECIAL_RED.includes(v)){ td.style.background='#f28b82'; return; }
-    if(!colors[v]){ colors[v] = palette[colorIndex % palette.length]; colorIndex++; }
-    td.style.background = colors[v];
+    if(!colors[v]){ colors[v]=palette[colorIndex%palette.length]; colorIndex++; }
+    td.style.background=colors[v];
 }
 
-/* Speichern */
 function saveCell(row,day,value){
     if(!currentGrid[row]) currentGrid[row]=[];
     currentGrid[row][day]={text:value};
-    localStorage.setItem(storageKey, JSON.stringify(currentGrid));
+    localStorage.setItem(storageKey,JSON.stringify(currentGrid));
 }
 
 /* Init */
