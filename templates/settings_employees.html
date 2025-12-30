@@ -4,9 +4,9 @@
 
 <h1>Mitarbeiterverwaltung</h1>
 
-<div id="settings">
+<div id="settings" style="margin-top:20px;">
     <h3>Mitarbeiterliste</h3>
-    <div id="employeeList"></div>
+    <div id="employeeList" style="margin-bottom:10px;"></div>
     <button id="addEmployee">+ Mitarbeiter</button>
 </div>
 
@@ -20,21 +20,31 @@ const employeeListDiv = document.getElementById('employeeList');
 
 function renderEmployeeList() {
     employeeListDiv.innerHTML = '';
-    employeeNames.forEach((name,index)=>{
+    employeeNames.forEach((name, index) => {
         const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.marginBottom = '5px';
+
         const input = document.createElement('input');
         input.value = name;
+        input.style.flex = '1';
+        input.style.padding = '4px';
+        input.style.marginRight = '5px';
         input.oninput = () => {
             employeeNames[index] = input.value;
             localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
         };
+
         const delBtn = document.createElement('button');
         delBtn.innerText = '–';
+        delBtn.style.padding = '4px 8px';
         delBtn.onclick = () => {
-            employeeNames.splice(index,1);
+            employeeNames.splice(index, 1);
             localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
             renderEmployeeList();
         };
+
         div.appendChild(input);
         div.appendChild(delBtn);
         employeeListDiv.appendChild(div);
@@ -42,8 +52,11 @@ function renderEmployeeList() {
 }
 
 document.getElementById('addEmployee').onclick = () => {
-    if(employeeNames.length >= MAX_EMPLOYEES) return;
-    employeeNames.push(`Mitarbeiter ${employeeNames.length+1}`);
+    if(employeeNames.length >= MAX_EMPLOYEES){
+        alert(`Maximal ${MAX_EMPLOYEES} Mitarbeiter erlaubt.`);
+        return;
+    }
+    employeeNames.push(`Mitarbeiter ${employeeNames.length + 1}`);
     localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
     renderEmployeeList();
 }
@@ -52,3 +65,4 @@ renderEmployeeList();
 </script>
 
 {% endblock %}
+
