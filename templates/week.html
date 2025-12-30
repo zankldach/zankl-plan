@@ -5,11 +5,7 @@
 <title>Zankl Plan – Wochenübersicht</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    background: #f4f6f8;
-}
+body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
 header {
     background: #003a8f;
     color: white;
@@ -18,52 +14,20 @@ header {
     justify-content: space-between;
     align-items: center;
 }
-select, button {
-    padding: 5px;
-    font-size: 14px;
-    margin-left: 5px;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    margin-top: 10px;
-}
-th, td {
-    border: 1px solid #ddd;
-    padding: 6px;
-    text-align: center;
-    min-width: 110px;
-}
-th {
-    background: #eef2f6;
-}
-td {
-    cursor: pointer;
-}
-td input {
-    width: 100%;
-    border: none;
+select { padding: 5px; font-size: 14px; margin-left: 5px; }
+table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
+th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
+th { background: #eef2f6; }
+td { cursor: pointer; }
+td input { width: 100%; border: none; background: transparent; text-align: center; font-size: 14px; }
+
+/* Zahnrad-Button */
+#settingsButton {
     background: transparent;
-    text-align: center;
-    font-size: 14px;
-}
-#settings {
-    background: #fff;
-    border: 1px solid #ddd;
-    padding: 10px;
-    margin: 10px 20px;
-}
-#settings h3 {
-    margin: 0 0 5px 0;
-}
-#employeeList input {
-    width: calc(100% - 30px);
-    margin-bottom: 5px;
-    padding: 3px;
-}
-#employeeList button {
-    margin-left: 5px;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
 }
 </style>
 </head>
@@ -72,18 +36,11 @@ td input {
 <header>
     <strong>Wochenplanung – Engelbrechts</strong>
     <div>
-        KW:
-        <select id="kw"></select>
-        Jahr:
-        <select id="year"></select>
+        KW: <select id="kw"></select>
+        Jahr: <select id="year"></select>
+        <button id="settingsButton" title="Einstellungen">⚙️</button>
     </div>
 </header>
-
-<div id="settings">
-    <h3>Mitarbeiterliste</h3>
-    <div id="employeeList"></div>
-    <button id="addEmployee">+ Mitarbeiter</button>
-</div>
 
 <table id="weekTable">
     <thead>
@@ -102,91 +59,56 @@ td input {
 <script>
 /* ---------- Einstellungen ---------- */
 const WORKDAYS = 5;
-const MAX_EMPLOYEES = 15;
 let dragValue = null;
 let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
     "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
 ];
-let currentGrid = [];
-
-/* ---------- Farben ---------- */
-const SPECIAL_RED = ['urlaub','krank','za','xxx'];
-const colors = {};
-const palette = ['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
-let colorIndex = 0;
+let currentGrid = JSON.parse(localStorage.getItem('weekGrid')) || [];
 
 /* ---------- KW & Jahr ---------- */
 const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
-for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
-for (let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML += `<option>${y}</option>`;
-kwSelect.value = new URLSearchParams(location.search).get('kw') || 1;
-yearSelect.value = new URLSearchParams(location.search).get('year') || new Date().getFullYear();
-kwSelect.onchange = yearSelect.onchange = () => { location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`; };
+for(let i=1;i<=53;i++) kwSelect.innerHTML+=`<option>${i}</option>`;
+for(let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML+=`<option>${y}</option>`;
+kwSelect.value=new URLSearchParams(location.search).get('kw')||1;
+yearSelect.value=new URLSearchParams(location.search).get('year')||new Date().getFullYear();
+kwSelect.onchange=yearSelect.onchange=()=>{ location.href=`?kw=${kwSelect.value}&year=${yearSelect.value}`; }
+
+/* Zahnrad-Button */
+document.getElementById('settingsButton').onclick = () => {
+    window.location.href = '/settings/employees';
+}
+
+/* ---------- Farben ---------- */
+const SPECIAL_RED=['urlaub','krank','za','xxx'];
+const colors={};
+const palette=['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
+let colorIndex=0;
 
 /* ---------- Tabelle ---------- */
-const tbody = document.querySelector('#weekTable tbody');
+const tbody=document.querySelector('#weekTable tbody');
 
-/* ---------- Employee Settings ---------- */
-const employeeListDiv = document.getElementById('employeeList');
-
-function renderEmployeeList() {
-    employeeListDiv.innerHTML = '';
-    employeeNames.forEach((name,index) => {
-        const div = document.createElement('div');
-        const input = document.createElement('input');
-        input.value = name;
-        input.oninput = () => {
-            employeeNames[index] = input.value;
-            localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
-            buildTable(currentGrid);
-        };
-        const delBtn = document.createElement('button');
-        delBtn.innerText = '–';
-        delBtn.onclick = () => {
-            employeeNames.splice(index,1);
-            localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
-            renderEmployeeList();
-            buildTable(currentGrid);
-        };
-        div.appendChild(input);
-        div.appendChild(delBtn);
-        employeeListDiv.appendChild(div);
-    });
+function createEmptyGrid(lines=employeeNames.length){
+    return Array.from({length:lines},()=>Array.from({length:WORKDAYS},()=>({text:''})));
 }
 
-document.getElementById('addEmployee').onclick = () => {
-    if(employeeNames.length >= MAX_EMPLOYEES) return;
-    employeeNames.push(`Mitarbeiter ${employeeNames.length+1}`);
-    localStorage.setItem('employeeNames', JSON.stringify(employeeNames));
-    renderEmployeeList();
-    buildTable(currentGrid);
-}
-
-/* ---------- Grid Funktionen ---------- */
-function createEmptyGrid(lines = employeeNames.length) {
-    return Array.from({length: lines}, () =>
-        Array.from({length: WORKDAYS}, () => ({ text: '' }))
-    );
-}
-
-function buildTable(grid) {
-    if(!Array.isArray(grid)) grid = createEmptyGrid();
-    currentGrid = grid;
-    tbody.innerHTML = '';
+function buildTable(grid){
+    if(!Array.isArray(grid)||grid.length===0) grid=createEmptyGrid();
+    currentGrid=grid;
+    tbody.innerHTML='';
     for(let r=0;r<employeeNames.length;r++){
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<th>${employeeNames[r] || "Mitarbeiter "+(r+1)}</th>`;
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<th>${employeeNames[r]||"Mitarbeiter "+(r+1)}</th>`;
         for(let d=0;d<WORKDAYS;d++){
-            const td = document.createElement('td');
-            const input = document.createElement('input');
-            const value = grid[r]?.[d]?.text || '';
-            input.value = value;
+            const td=document.createElement('td');
+            const input=document.createElement('input');
+            const value=grid[r]?.[d]?.text||'';
+            input.value=value;
             applyColor(td,value);
-            input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
-            input.onmousedown = () => dragValue = input.value;
-            input.onmouseover = () => { if(dragValue!==null){input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue);} };
-            input.onmouseup = () => dragValue = null;
+            input.oninput=()=>{applyColor(td,input.value); saveCell(r,d,input.value);}
+            input.onmousedown=()=>dragValue=input.value;
+            input.onmouseover=()=>{if(dragValue!==null){input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue);}};
+            input.onmouseup=()=>dragValue=null;
             td.appendChild(input);
             tr.appendChild(td);
         }
@@ -194,50 +116,24 @@ function buildTable(grid) {
     }
 }
 
-/* ---------- Farben ---------- */
+/* Farben */
 function applyColor(td,value){
     if(!value){td.style.background=''; return;}
-    const v = value.toLowerCase();
+    const v=value.toLowerCase();
     if(SPECIAL_RED.includes(v)){td.style.background='#f28b82'; return;}
-    if(!colors[v]){colors[v]=palette[colorIndex % palette.length]; colorIndex++;}
+    if(!colors[v]){colors[v]=palette[colorIndex%palette.length]; colorIndex++;}
     td.style.background=colors[v];
 }
 
-/* ---------- Laden ---------- */
-async function loadWeek(){
-    try{
-        const res = await fetch(`/api/week/view?kw=${kwSelect.value}&year=${yearSelect.value}`);
-        if(!res.ok) throw new Error('Backend Fehler');
-        const data = await res.json();
-        buildTable(data.grid);
-    }catch(err){
-        console.error('Laden fehlgeschlagen:',err);
-        buildTable(createEmptyGrid());
-    }
-}
-
-/* ---------- Speichern ---------- */
-async function saveCell(row,day,value){
+/* Speichern */
+function saveCell(row,day,value){
     if(!currentGrid[row]) currentGrid[row]=[];
     currentGrid[row][day]={text:value};
-    try{
-        await fetch('/api/week/set-cell',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({
-                kw: kwSelect.value,
-                year: yearSelect.value,
-                row_index: row,
-                day_index: day,
-                text: value
-            })
-        });
-    }catch(e){console.warn('Speichern fehlgeschlagen');}
+    localStorage.setItem('weekGrid',JSON.stringify(currentGrid));
 }
 
-/* ---------- Init ---------- */
-renderEmployeeList();
-loadWeek();
+/* Init */
+buildTable(currentGrid);
 </script>
 
 </body>
