@@ -54,28 +54,13 @@ td input {
     text-align: center;
     font-size: 14px;
 }
-
-.modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-}
-
-.modal-content {
-    background: white;
-    padding: 20px;
-    max-width: 400px;
-    margin: 10% auto;
-    border-radius: 6px;
-}
 </style>
 </head>
 
 <body>
 
 <header>
-    <strong>Wochenplanung</strong>
+    <strong>Wochenplanung – Engelbrechts</strong>
     <div>
         KW:
         <select id="kw"></select>
@@ -88,27 +73,23 @@ td input {
     <thead>
         <tr>
             <th>Mitarbeiter</th>
-            <th>Mo<br><span class="date"></span></th>
-            <th>Di<br><span class="date"></span></th>
-            <th>Mi<br><span class="date"></span></th>
-            <th>Do<br><span class="date"></span></th>
-            <th>Fr<br><span class="date"></span></th>
+            <th>Mo</th>
+            <th>Di</th>
+            <th>Mi</th>
+            <th>Do</th>
+            <th>Fr</th>
         </tr>
     </thead>
     <tbody></tbody>
 </table>
 
-<!-- Popup vorbereitet -->
-<div class="modal" id="popup">
-    <div class="modal-content">
-        <h3>Baustelle</h3>
-        <p>Hier kommen später Details rein.</p>
-        <button onclick="closePopup()">Schließen</button>
-    </div>
-</div>
-
 <script>
-/* ---------- Grunddaten ---------- */
+/* ---------- Einstellungen ---------- */
+const WORKDAYS = 5;
+let EMPLOYEE_LINES = 3;   // kommt später aus Backend
+let dragValue = null;
+
+/* ---------- Farben ---------- */
 const SPECIAL_RED = ['urlaub','krank','za','xxx'];
 const colors = {};
 const palette = [
@@ -116,7 +97,6 @@ const palette = [
     '#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'
 ];
 let colorIndex = 0;
-let dragValue = null;
 
 /* ---------- KW & Jahr ---------- */
 const kwSelect = document.getElementById('kw');
@@ -134,33 +114,42 @@ kwSelect.onchange = yearSelect.onchange = () => {
 
 /* ---------- Tabelle ---------- */
 const tbody = document.querySelector('#weekTable tbody');
-const employees = ['Mitarbeiter 1','Mitarbeiter 2','Mitarbeiter 3'];
 
-employees.forEach(emp => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<th>${emp}</th>`;
-    for (let i=0;i<5;i++) {
-        const td = document.createElement('td');
-        const input = document.createElement('input');
+function buildTable(grid) {
+    tbody.innerHTML = '';
 
-        input.oninput = () => applyColor(td, input.value);
-        input.onchange = () => saveCell(emp, i, input.value);
+    EMPLOYEE_LINES = grid.length;
 
-        input.onmousedown = () => dragValue = input.value;
-        input.onmouseover = () => {
-            if (dragValue !== null) {
-                input.value = dragValue;
-                applyColor(td, dragValue);
-                saveCell(emp, i, dragValue);
-            }
-        };
-        input.onmouseup = () => dragValue = null;
+    for (let r = 0; r < EMPLOYEE_LINES; r++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<th>Mitarbeiter ${r+1}</th>`;
 
-        td.appendChild(input);
-        tr.appendChild(td);
+        for (let d = 0; d < WORKDAYS; d++) {
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+
+            input.value = grid[r][d].text || '';
+            applyColor(td, input.value);
+
+            input.oninput = () => applyColor(td, input.value);
+            input.onchange = () => saveCell(r, d, input.value);
+
+            input.onmousedown = () => dragValue = input.value;
+            input.onmouseover = () => {
+                if (dragValue !== null) {
+                    input.value = dragValue;
+                    applyColor(td, dragValue);
+                    saveCell(r, d, dragValue);
+                }
+            };
+            input.onmouseup = () => dragValue = null;
+
+            td.appendChild(input);
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
     }
-    tbody.appendChild(tr);
-});
+}
 
 /* ---------- Farben ---------- */
 function applyColor(td, value) {
@@ -184,25 +173,30 @@ function applyColor(td, value) {
     td.style.background = colors[v];
 }
 
-/* ---------- Speicherung ---------- */
-async function saveCell(emp, day, value) {
-    await fetch('/api/week/save', {
+/* ---------- Laden ---------- */
+async function loadWeek() {
+    const res = await fetch(`/api/week/view?kw=${kwSelect.value}&year=${yearSelect.value}`);
+    const data = await res.json();
+    buildTable(data.grid);
+}
+
+/* ---------- Speichern ---------- */
+async function saveCell(row, day, value) {
+    await fetch('/api/week/set-cell', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
-            employee: emp,
-            day,
-            value,
             kw: kwSelect.value,
-            year: yearSelect.value
+            year: yearSelect.value,
+            row_index: row,
+            day_index: day,
+            text: value
         })
     });
 }
 
-/* ---------- Popup ---------- */
-function closePopup() {
-    document.getElementById('popup').style.display = 'none';
-}
+/* ---------- Init ---------- */
+loadWeek();
 </script>
 
 </body>
