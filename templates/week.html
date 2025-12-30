@@ -9,25 +9,17 @@ body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
 header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
 select { padding: 5px; font-size: 14px; margin-left: 5px; }
 table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
-th, td { border: 1px solid #ddd; padding: 6px; min-width: 110px; }
-th { background: #eef2f6; text-align: center; }
+th, td { border: 1px solid #ddd; padding: 6px; min-width: 110px; text-align: center; }
+th { background: #eef2f6; }
 td { cursor: pointer; }
-td input {
-    width: 100%;
-    border: none;
-    background: transparent;
-    font-size: 14px;
-    text-align: left;
-    padding-left: 4px;
-    box-sizing: border-box;
-}
+td input { width: 100%; border: none; background: transparent; font-size: 14px; text-align: left; padding-left: 4px; box-sizing: border-box; }
 #settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; margin-left: 10px; }
 </style>
 </head>
 <body>
 
 <header>
-    <strong>Wochenplanung – Engelbrechts</strong>
+    <strong>Wochenplanung Zankl Engelbrechts</strong>
     <div>
         KW: <select id="kw"></select>
         Jahr: <select id="year"></select>
@@ -54,7 +46,7 @@ td input {
 const WORKDAYS = 5;
 let dragValue = null;
 
-// Mitarbeiterliste (kann in /settings/employees geändert werden)
+// Mitarbeiterliste aus LocalStorage
 let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
     "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
 ];
@@ -133,16 +125,16 @@ function buildTable(grid){
             input.dataset.row = r;
             input.dataset.day = d;
 
-            // Drag Events
-            input.onmousedown = (e) => { if(e.button === 0) dragValue = input.value; };
+            // Drag Events (linke Maustaste)
+            input.onmousedown = (e) => { if(e.button===0) dragValue=input.value; };
             input.onmouseover = () => {
-                if(dragValue !== null){
-                    input.value = dragValue;
+                if(dragValue!==null){
+                    input.value=dragValue;
                     applyColor(td, dragValue);
                     saveCell(r,d,dragValue);
                 }
             };
-            input.onmouseup = () => dragValue = null;
+            input.onmouseup = () => dragValue=null;
 
             input.oninput = () => { applyColor(td,input.value); saveCell(r,d,input.value); };
 
@@ -167,8 +159,8 @@ function applyColor(td, value){
 
 /* Speichern */
 function saveCell(row,day,value){
-    if(!currentGrid[row]) currentGrid[row] = [];
-    currentGrid[row][day] = {text:value};
+    if(!currentGrid[row]) currentGrid[row]=[];
+    currentGrid[row][day]={text:value};
     localStorage.setItem(storageKey, JSON.stringify(currentGrid));
 }
 
