@@ -11,7 +11,6 @@ body {
     margin: 0;
     background: #f4f6f8;
 }
-
 header {
     background: #003a8f;
     color: white;
@@ -20,33 +19,28 @@ header {
     justify-content: space-between;
     align-items: center;
 }
-
-select {
+select, button {
     padding: 5px;
     font-size: 14px;
+    margin-left: 5px;
 }
-
 table {
     width: 100%;
     border-collapse: collapse;
     background: white;
 }
-
 th, td {
     border: 1px solid #ddd;
     padding: 6px;
     text-align: center;
     min-width: 110px;
 }
-
 th {
     background: #eef2f6;
 }
-
 td {
     cursor: pointer;
 }
-
 td input {
     width: 100%;
     border: none;
@@ -56,7 +50,6 @@ td input {
 }
 </style>
 </head>
-
 <body>
 
 <header>
@@ -66,6 +59,7 @@ td input {
         <select id="kw"></select>
         Jahr:
         <select id="year"></select>
+        <button id="copyWeekBtn">Neue Woche kopieren</button>
     </div>
 </header>
 
@@ -103,7 +97,7 @@ const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
 
 for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
-for (let y=2024;y<=2027;y++) yearSelect.innerHTML += `<option>${y}</option>`;
+for (let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML += `<option>${y}</option>`;
 
 kwSelect.value = new URLSearchParams(location.search).get('kw') || 1;
 yearSelect.value = new URLSearchParams(location.search).get('year') || new Date().getFullYear();
@@ -114,21 +108,24 @@ kwSelect.onchange = yearSelect.onchange = () => {
 
 /* ---------- Tabelle ---------- */
 const tbody = document.querySelector('#weekTable tbody');
+let currentGrid = [];
 
+/* Leeres Grid erstellen */
 function createEmptyGrid(lines = EMPLOYEE_LINES) {
     return Array.from({length: lines}, () =>
         Array.from({length: WORKDAYS}, () => ({ text: '' }))
     );
 }
 
+/* Tabelle aufbauen */
 function buildTable(grid) {
     if (!Array.isArray(grid)) {
         console.warn('Grid ungültig – leere Woche wird verwendet');
         grid = createEmptyGrid();
     }
-
     tbody.innerHTML = '';
     EMPLOYEE_LINES = grid.length;
+    currentGrid = grid;
 
     for (let r = 0; r < EMPLOYEE_LINES; r++) {
         const tr = document.createElement('tr');
@@ -162,46 +159,40 @@ function buildTable(grid) {
     }
 }
 
-/* ---------- Farben ---------- */
+/* Farben anwenden */
 function applyColor(td, value) {
     if (!value) {
         td.style.background = '';
         return;
     }
-
     const v = value.toLowerCase();
-
     if (SPECIAL_RED.includes(v)) {
         td.style.background = '#f28b82';
         return;
     }
-
     if (!colors[v]) {
         colors[v] = palette[colorIndex % palette.length];
         colorIndex++;
     }
-
     td.style.background = colors[v];
 }
 
-/* ---------- Laden ---------- */
+/* ---------- Woche laden ---------- */
 async function loadWeek() {
     try {
         const res = await fetch(`/api/week/view?kw=${kwSelect.value}&year=${yearSelect.value}`);
-
         if (!res.ok) throw new Error('Backend Fehler');
-
         const data = await res.json();
         buildTable(data.grid);
-
     } catch (err) {
         console.error('Laden fehlgeschlagen:', err);
         buildTable(createEmptyGrid());
     }
 }
 
-/* ---------- Speichern ---------- */
+/* ---------- Zelle speichern ---------- */
 async function saveCell(row, day, value) {
+    currentGrid[row][day].text = value; // lokale Kopie aktualisieren
     try {
         await fetch('/api/week/set-cell', {
             method: 'POST',
@@ -217,6 +208,13 @@ async function saveCell(row, day, value) {
     } catch (e) {
         console.warn('Speichern fehlgeschlagen');
     }
+}
+
+/* ---------- Neue Woche kopieren ---------- */
+document.getElementById('copyWeekBtn').onclick = () => {
+    const newGrid = currentGrid.map(row => row.map(cell => ({ text: cell.text })));
+    buildTable(newGrid);
+    console.log('Woche kopiert');
 }
 
 /* ---------- Init ---------- */
