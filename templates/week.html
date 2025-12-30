@@ -6,29 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
-header {
-    background: #003a8f;
-    color: white;
-    padding: 10px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
 select { padding: 5px; font-size: 14px; margin-left: 5px; }
 table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; }
 th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
 th { background: #eef2f6; }
 td { cursor: pointer; }
 td input { width: 100%; border: none; background: transparent; text-align: center; font-size: 14px; }
-
-/* Zahnrad-Button */
-#settingsButton {
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
-}
+#settingsButton { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -46,11 +31,11 @@ td input { width: 100%; border: none; background: transparent; text-align: cente
     <thead>
         <tr>
             <th>Mitarbeiter</th>
-            <th>Mo</th>
-            <th>Di</th>
-            <th>Mi</th>
-            <th>Do</th>
-            <th>Fr</th>
+            <th id="mo"></th>
+            <th id="di"></th>
+            <th id="mi"></th>
+            <th id="do"></th>
+            <th id="fr"></th>
         </tr>
     </thead>
     <tbody></tbody>
@@ -63,21 +48,42 @@ let dragValue = null;
 let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
     "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
 ];
-let currentGrid = JSON.parse(localStorage.getItem('weekGrid')) || [];
 
-/* ---------- KW & Jahr ---------- */
 const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
 for(let i=1;i<=53;i++) kwSelect.innerHTML+=`<option>${i}</option>`;
 for(let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML+=`<option>${y}</option>`;
-kwSelect.value=new URLSearchParams(location.search).get('kw')||1;
-yearSelect.value=new URLSearchParams(location.search).get('year')||new Date().getFullYear();
+
+const params=new URLSearchParams(location.search);
+let currentKW = params.get('kw')||1;
+let currentYear = params.get('year')||new Date().getFullYear();
+kwSelect.value=currentKW;
+yearSelect.value=currentYear;
+
 kwSelect.onchange=yearSelect.onchange=()=>{ location.href=`?kw=${kwSelect.value}&year=${yearSelect.value}`; }
 
 /* Zahnrad-Button */
 document.getElementById('settingsButton').onclick = () => {
-    window.location.href = '/settings/employees';
+    window.location.href = '/settings/employees'; // Route muss serverseitig existieren
 }
+
+/* ---------- Datum berechnen ---------- */
+function getWeekDates(year, week) {
+    const d = new Date(year,0,1 + (week-1)*7);
+    const day = d.getDay();
+    const diff = (day<=4?1:8)-day; 
+    d.setDate(d.getDate()+diff);
+    let dates = [];
+    for(let i=0;i<WORKDAYS;i++){
+        let dd = new Date(d);
+        dd.setDate(d.getDate()+i);
+        dates.push(`${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`);
+    }
+    return dates;
+}
+
+const dates = getWeekDates(currentYear,currentKW);
+['mo','di','mi','do','fr'].forEach((id,i)=>document.getElementById(id).innerText=dates[i]);
 
 /* ---------- Farben ---------- */
 const SPECIAL_RED=['urlaub','krank','za','xxx'];
@@ -87,6 +93,8 @@ let colorIndex=0;
 
 /* ---------- Tabelle ---------- */
 const tbody=document.querySelector('#weekTable tbody');
+let storageKey = `weekGrid_${currentYear}_${currentKW}`;
+let currentGrid = JSON.parse(localStorage.getItem(storageKey)) || [];
 
 function createEmptyGrid(lines=employeeNames.length){
     return Array.from({length:lines},()=>Array.from({length:WORKDAYS},()=>({text:''})));
@@ -129,7 +137,7 @@ function applyColor(td,value){
 function saveCell(row,day,value){
     if(!currentGrid[row]) currentGrid[row]=[];
     currentGrid[row][day]={text:value};
-    localStorage.setItem('weekGrid',JSON.stringify(currentGrid));
+    localStorage.setItem(storageKey,JSON.stringify(currentGrid));
 }
 
 /* Init */
