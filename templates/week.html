@@ -2,28 +2,30 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Zankl Plan – Wochenübersicht</title>
+<title>Wochenplanung Zankl Engelbrechts</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
-header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
-select { padding:5px; font-size:14px; margin-left:5px; }
-table { width:100%; border-collapse:collapse; background:white; margin-top:10px; }
-th, td { border:1px solid #ddd; padding:6px; min-width:110px; text-align:center; }
-th { background:#eef2f6; }
-td { cursor:pointer; }
-td input { width:100%; border:none; background:transparent; font-size:14px; text-align:left; padding-left:4px; box-sizing:border-box; }
-#settingsButton { background:transparent; border:none; color:white; font-size:20px; cursor:pointer; margin-left:10px; }
+body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f8; }
+header { background: #003a8f; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+select { padding: 5px; font-size: 14px; }
+table { width: 100%; border-collapse: collapse; background: white; }
+th, td { border: 1px solid #ddd; padding: 6px; text-align: center; min-width: 110px; }
+th { background: #eef2f6; }
+td { cursor: pointer; }
+td input { width: 100%; border: none; background: transparent; text-align: center; font-size: 14px; }
 </style>
 </head>
+
 <body>
 
 <header>
     <strong>Wochenplanung Zankl Engelbrechts</strong>
     <div>
-        KW: <select id="kw"></select>
-        Jahr: <select id="year"></select>
-        <button id="settingsButton" title="Einstellungen">⚙️</button>
+        KW:
+        <select id="kw"></select>
+        Jahr:
+        <select id="year"></select>
     </div>
 </header>
 
@@ -31,11 +33,9 @@ td input { width:100%; border:none; background:transparent; font-size:14px; text
     <thead>
         <tr>
             <th>Mitarbeiter</th>
-            <th id="mo"></th>
-            <th id="di"></th>
-            <th id="mi"></th>
-            <th id="do"></th>
-            <th id="fr"></th>
+            {% for d in days %}
+                <th>{{ d.label }} {{ d.date }}</th>
+            {% endfor %}
         </tr>
     </thead>
     <tbody></tbody>
@@ -44,105 +44,59 @@ td input { width:100%; border:none; background:transparent; font-size:14px; text
 <script>
 /* ---------- Einstellungen ---------- */
 const WORKDAYS = 5;
+let EMPLOYEE_LINES = {{ grid|length }};
 let dragValue = null;
 
-// Mitarbeiterliste
-let employeeNames = JSON.parse(localStorage.getItem('employeeNames')) || [
-    "Mitarbeiter 1","Mitarbeiter 2","Mitarbeiter 3","Mitarbeiter 4","Mitarbeiter 5"
-];
+/* ---------- Farben ---------- */
+const SPECIAL_RED = ['urlaub','krank','za','xxx'];
+const colors = {};
+const palette = ['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
+let colorIndex = 0;
 
-// KW/Jahr
+/* ---------- KW & Jahr ---------- */
 const kwSelect = document.getElementById('kw');
 const yearSelect = document.getElementById('year');
-for(let i=1;i<=53;i++) kwSelect.innerHTML+=`<option>${i}</option>`;
-for(let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+3;y++) yearSelect.innerHTML+=`<option>${y}</option>`;
+for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
+for (let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+2;y++) yearSelect.innerHTML += `<option>${y}</option>`;
 
-const params = new URLSearchParams(location.search);
-let currentKW = params.get('kw') || 1;
-let currentYear = params.get('year') || new Date().getFullYear();
-kwSelect.value = currentKW;
-yearSelect.value = currentYear;
+kwSelect.value = {{ kw }};
+yearSelect.value = {{ year }};
 
-kwSelect.onchange = yearSelect.onchange = ()=>location.href=`?kw=${kwSelect.value}&year=${yearSelect.value}`;
+kwSelect.onchange = yearSelect.onchange = () => {
+    location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`;
+};
 
-/* Zahnrad */
-document.getElementById('settingsButton').onclick = ()=>window.location.href='/settings/employees';
+/* ---------- Tabelle ---------- */
+const tbody = document.querySelector('#weekTable tbody');
 
-/* Wochentage */
-function getWeekDates(year, week){
-    const d=new Date(year,0,1+(week-1)*7);
-    const day=d.getDay();
-    const diff=(day<=4?1:8)-day;
-    d.setDate(d.getDate()+diff);
-    const weekdays=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"];
-    let dates=[];
-    for(let i=0;i<WORKDAYS;i++){
-        let dd=new Date(d);
-        dd.setDate(d.getDate()+i);
-        const dateStr=`${dd.getDate().toString().padStart(2,'0')}.${(dd.getMonth()+1).toString().padStart(2,'0')}`;
-        dates.push(`${weekdays[i]} ${dateStr}`);
-    }
-    return dates;
-}
-
-const dates=getWeekDates(currentYear,currentKW);
-['mo','di','mi','do','fr'].forEach((id,i)=>document.getElementById(id).innerText=dates[i]);
-
-/* Farben */
-const SPECIAL_RED=['urlaub','krank','za','xxx'];
-const colors={};
-const palette=['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
-let colorIndex=0;
-
-/* Tabelle */
-const tbody=document.querySelector('#weekTable tbody');
-let storageKey=`weekGrid_${currentYear}_${currentKW}`;
-let currentGrid=JSON.parse(localStorage.getItem(storageKey)) || [];
-
-function createEmptyGrid(lines=employeeNames.length){
-    return Array.from({length:lines},()=>Array.from({length:WORKDAYS},()=>({text:''})));
+/* Mitarbeiterliste aus DB laden */
+let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
+if(employeeNames.length === 0){
+    employeeNames = Array.from({length: EMPLOYEE_LINES}, (_,i)=>`Mitarbeiter ${i+1}`);
 }
 
 function buildTable(grid){
-    if(!Array.isArray(grid)||grid.length===0) grid=createEmptyGrid();
-    currentGrid=grid;
-    tbody.innerHTML='';
+    tbody.innerHTML = '';
+    EMPLOYEE_LINES = Math.max(grid.length, employeeNames.length);
 
-    for(let r=0;r<employeeNames.length;r++){
-        const tr=document.createElement('tr');
-        tr.innerHTML=`<th>${employeeNames[r]||"Mitarbeiter "+(r+1)}</th>`;
+    for(let r=0;r<EMPLOYEE_LINES;r++){
+        const tr = document.createElement('tr');
+        const name = employeeNames[r] || `Mitarbeiter ${r+1}`;
+        tr.innerHTML = `<th>${name}</th>`;
 
-        for(let d=0;d<WORKDAYS;d++){
-            const td=document.createElement('td');
-            const input=document.createElement('input');
-            const value=grid[r]?.[d]?.text||'';
-            input.value=value;
+        for(let d=0; d<WORKDAYS; d++){
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+            const value = grid[r]?.[d]?.text || '';
+            input.value = value;
             applyColor(td,value);
 
-            input.dataset.row=r;
-            input.dataset.day=d;
+            input.oninput = () => applyColor(td,input.value);
+            input.onchange = () => saveCell(r,d,input.value);
 
-            // Drag rechte Maustaste
-            input.onmousedown=(e)=>{
-                if(e.button===2){ // rechts
-                    dragValue=input.value;
-                    e.preventDefault();
-                }
-            };
-            input.onmouseover=()=>{
-                if(dragValue!==null){
-                    input.value=dragValue;
-                    applyColor(td,dragValue);
-                    saveCell(r,d,dragValue);
-                }
-            };
-            input.onmouseup=()=>dragValue=null;
-
-            // Browser-Kontextmenü verhindern
-            input.oncontextmenu=e=>e.preventDefault();
-
-            input.oninput=()=>{ applyColor(td,input.value); saveCell(r,d,input.value); };
-
+            input.onmousedown = (e)=>{ if(e.button===2) dragValue=input.value; };
+            input.onmouseover = ()=>{ if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); } };
+            input.onmouseup = ()=>dragValue=null;
             td.appendChild(input);
             tr.appendChild(td);
         }
@@ -150,25 +104,32 @@ function buildTable(grid){
     }
 }
 
-// Drag abbrechen, Maus verlässt Tabelle
-document.querySelector('#weekTable').onmouseleave=()=>dragValue=null;
-
+/* ---------- Farben ---------- */
 function applyColor(td,value){
     if(!value){ td.style.background=''; return; }
     const v=value.toLowerCase();
     if(SPECIAL_RED.includes(v)){ td.style.background='#f28b82'; return; }
-    if(!colors[v]){ colors[v]=palette[colorIndex%palette.length]; colorIndex++; }
-    td.style.background=colors[v];
+    if(!colors[v]){ colors[v]=palette[colorIndex % palette.length]; colorIndex++; }
+    td.style.background = colors[v];
 }
 
-function saveCell(row,day,value){
-    if(!currentGrid[row]) currentGrid[row]=[];
-    currentGrid[row][day]={text:value};
-    localStorage.setItem(storageKey,JSON.stringify(currentGrid));
+/* ---------- Speichern ---------- */
+async function saveCell(row,day,value){
+    try{
+        await fetch('/api/week/set-cell',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({kw:{{ kw }},year:{{ year }},row:row,day:day,value:value})
+        });
+    }catch(e){ console.warn('Speichern fehlgeschlagen'); }
 }
 
-/* Init */
-buildTable(currentGrid);
+/* ---------- Initialisieren ---------- */
+const initialGrid = {{ grid|tojson }};
+buildTable(initialGrid);
+
+/* Kontextmenü für Drag unterdrücken */
+document.addEventListener('contextmenu', e=>{ if(e.target.tagName==='INPUT') e.preventDefault(); });
 </script>
 
 </body>
