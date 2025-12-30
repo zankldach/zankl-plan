@@ -1,20 +1,15 @@
-# src/main.py
 import os
+import sqlite3
 from datetime import date, timedelta
 
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import get_conn, init_db
-
-# --------------------------------------------------
-# App
-# --------------------------------------------------
+# ---------------- App ----------------
 app = FastAPI(title="Zankl Plan")
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -23,152 +18,137 @@ app.add_middleware(
     secret_key=os.getenv("SESSION_SECRET", "dev-secret"),
 )
 
-# --------------------------------------------------
-# Startup
-# --------------------------------------------------
+# ---------------- DB ----------------
+DB_PATH = os.path.join(os.getcwd(), "database.db")
+
+
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS week_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            year INTEGER NOT NULL,
+            kw INTEGER NOT NULL,
+            standort TEXT NOT NULL,
+            row_count INTEGER NOT NULL DEFAULT 5,
+            UNIQUE(year, kw, standort)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS week_cells (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_plan_id INTEGER NOT NULL,
+            row_index INTEGER NOT NULL,
+            day_index INTEGER NOT NULL,
+            text TEXT,
+            UNIQUE(week_plan_id, row_index, day_index)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
 @app.on_event("startup")
 def startup():
     init_db()
 
 
-# --------------------------------------------------
-# Dummy Login (vorerst)
-# --------------------------------------------------
-def require_login(request: Request):
-    if "user" not in request.session:
-        request.session["user"] = {
-            "role": "write",
-            "standort_id": 1,
-        }
+# ---------------- Helpers ----------------
+def get_prev_week(year: int, kw: int):
+    if kw > 1:
+        return year, kw - 1
+    return year - 1, 52
 
 
-# --------------------------------------------------
-# Helpers
-# --------------------------------------------------
-def get_week_days(year: int, kw: int, workdays: int = 5):
+def get_week_days(year: int, kw: int):
     monday = date.fromisocalendar(year, kw, 1)
     labels = ["Mo", "Di", "Mi", "Do", "Fr"]
-    days = []
-
-    for i in range(workdays):
-        d = monday + timedelta(days=i)
-        days.append({
+    return [
+        {
             "label": labels[i],
-            "date": d.strftime("%d.%m.%Y"),
-        })
-
-    return days
-
-
-def get_or_create_week_plan(conn, year, kw, standort_id):
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT id FROM week_plans
-        WHERE year=? AND kw=? AND standort_id=?
-        """,
-        (year, kw, standort_id),
-    )
-    row = c.fetchone()
-    if row:
-        return row["id"]
-
-    c.execute(
-        """
-        INSERT INTO week_plans (year, kw, standort_id)
-        VALUES (?,?,?)
-        """,
-        (year, kw, standort_id),
-    )
-    conn.commit()
-    return c.lastrowid
+            "date": (monday + timedelta(days=i)).strftime("%d.%m.%Y"),
+        }
+        for i in range(5)
+    ]
 
 
-# --------------------------------------------------
-# Root
-# --------------------------------------------------
+# ---------------- Root ----------------
 @app.get("/", response_class=RedirectResponse)
 def root():
     return RedirectResponse("/week", status_code=303)
 
 
-# --------------------------------------------------
-# Wochenansicht
-# --------------------------------------------------
+# ---------------- Wochenansicht ----------------
 @app.get("/week", response_class=HTMLResponse)
 def week_view(
     request: Request,
-    standort_id: int = 1,
-    kw: int | None = None,
-    year: int | None = None,
+    kw: int = None,
+    year: int = None,
+    standort: str = "Engelbrechts",
 ):
-    require_login(request)
-
     today = date.today()
     kw = kw or today.isocalendar()[1]
     year = year or today.year
-    workdays = 5
 
     conn = get_conn()
-    c = conn.cursor()
+    cur = conn.cursor()
 
-    # Standorte
-    c.execute("SELECT * FROM standorte ORDER BY id")
-    standorte = [dict(r) for r in c.fetchall()]
-
-    # Mitarbeiter (fixe Zeilen!)
-    c.execute(
-        """
-        SELECT * FROM mitarbeiter
-        WHERE standort_id=? AND aktiv=1
-        ORDER BY sort_order
-        """,
-        (standort_id,),
+    # Woche holen
+    cur.execute(
+        "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
+        (year, kw, standort),
     )
-    mitarbeiter = [dict(r) for r in c.fetchall()]
+    plan = cur.fetchone()
 
-    # Weekplan
-    week_plan_id = get_or_create_week_plan(conn, year, kw, standort_id)
+    # Falls neue Woche → Struktur aus Vorwoche übernehmen
+    if not plan:
+        py, pkw = get_prev_week(year, kw)
+        cur.execute(
+            "SELECT row_count FROM week_plans WHERE year=? AND kw=? AND standort=?",
+            (py, pkw, standort),
+        )
+        prev = cur.fetchone()
+        row_count = prev["row_count"] if prev else 5
 
-    # Zellen laden
-    c.execute(
-        """
-        SELECT * FROM week_cells
-        WHERE week_plan_id=?
-        """,
-        (week_plan_id,),
-    )
-    cells = [dict(r) for r in c.fetchall()]
-
-    # Falls noch keine Zellen existieren → anlegen
-    if not cells:
-        for m in mitarbeiter:
-            for d in range(workdays):
-                c.execute(
-                    """
-                    INSERT INTO week_cells
-                    (week_plan_id, mitarbeiter_id, day_index, text, color)
-                    VALUES (?,?,?,?,?)
-                    """,
-                    (week_plan_id, m["id"], d, "", None),
-                )
+        cur.execute(
+            "INSERT INTO week_plans (year, kw, standort, row_count) VALUES (?,?,?,?)",
+            (year, kw, standort, row_count),
+        )
         conn.commit()
 
-        c.execute(
-            "SELECT * FROM week_cells WHERE week_plan_id=?",
-            (week_plan_id,),
+        cur.execute(
+            "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
+            (year, kw, standort),
         )
-        cells = [dict(r) for r in c.fetchall()]
+        plan = cur.fetchone()
 
-    # Grid bauen: mitarbeiter_id → tage
-    grid = {}
-    for m in mitarbeiter:
-        grid[m["id"]] = [None] * workdays
+    plan_id = plan["id"]
+    row_count = plan["row_count"]
 
-    for cell in cells:
-        grid[cell["mitarbeiter_id"]][cell["day_index"]] = cell
+    # Grid vorbereiten
+    grid = [
+        [{"text": ""} for _ in range(5)]
+        for _ in range(row_count)
+    ]
 
-    days = get_week_days(year, kw, workdays)
+    cur.execute(
+        "SELECT row_index, day_index, text FROM week_cells WHERE week_plan_id=?",
+        (plan_id,),
+    )
+
+    for r, d, text in cur.fetchall():
+        if r < row_count and d < 5:
+            grid[r][d]["text"] = text
 
     conn.close()
 
@@ -176,45 +156,97 @@ def week_view(
         "week.html",
         {
             "request": request,
-            "standorte": standorte,
-            "standort_id": standort_id,
-            "year": year,
-            "kw": kw,
-            "days": days,
-            "mitarbeiter": mitarbeiter,
             "grid": grid,
-            "week_plan_id": week_plan_id,
+            "days": get_week_days(year, kw),
+            "kw": kw,
+            "year": year,
+            "standort": standort,
         },
     )
 
 
-# --------------------------------------------------
-# API: Zelle speichern (AUTO-SAVE)
-# --------------------------------------------------
-@app.post("/api/week/set-cell", response_class=JSONResponse)
-def set_cell(
-    request: Request,
-    week_plan_id: int = Form(...),
-    mitarbeiter_id: int = Form(...),
-    day_index: int = Form(...),
-    text: str = Form(""),
-    color: str | None = Form(None),
-):
-    require_login(request)
+# ---------------- API: Zelle speichern ----------------
+@app.post("/api/week/set-cell")
+async def set_cell(request: Request):
+    data = await request.json()
 
     conn = get_conn()
-    c = conn.cursor()
+    cur = conn.cursor()
 
-    c.execute(
+    cur.execute(
+        "SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?",
+        (data["year"], data["kw"], data.get("standort", "Engelbrechts")),
+    )
+    plan_id = cur.fetchone()["id"]
+
+    cur.execute(
         """
-        UPDATE week_cells
-        SET text=?, color=?
-        WHERE week_plan_id=? AND mitarbeiter_id=? AND day_index=?
+        INSERT INTO week_cells (week_plan_id, row_index, day_index, text)
+        VALUES (?,?,?,?)
+        ON CONFLICT(week_plan_id, row_index, day_index)
+        DO UPDATE SET text=excluded.text
         """,
-        (text, color, week_plan_id, mitarbeiter_id, day_index),
+        (
+            plan_id,
+            data["row"],
+            data["day"],
+            data["value"],
+        ),
     )
 
     conn.commit()
     conn.close()
 
-    return {"success": True}
+    return {"ok": True}
+
+
+# ---------------- API: Zeile + ----------------
+@app.post("/api/week/add-row")
+async def add_row(request: Request):
+    data = await request.json()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "UPDATE week_plans SET row_count = row_count + 1 WHERE year=? AND kw=? AND standort=?",
+        (data["year"], data["kw"], data.get("standort", "Engelbrechts")),
+    )
+
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ---------------- API: Zeile - ----------------
+@app.post("/api/week/remove-row")
+async def remove_row(request: Request):
+    data = await request.json()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id, row_count FROM week_plans WHERE year=? AND kw=? AND standort=?",
+        (data["year"], data["kw"], data.get("standort", "Engelbrechts")),
+    )
+    plan = cur.fetchone()
+
+    if not plan or plan["row_count"] <= 1:
+        return {"ok": False}
+
+    last_row = plan["row_count"] - 1
+
+    cur.execute(
+        "DELETE FROM week_cells WHERE week_plan_id=? AND row_index=?",
+        (plan["id"], last_row),
+    )
+
+    cur.execute(
+        "UPDATE week_plans SET row_count = row_count - 1 WHERE id=?",
+        (plan["id"],),
+    )
+
+    conn.commit()
+    conn.close()
+    return {"ok": True}
