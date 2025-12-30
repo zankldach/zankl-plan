@@ -2,54 +2,46 @@
 {% block title %}Mitarbeiterverwaltung{% endblock %}
 {% block content %}
 
-<h1>Mitarbeiterverwaltung – {{ standort }}</h1>
+<h1>Mitarbeiterverwaltung</h1>
 
 <div id="settings">
+    <label for="standort">Standort:</label>
+    <select id="standort">
+        <option value="Engelbrechts" selected>Engelbrechts</option>
+        <!-- Weitere Standorte hier einfügen, falls nötig -->
+    </select>
+
     <h3>Mitarbeiterliste</h3>
     <div id="employeeList"></div>
     <button id="addEmployee">+ Mitarbeiter</button>
-    <form id="saveForm" method="POST" action="/settings/employees" style="display:none;">
-        <input type="hidden" name="standort" value="{{ standort }}">
-        <input type="hidden" name="names" id="namesInput">
-    </form>
+    <button id="saveEmployees" style="margin-left:10px;">Speichern</button>
 </div>
 
 <script>
 const MAX_EMPLOYEES = 15;
 
-// Mitarbeiterliste aus Backend
-let employeeNames = {{ employees|tojson }};
+let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
 
-// DOM-Referenzen
 const employeeListDiv = document.getElementById('employeeList');
-const saveForm = document.getElementById('saveForm');
-const namesInput = document.getElementById('namesInput');
 
-// Liste rendern
 function renderEmployeeList() {
     employeeListDiv.innerHTML = '';
-    employeeNames.forEach((name, index) => {
+    employeeNames.forEach((name,index)=>{
         const div = document.createElement('div');
-        div.style.marginBottom = "4px";
+        div.style.marginBottom = '4px';
 
         const input = document.createElement('input');
-        input.type = "text";
         input.value = name;
-        input.style.width = "200px";
-        input.oninput = () => {
-            employeeNames[index] = input.value;
-            saveEmployees();
-        };
+        input.style.width = '200px';
+        input.oninput = () => { employeeNames[index] = input.value; };
 
         const delBtn = document.createElement('button');
-        delBtn.type = "button";
         delBtn.innerText = '–';
+        delBtn.style.marginLeft = '6px';
         delBtn.onclick = () => {
             employeeNames.splice(index,1);
             renderEmployeeList();
-            saveEmployees();
         };
-        delBtn.style.marginLeft = "4px";
 
         div.appendChild(input);
         div.appendChild(delBtn);
@@ -57,21 +49,32 @@ function renderEmployeeList() {
     });
 }
 
-// Mitarbeiter hinzufügen
 document.getElementById('addEmployee').onclick = () => {
     if(employeeNames.length >= MAX_EMPLOYEES) return;
     employeeNames.push(`Mitarbeiter ${employeeNames.length+1}`);
     renderEmployeeList();
-    saveEmployees();
 }
 
-// Liste speichern
-function saveEmployees() {
-    namesInput.value = employeeNames.join(',');
-    saveForm.submit();
+document.getElementById('saveEmployees').onclick = async () => {
+    const standort = document.getElementById('standort').value;
+    try {
+        const res = await fetch('/api/settings/employees', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({names: employeeNames, standort})
+        });
+        const data = await res.json();
+        if(data.ok){
+            alert('Mitarbeiter erfolgreich gespeichert!');
+        } else {
+            alert('Fehler beim Speichern');
+        }
+    } catch(e){
+        alert('Fehler beim Speichern');
+        console.error(e);
+    }
 }
 
-// Initial rendern
 renderEmployeeList();
 </script>
 
