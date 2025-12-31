@@ -10,9 +10,7 @@
     /* ---------- Grundlayout ---------- */
     :root {
       --blue: #003a8f;
-      --blue-2: #0b57d0;
       --bg: #f4f6f8;
-      --border: #d9dee5;
     }
     html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
@@ -25,10 +23,8 @@
       justify-content: space-between;
       align-items: center;
       position: relative;
-      z-index: 10;
     }
 
-    /* ---------- Menü ---------- */
     nav.site {
       background: var(--blue);
       padding: 6px 20px;
@@ -36,10 +32,6 @@
       display: flex;
       gap: 16px;
       align-items: center;
-      border-top: 1px solid rgba(255,255,255,0.1);
-      position: sticky; /* bleibt oben beim Scrollen */
-      top: 0;
-      z-index: 9;
     }
     nav.site a {
       color: white;
@@ -50,7 +42,6 @@
     }
     nav.site a:hover { background: rgba(255,255,255,0.12); }
 
-    /* ---------- Zahnrad ---------- */
     #settingsGear {
       position:absolute;
       right:20px;
@@ -60,22 +51,13 @@
       font-size:20px;
     }
 
-    /* ---------- Seiteninhalt ---------- */
-    main {
-      padding: 20px;
-      position: relative;
-      z-index: 1;
-    }
+    main { padding: 20px; }
 
-    /* ---------- Tabellen (Default) ---------- */
+    /* Tabellen Defaults (werden von week.html überschrieben) */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
-    td { position:relative; }
     td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
-
-    button { padding:5px 10px; font-size:14px; cursor:pointer; }
-    .special-red { background:#f28b82 !important; }
   </style>
 
   {% block head %}{% endblock %}
@@ -88,11 +70,10 @@
     <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
   </header>
 
-  <!-- WICHTIG: Alle href korrekt und vollständig, keine Tippfehler -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    <aeekWochenplanung</a>
+    /weekWochenplanung</a>
     /settings/employeesMitarbeiter</a>
-    /yearJahr</a>
+    <yearJahr</a>
     /healthHealth</a>
   </nav>
 
@@ -100,15 +81,16 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Optionales globales JS -->
-  <script src="/static/app.js<script>
-    // Zahnrad: per Klick und Enter/Space (zugänglich)
+  <!-- Nur korrektes Inline-JS, KEIN src-Tag -->
+  <script>
     function openSettings() { window.location.href = '/settings/employees'; }
     const gear = document.getElementById('settingsGear');
-    gear.addEventListener('click', openSettings);
-    gear.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
-    });
+    if (gear) {
+      gear.addEventListener('click', openSettings);
+      gear.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
+      });
+    }
 
     // Kontextmenü bei Input optional verhindern
     document.addEventListener('contextmenu', e => {
