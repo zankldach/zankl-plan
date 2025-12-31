@@ -1,20 +1,34 @@
-from fastapi import FastAPI, Request
+
+# src/main.py
+from fastapi import FastAPI, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import sqlite3
 from pathlib import Path
+from datetime import date, timedelta
+import logging
 
 # ----------------------------
 # App Setup
 # ----------------------------
-app = FastAPI()
+app = FastAPI(title="Zankl-Plan MVP")
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "zankl.db"
+# Verzeichnisstruktur:
+# project_root/
+#   src/main.py
+#   templates/
+#   static/
+BASE_DIR = Path(__file__).resolve().parent            # .../src
+ROOT_DIR = BASE_DIR.parent                            # Projekt-Root
+DB_PATH = BASE_DIR / "zankl.db"                       # DB liegt in src/
 
-templates = Jinja2Templates(directory=str(BASE_DIR.parent / "templates"))
-app.mount("/static", StaticFiles(directory=str(BASE_DIR.parent / "static")), name="static")
+templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("zankl-plan")
 
 # ----------------------------
 # Database
@@ -64,6 +78,26 @@ def init_db():
 init_db()
 
 # ----------------------------
+# Hilfsfunktionen
+# ----------------------------
+def build_days(year: int, kw: int) -> list[dict]:
+    """Erzeugt Mo–Fr mit Datum aus ISO-Kalender (KW/Jahr)."""
+    start = date.fromisocalendar(year, kw, 1)  # Montag
+    labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
+    return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
+
+# ----------------------------
+# Healthcheck & Diagnose
+# ----------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/week-plain")
+def week_plain(kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
+    return {"kw": kw, "year": year, "standort": standort}
+
+# ----------------------------
 # Week View
 # ----------------------------
 @app.get("/", response_class=HTMLResponse)
@@ -89,7 +123,14 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             plan_id = plan["id"]
             rows = plan["row_count"]
 
-        # Grid vorbereiten
+        # Mitarbeiter laden
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
+
+        # Zeilenanzahl mindestens so groß wie Mitarbeiterliste
+        rows = max(rows, len(employees)) if employees else rows
+
+        # Grid vorbereiten (rows × 5 Tage)
         grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
         cur.execute("SELECT row_index, day_index, text FROM week_cells WHERE week_plan_id=?", (plan_id,))
         for r in cur.fetchall():
@@ -98,18 +139,8 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
-        # Mitarbeiter
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
-        employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
-
-        # Default-Tage
-        days = [
-            {"label":"Montag","date":"06.01"},
-            {"label":"Dienstag","date":"07.01"},
-            {"label":"Mittwoch","date":"08.01"},
-            {"label":"Donnerstag","date":"09.01"},
-            {"label":"Freitag","date":"10.01"},
-        ]
+        # Tage berechnen aus KW/Jahr
+        days = build_days(year, kw)
 
         return templates.TemplateResponse("week.html", {
             "request": request,
@@ -122,7 +153,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         })
 
     except Exception as e:
-        print("Fehler in /week:", e)
+        logger.exception("Fehler in /week")
         return HTMLResponse(f"<h1>Fehler beim Laden der Woche</h1><pre>{e}</pre>", status_code=500)
     finally:
         conn.close()
@@ -131,7 +162,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
 # Set Cell
 # ----------------------------
 @app.post("/api/week/set-cell")
-async def set_cell(data: dict):
+async def set_cell(data: dict = Body(...)):
     conn = get_conn()
     cur = conn.cursor()
     try:
@@ -150,6 +181,7 @@ async def set_cell(data: dict):
         conn.commit()
         return {"ok": True}
     except Exception as e:
+        logger.exception("Fehler in /api/week/set-cell")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     finally:
         conn.close()
@@ -169,17 +201,25 @@ def employees_settings(request: Request):
         conn.close()
 
 @app.post("/settings/employees")
-async def employees_save(data: dict):
+async def employees_save(data: dict = Body(...)):
     conn = get_conn()
     cur = conn.cursor()
     try:
         cur.execute("DELETE FROM employees")
         for e in data.get("employees", []):
-            name = e.get("name","").strip()
-            standort = e.get("standort","engelbrechts")
+            name = e.get("name", "").strip()
+            standort = e.get("standort", "engelbrechts")
             if name:
                 cur.execute("INSERT INTO employees(name,standort) VALUES(?,?)", (name, standort))
         conn.commit()
         return {"ok": True}
     finally:
         conn.close()
+
+# ----------------------------
+# Year View (Optional)
+# ----------------------------
+@app.get("/year", response_class=HTMLResponse)
+def year_view(request: Request, year: int = 2025):
+    ctx = {"request": request, "year": year}
+    return templates.TemplateResponse("year.html", ctx)
