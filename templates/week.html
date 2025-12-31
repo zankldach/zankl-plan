@@ -5,6 +5,8 @@
 {% block head %}
 <style>
   .plan-wrap { margin-top: 12px; }
+
+  /* Tabelle */
   table.planner {
     width: 100%;
     border-collapse: separate;
@@ -17,45 +19,106 @@
     box-shadow: 0 3px 12px rgba(0,0,0,0.06);
   }
   .planner thead th {
-    position: sticky; top: 0; z-index: 3;
-    background: #0b57d0; color: #fff; padding: 10px 8px; font-weight: 700;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #0b57d0;
+    color: #fff;
+    padding: 10px 8px;
+    font-weight: 700;
     border-bottom: 1px solid rgba(255,255,255,0.2);
   }
   .planner thead th:first-child,
   .planner tbody td:first-child {
-    position: sticky; left: 0; z-index: 2;
-    background: #f7f9fc; font-weight: 600; width: 200px; text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f7f9fc;
+    font-weight: 600;
+    width: 200px;
+    text-align: left;
   }
-  .planner tbody td { border-top: 1px solid #eef2f6; border-right: 1px solid #eef2f6; padding: 0; height: 44px; }
+  .planner tbody td {
+    border-top: 1px solid #eef2f6;
+    border-right: 1px solid #eef2f6;
+    padding: 0;
+    height: 44px;
+  }
   .planner tbody tr:nth-child(even) td:first-child { background: #f1f5fb; }
   .planner tbody tr:hover td { background: #fbfdff; }
-  .planner input.cell { width: 100%; height: 44px; padding: 6px 8px; border: none; background: transparent; text-align: center; font-size: 14px; outline: none; }
+
+  .planner input.cell {
+    width: 100%;
+    height: 44px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 14px;
+    outline: none;
+  }
   .planner input.cell:focus { outline: 2px solid #7db3ff; background: #fff; }
+
+  /* Drag & Drop */
   .drag-over { outline: 2px dashed #2196f3; outline-offset: -4px; background: #eef7ff !important; }
   .dragging { opacity: .6; }
   .is-empty { background: transparent !important; }
+
+  /* Kopfbereich dieser Seite */
   header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
-  .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
+
+  /* Toolbar (Standort + KW/Jahr) */
+  .toolbar { display:flex; gap:16px; align-items:center; flex-wrap: wrap; margin-bottom:8px; }
+  .toolbar .group { display:flex; gap:8px; align-items:center; }
+  .toolbar label { font-weight: 600; }
+  .toolbar select, .toolbar button {
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+  .toolbar .badge {
+    display:inline-block;
+    padding:4px 8px;
+    background:#eef2f6;
+    border-radius:999px;
+    font-size:12px;
+    color:#334155;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
-  <!-- keine Links hier, Standortwechsel nur per Select -->
+  <!-- keine Links mehr hier (vermeidet kaputte URLs) -->
 </header>
 
 <div class="toolbar">
-  <div>
+  <!-- Standort -->
+  <div class="group">
     <label for="locationSelect">Standort:</label>
     <select id="locationSelect">
       <option value="engelbrechts" {% if standort=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
       <option value="gross-gerungs" {% if standort=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
     </select>
   </div>
+
+  <!-- KW / Jahr Navigation -->
+  <div class="group">
+    <button id="prevWeekBtn" title="Vorherige Woche">←</button>
+
+    <label for="kwSelect">KW:</label>
+    <select id="kwSelect"></select>
+
+    <label for="yearSelect">Jahr:</label>
+    <select id="yearSelect"></select>
+
+    <button id="nextWeekBtn" title="Nächste Woche">→</button>
+    <button id="goBtn" title="Auswahl öffnen">Öffnen</button>
+  </div>
+
+  <!-- Hinweise -->
   <span class="badge">KW {{ kw }} / {{ year }}</span>
-  <span class="badge">Tipp: <kbd>Strg</kbd> halten beim Ziehen = Kopieren</span>
+  <span class="badge">Tipp: <kbd>Strg</kbd> beim Ziehen = Kopieren</span>
 </div>
 
 <div class="plan-wrap">
@@ -100,14 +163,100 @@
 
 {% block scripts %}
 <script>
-  const KW = parseInt('{{ kw }}', 10);
+  /* -------------------------
+   * Kontext & Navigation
+   * ------------------------- */
+  const KW   = parseInt('{{ kw }}', 10);
   const YEAR = parseInt('{{ year }}', 10);
   const CURRENT_LOC = "{{ standort|e }}";
 
+  // Wir erlauben 53 als Max – exakte ISO-Berechnung können wir später nachrüsten
+  const MAX_WEEKS = 53;
+
+  function initSelectors(){
+    const kwSel = document.getElementById('kwSelect');
+    const yearSel = document.getElementById('yearSelect');
+
+    // KW 1..53
+    kwSel.innerHTML = "";
+    for (let w=1; w<=MAX_WEEKS; w++){
+      const opt = document.createElement('option');
+      opt.value = String(w);
+      opt.textContent = String(w);
+      if (w === KW) opt.selected = true;
+      kwSel.appendChild(opt);
+    }
+
+    // Jahr: aktuell-1, aktuell, aktuell+1
+    const years = [YEAR-1, YEAR, YEAR+1];
+    yearSel.innerHTML = "";
+    years.forEach(y=>{
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      if (y === YEAR) opt.selected = true;
+      yearSel.appendChild(opt);
+    });
+  }
+
+  function navigate(standort, kw, year){
+    if (kw < 1) kw = 1;
+    if (kw > MAX_WEEKS) kw = MAX_WEEKS;
+    window.location.href = `/week?standort=${encodeURIComponent(standort)}&kw=${kw}&year=${year}`;
+  }
+
+  function prevWeek(kw, year){
+    if (kw > 1) return {kw: kw-1, year};
+    return {kw: MAX_WEEKS, year: year-1};
+  }
+
+  function nextWeek(kw, year){
+    if (kw < MAX_WEEKS) return {kw: kw+1, year};
+    return {kw: 1, year: year+1};
+  }
+
+  // Events
+  document.getElementById('locationSelect').onchange = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    navigate(loc, kw, yr);
+  };
+
+  document.getElementById('prevWeekBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    const p   = prevWeek(kw, yr);
+    navigate(loc, p.kw, p.year);
+  };
+
+  document.getElementById('nextWeekBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    const n   = nextWeek(kw, yr);
+    navigate(loc, n.kw, n.year);
+  };
+
+  document.getElementById('goBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    navigate(loc, kw, yr);
+  };
+
+  // Initial befüllen
+  initSelectors();
+
+  /* -------------------------
+   * Farben
+   * ------------------------- */
   const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
   function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
   function colorFor(text){
-    const n = normalize(text); if(!n) return null;
+    const n = normalize(text);
+    if(!n) return null;
     const h = hashCode(n) % 360, s = 70, l = 80;
     return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
   }
@@ -119,27 +268,48 @@
     });
   }
 
+  /* -------------------------
+   * Speichern
+   * ------------------------- */
   async function saveCell(row, day, value){
     try{
       const res = await fetch('/api/week/set-cell',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ row:Number(row), day:Number(day), value:value??"", kw:KW, year:YEAR, standort:(document.getElementById('locationSelect').value || CURRENT_LOC) })
+        body: JSON.stringify({
+          row:Number(row),
+          day:Number(day),
+          value:value ?? "",
+          kw:KW,
+          year:YEAR,
+          standort:(document.getElementById('locationSelect').value || CURRENT_LOC)
+        })
       });
-      if (!res.ok) { const text = await res.text(); console.warn('Save HTTP-Fehler:', res.status, text); return false; }
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn('Save HTTP-Fehler:', res.status, text);
+        return false;
+      }
       const r = await res.json();
       if(!r.ok) { console.warn('Save-Fehler:', r.error); return false; }
       return true;
     }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
   }
+
   async function saveAll(){
-    const ops=[]; document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+    const ops=[];
+    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
       ops.push(saveCell(inp.dataset.row, inp.dataset.day, inp.value));
     });
-    await Promise.all(ops); alert('Alle Zellen gespeichert.');
+    await Promise.all(ops);
+    alert('Alle Zellen gespeichert.');
   }
 
+  /* -------------------------
+   * Drag & Drop
+   * ------------------------- */
   let dragData=null;
+
   function attachDnD(){
     const cells = document.querySelectorAll('#weekTable td');
     const inputs = document.querySelectorAll('#weekTable input.cell');
@@ -156,6 +326,8 @@
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
         dragData=null;
       });
+
+      // Speichern beim Verlassen/Enter
       inp.addEventListener('blur', async ()=>{
         await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
         applyColors();
@@ -177,10 +349,12 @@
       td.addEventListener('dragover',e=>{ e.preventDefault(); td.classList.add('drag-over'); });
       td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
       td.addEventListener('drop', async e=>{
-        e.preventDefault(); td.classList.remove('drag-over');
+        e.preventDefault();
+        td.classList.remove('drag-over');
         try{
           const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
           if(!payload || typeof payload.row==='undefined') return;
+
           const targetRow = Number(td.dataset.row);
           const targetDay = Number(td.dataset.day);
           const tgtInput = td.querySelector('input.cell');
@@ -188,25 +362,29 @@
           if(!tgtInput || !srcInput) return;
 
           const copy = e.ctrlKey || e.metaKey; // Strg/Cmd = kopieren
+
+          // Ziel setzen + speichern
           tgtInput.value = payload.value;
           await saveCell(targetRow, targetDay, payload.value);
 
+          // Move: Quelle leeren + speichern
           if(!copy && (payload.row!==targetRow || payload.day!==targetDay)){
             srcInput.value = "";
             await saveCell(payload.row, payload.day, "");
           }
+
           applyColors();
         }catch(err){ console.warn('Drop-Fehler:', err); }
       });
     });
   }
 
-  document.getElementById('locationSelect').onchange = ()=>{
-    const loc = document.getElementById('locationSelect').value;
-    window.location.href = `/week?standort=${encodeURIComponent(loc)}&kw=${KW}&year=${YEAR}`;
-  };
-
+  // Buttons
   document.getElementById('saveAllBtn').onclick = saveAll;
-  attachDnD(); applyColors();
+
+  // Aktivieren
+  attachDnD();
+  applyColors();
 </script>
 {% endblock %}
+``
