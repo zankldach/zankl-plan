@@ -1,44 +1,14 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8">
-<title>Wochenplanung Zankl Engelbrechts</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "base.html" %}
 
-<style>
-body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
-header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; position:relative; }
-select { padding:5px; font-size:14px; }
-table { width:100%; border-collapse:collapse; background:white; }
-th, td { border:1px solid #ddd; padding:6px; text-align:center; min-width:110px; }
-th { background:#eef2f6; }
-td { cursor:pointer; position:relative; }
-td input { 
-    width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; 
-}
-#settingsGear {
-    position:absolute;
-    right:20px;
-    top:50%;
-    transform:translateY(-50%);
-    cursor:pointer;
-    font-size:20px;
-}
-</style>
-</head>
+{% block title %}Wochenplanung Zankl{% endblock %}
 
-<body>
-
-<header>
-    <strong>Wochenplanung Zankl Engelbrechts</strong>
-    <div>
-        KW:
-        <select id="kw"></select>
-        Jahr:
-        <select id="year"></select>
-    </div>
-    <div id="settingsGear" title="Einstellungen">⚙️</div>
-</header>
+{% block content %}
+<div style="margin-bottom:15px;">
+    KW:
+    <select id="kw"></select>
+    Jahr:
+    <select id="year"></select>
+</div>
 
 <table id="weekTable">
     <thead>
@@ -51,7 +21,9 @@ td input {
     </thead>
     <tbody></tbody>
 </table>
+{% endblock %}
 
+{% block scripts %}
 <script>
 /* ---------- Einstellungen ---------- */
 const WORKDAYS = 5;
@@ -128,13 +100,5 @@ async function saveCell(row,day,value){
 /* ---------- Init ---------- */
 const initialGrid = {{ grid|tojson }};
 buildTable(initialGrid);
-
-/* Kontextmenü für Drag unterdrücken */
-document.addEventListener('contextmenu', e=>{ if(e.target.tagName==='INPUT') e.preventDefault(); });
-
-/* ---------- Zahnrad: Einstellungen öffnen ---------- */
-document.getElementById('settingsGear').onclick=()=>{ window.location.href='/settings/employees'; };
 </script>
-
-</body>
-</html>
+{% endblock %}
