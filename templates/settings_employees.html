@@ -19,6 +19,7 @@ button { padding:4px 8px; margin-left:4px; cursor:pointer; }
 button.delete { background:#f44336; color:white; border:none; }
 button.edit { background:#2196f3; color:white; border:none; }
 .add-row { margin-top:10px; padding:6px 12px; background:#4caf50; color:white; border:none; cursor:pointer; }
+#saveBtn { padding:6px 12px; background:#003a8f; color:white; border:none; cursor:pointer; }
 
 /* Einfaches responsive Menü */
 @media(max-width:600px){
@@ -31,8 +32,8 @@ button.edit { background:#2196f3; color:white; border:none; }
 <header>
     <strong>Zankl Dach – Mitarbeiterverwaltung</strong>
     <nav>
-        <a href="/week?location=engelbrechts">Wochenplanung Engelbrechts</a>
-        <a href="/week?location=gross-gerungs">Wochenplanung Groß Gerungs</a>
+        <a href="/week?standort=engelbrechts">Wochenplanung Engelbrechts</a>
+        <a href="/week?standort=gross-gerungs">Wochenplanung Groß Gerungs</a>
         <a href="/settings/employees">Mitarbeiter</a>
     </nav>
 </header>
@@ -46,22 +47,23 @@ button.edit { background:#2196f3; color:white; border:none; }
     <option value="gross-gerungs">Groß Gerungs</option>
 </select>
 
+<form id="employeeForm">
 <div id="employeesContainer"></div>
-
-<button class="add-row" onclick="addEmployee()">Neuen Mitarbeiter hinzufügen</button>
+<button type="button" class="add-row" onclick="addEmployee()">Neuen Mitarbeiter hinzufügen</button>
+<button type="submit" id="saveBtn">Speichern</button>
+</form>
 </section>
 
 <script>
-let employees = {{ employees|tojson }} || []; // alle Mitarbeiter als Array von Objekten: {name, location}
+let employees = {{ employees|tojson }} || [];  // Array von {id,name}
 let currentLocation = document.getElementById('locationSelect').value;
 
 const container = document.getElementById('employeesContainer');
 
 function renderEmployees() {
     container.innerHTML = '';
-    const filtered = employees.filter(e => e.location === currentLocation);
-    if(filtered.length === 0){
-        container.innerHTML = `<p>Keine Mitarbeiter für ${currentLocation} vorhanden.</p>`;
+    if(employees.length === 0){
+        container.innerHTML = `<p>Keine Mitarbeiter vorhanden.</p>`;
         return;
     }
 
@@ -72,25 +74,21 @@ function renderEmployees() {
 
     const tbody = document.createElement('tbody');
 
-    filtered.forEach((emp, index) => {
+    employees.forEach((emp, index) => {
         const tr = document.createElement('tr');
+
         const nameTd = document.createElement('td');
         const input = document.createElement('input');
         input.value = emp.name;
-        input.onchange = () => { emp.name = input.value; saveEmployees(); };
+        input.onchange = () => { emp.name = input.value; };
         nameTd.appendChild(input);
 
         const actionTd = document.createElement('td');
-        const editBtn = document.createElement('button');
-        editBtn.textContent = 'Bearbeiten';
-        editBtn.className = 'edit';
-        editBtn.onclick = () => { input.focus(); };
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = 'Löschen';
         deleteBtn.className = 'delete';
         deleteBtn.onclick = () => { removeEmployee(emp); };
 
-        actionTd.appendChild(editBtn);
         actionTd.appendChild(deleteBtn);
 
         tr.appendChild(nameTd);
@@ -102,30 +100,28 @@ function renderEmployees() {
     container.appendChild(table);
 }
 
-function saveEmployees() {
-    fetch('/settings/employees', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employees })
-    }).then(res => res.json())
-      .then(data => console.log('Speichern erfolgreich', data))
-      .catch(e => console.warn('Speichern fehlgeschlagen', e));
-}
-
-function removeEmployee(emp) {
+function removeEmployee(emp){
     if(!confirm(`Mitarbeiter "${emp.name}" wirklich löschen?`)) return;
     employees = employees.filter(e => e !== emp);
-    saveEmployees();
     renderEmployees();
 }
 
-function addEmployee() {
+function addEmployee(){
     const name = prompt('Name des neuen Mitarbeiters:');
     if(!name) return;
-    employees.push({name, location: currentLocation});
-    saveEmployees();
+    employees.push({id:null,name});
     renderEmployees();
 }
+
+document.getElementById('employeeForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    employees.forEach(emp => formData.append('names', emp.name));
+    const res = await fetch('/settings/employees', { method:'POST', body: formData });
+    const data = await res.json();
+    if(data.ok) alert('Mitarbeiter erfolgreich gespeichert');
+    else alert('Fehler beim Speichern');
+};
 
 document.getElementById('locationSelect').onchange = (e) => {
     currentLocation = e.target.value;
