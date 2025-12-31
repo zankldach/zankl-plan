@@ -1,136 +1,101 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8">
-<title>Mitarbeiterverwaltung Zankl Dach</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
-header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
-nav { display:flex; gap:15px; }
-nav a { color:white; text-decoration:none; font-weight:bold; }
-section { padding:20px; }
-h2 { margin-top:0; }
-table { width:100%; border-collapse:collapse; background:white; margin-bottom:20px; }
-th, td { border:1px solid #ddd; padding:6px; text-align:center; }
-th { background:#eef2f6; }
-td input { width:100%; padding:4px; box-sizing:border-box; }
-button { padding:4px 8px; margin-left:4px; cursor:pointer; }
-button.delete { background:#f44336; color:white; border:none; }
-button.edit { background:#2196f3; color:white; border:none; }
-.add-row { margin-top:10px; padding:6px 12px; background:#4caf50; color:white; border:none; cursor:pointer; }
-#saveBtn { padding:6px 12px; background:#003a8f; color:white; border:none; cursor:pointer; }
 
-/* Einfaches responsive Menü */
-@media(max-width:600px){
-    nav { flex-direction:column; gap:5px; }
-}
-</style>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Mitarbeiter – Zankl Plan{% endblock %}
 
-<header>
-    <strong>Zankl Dach – Mitarbeiterverwaltung</strong>
-    <nav>
-        <a href="/week?standort=engelbrechts">Wochenplanung Engelbrechts</a>
-        <a href="/week?standort=gross-gerungs">Wochenplanung Groß Gerungs</a>
-        <a href="/settings/employees">Mitarbeiter</a>
-    </nav>
-</header>
+{% block content %}
+<h2>Mitarbeiter verwalten</h2>
 
-<section>
-<h2>Mitarbeiterverwaltung</h2>
+<p>Hier kannst du Mitarbeiter für die Standorte <strong>Engelbrechts</strong> und <strong>Groß Gerungs</strong> pflegen. Speichern sendet die Liste an den Server und ersetzt die bestehenden Einträge.</p>
 
-<label for="locationSelect">Standort:</label>
-<select id="locationSelect">
-    <option value="engelbrechts">Engelbrechts</option>
-    <option value="gross-gerungs">Groß Gerungs</option>
-</select>
+<div style="display:flex; gap:24px; flex-wrap:wrap;">
+  <section style="flex:1; min-width:320px;">
+    <h3>Engelbrechts</h3>
+    <table id="tbl-engelbrechts">
+      <thead><tr><th>Name</th><th>Aktion</th></tr></thead>
+      <tbody>
+        {% for e in employees if e.standort == 'engelbrechts' %}
+          <tr>
+            <td><input type="text" value="{{ e.name }}"></td>
+            <td><button class="btn-del">Löschen</button></td>
+          </tr>
+        {% endfor %}
+        {% if employees|length == 0 %}
+          <tr><td><input type="text" value=""></td><td><button class="btn-del">Löschen</button></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <button id="add-eng">+ Zeile</button>
+  </section>
 
-<form id="employeeForm">
-<div id="employeesContainer"></div>
-<button type="button" class="add-row" onclick="addEmployee()">Neuen Mitarbeiter hinzufügen</button>
-<button type="submit" id="saveBtn">Speichern</button>
-</form>
-</section>
+  <section style="flex:1; min-width:320px;">
+    <h3>Groß Gerungs</h3>
+    <table id="tbl-gross">
+      <thead><tr><th>Name</th><th>Aktion</th></tr></thead>
+      <tbody>
+        {% for e in employees if e.standort == 'gross-gerungs' %}
+          <tr>
+            <td><input type="text" value="{{ e.name }}"></td>
+            <td><button class="btn-del">Löschen</button></td>
+          </tr>
+        {% endfor %}
+        {% if employees|length == 0 %}
+          <tr><td><input type="text" value=""></td><td><button class="btn-del">Löschen</button></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <button id="add-gross">+ Zeile</button>
+  </section>
+</div>
 
+<div style="margin-top:16px;">
+  <button id="saveEmp">Speichern</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-let employees = {{ employees|tojson }} || [];  // Array von {id,name}
-let currentLocation = document.getElementById('locationSelect').value;
-
-const container = document.getElementById('employeesContainer');
-
-function renderEmployees() {
-    container.innerHTML = '';
-    if(employees.length === 0){
-        container.innerHTML = `<p>Keine Mitarbeiter vorhanden.</p>`;
-        return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `<tr><th>Name</th><th>Aktionen</th></tr>`;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-
-    employees.forEach((emp, index) => {
-        const tr = document.createElement('tr');
-
-        const nameTd = document.createElement('td');
-        const input = document.createElement('input');
-        input.value = emp.name;
-        input.onchange = () => { emp.name = input.value; };
-        nameTd.appendChild(input);
-
-        const actionTd = document.createElement('td');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Löschen';
-        deleteBtn.className = 'delete';
-        deleteBtn.onclick = () => { removeEmployee(emp); };
-
-        actionTd.appendChild(deleteBtn);
-
-        tr.appendChild(nameTd);
-        tr.appendChild(actionTd);
-        tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    container.appendChild(table);
+function addRow(tblId) {
+  const tbody = document.querySelector(`#${tblId} tbody`);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><input type="text" value=""></td><td><button class="btn-del">Löschen</button></td>`;
+  tbody.appendChild(tr);
 }
 
-function removeEmployee(emp){
-    if(!confirm(`Mitarbeiter "${emp.name}" wirklich löschen?`)) return;
-    employees = employees.filter(e => e !== emp);
-    renderEmployees();
-}
+document.getElementById('add-eng').onclick = () => addRow('tbl-engelbrechts');
+document.getElementById('add-gross').onclick = () => addRow('tbl-gross');
 
-function addEmployee(){
-    const name = prompt('Name des neuen Mitarbeiters:');
-    if(!name) return;
-    employees.push({id:null,name});
-    renderEmployees();
-}
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('btn-del')) {
+    const tr = e.target.closest('tr');
+    tr?.parentElement?.removeChild(tr);
+  }
+});
 
-document.getElementById('employeeForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const formData = new FormData();
-    employees.forEach(emp => formData.append('names', emp.name));
-    const res = await fetch('/settings/employees', { method:'POST', body: formData });
-    const data = await res.json();
-    if(data.ok) alert('Mitarbeiter erfolgreich gespeichert');
-    else alert('Fehler beim Speichern');
+document.getElementById('saveEmp').onclick = () => {
+  const employees = [];
+
+  document.querySelectorAll('#tbl-engelbrechts tbody tr').forEach(tr => {
+    const name = tr.querySelector('input').value.trim();
+    if (name) employees.push({ name, standort: 'engelbrechts' });
+  });
+
+  document.querySelectorAll('#tbl-gross tbody tr').forEach(tr => {
+    const name = tr.querySelector('input').value.trim();
+    if (name) employees.push({ name, standort: 'gross-gerungs' });
+  });
+
+  fetch('/settings/employees', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ employees })
+  })
+  .then(res => res.json())
+  .then(r => {
+    if (r.ok) alert('Gespeichert.');
+    else alert('Fehler: ' + (r.error || 'unbekannt'));
+  })
+  .catch(e => alert('Fehler: ' + e));
 };
-
-document.getElementById('locationSelect').onchange = (e) => {
-    currentLocation = e.target.value;
-    renderEmployees();
-};
-
-// Initial render
-renderEmployees();
 </script>
-
-</body>
-</html>
+{% endblock %}
+``
