@@ -37,10 +37,10 @@
       color: white;
       text-decoration: none;
       font-weight: bold;
-      padding: 4px 8px;
+      padding: 6px 10px;
       border-radius: 6px;
     }
-    nav.site a:hover { background: rgba(255,255,255,0.12); }
+    nav.site a:hover { background: rgba(255,255,255,0.14); }
 
     #settingsGear {
       position:absolute;
@@ -70,10 +70,11 @@
     <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
   </header>
 
+  <!-- Saubere Menüzeile -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
     /weekWochenplanung</a>
     /settings/employeesMitarbeiter</a>
-    <yearJahr</a>
+    /yearJahr</a>
     /healthHealth</a>
   </nav>
 
@@ -81,7 +82,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Nur korrektes Inline-JS, KEIN src-Tag -->
+  <!-- Inline-JS für Zahnrad -->
   <script>
     function openSettings() { window.location.href = '/settings/employees'; }
     const gear = document.getElementById('settingsGear');
