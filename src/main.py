@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 from datetime import date, timedelta
 import logging
+import traceback
 
 # ----------------------------
 # App Setup
@@ -139,7 +140,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
-        # Tage berechnen aus KW/Jahr
+        # Tage berechnen aus KW/Jahr (Mo–Fr)
         days = build_days(year, kw)
 
         return templates.TemplateResponse("week.html", {
@@ -153,8 +154,9 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         })
 
     except Exception as e:
-        logger.exception("Fehler in /week")
-        return HTMLResponse(f"<h1>Fehler beim Laden der Woche</h1><pre>{e}</pre>", status_code=500)
+        tb = traceback.format_exc()
+        logger.error("Fehler in /week:\n%s", tb)
+        return HTMLResponse(f"<h1>Fehler beim Laden der Woche</h1><pre>{tb}</pre>", status_code=500)
     finally:
         conn.close()
 
@@ -181,7 +183,8 @@ async def set_cell(data: dict = Body(...)):
         conn.commit()
         return {"ok": True}
     except Exception as e:
-        logger.exception("Fehler in /api/week/set-cell")
+        tb = traceback.format_exc()
+        logger.error("Fehler in /api/week/set-cell:\n%s", tb)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     finally:
         conn.close()
@@ -197,6 +200,10 @@ def employees_settings(request: Request):
         cur.execute("SELECT id,name,standort FROM employees ORDER BY id")
         employees = [{"id": e["id"], "name": e["name"], "standort": e["standort"]} for e in cur.fetchall()]
         return templates.TemplateResponse("settings_employees.html", {"request": request, "employees": employees})
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error("Fehler in /settings/employees GET:\n%s", tb)
+        return HTMLResponse(f"<h1>Fehler Mitarbeiter</h1><pre>{tb}</pre>", status_code=500)
     finally:
         conn.close()
 
@@ -207,12 +214,16 @@ async def employees_save(data: dict = Body(...)):
     try:
         cur.execute("DELETE FROM employees")
         for e in data.get("employees", []):
-            name = e.get("name", "").strip()
-            standort = e.get("standort", "engelbrechts")
+            name = (e.get("name") or "").strip()
+            standort = e.get("standort") or "engelbrechts"
             if name:
                 cur.execute("INSERT INTO employees(name,standort) VALUES(?,?)", (name, standort))
         conn.commit()
         return {"ok": True}
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error("Fehler in /settings/employees POST:\n%s", tb)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     finally:
         conn.close()
 
