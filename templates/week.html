@@ -1,104 +1,109 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Wochenplanung Zankl Dach</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
+header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+nav { display:flex; gap:15px; }
+nav a { color:white; text-decoration:none; font-weight:bold; }
+section { padding:20px; }
+h2 { margin-top:0; }
+table { width:100%; border-collapse:collapse; background:white; margin-bottom:20px; }
+th, td { border:1px solid #ddd; padding:6px; text-align:center; }
+th { background:#eef2f6; }
+td input { width:100%; padding:4px; box-sizing:border-box; }
+button { padding:4px 8px; margin-left:4px; cursor:pointer; }
 
-{% block title %}Wochenplanung Zankl{% endblock %}
+/* Einfaches responsive Menü */
+@media(max-width:600px){
+    nav { flex-direction:column; gap:5px; }
+}
+</style>
+</head>
+<body>
 
-{% block content %}
-<div style="margin-bottom:15px;">
-    KW:
-    <select id="kw"></select>
-    Jahr:
-    <select id="year"></select>
-</div>
+<header>
+    <strong>Zankl Dach – Wochenplanung</strong>
+    <nav>
+        <a href="/week?standort=engelbrechts">Wochenplanung Engelbrechts</a>
+        <a href="/week?standort=gross-gerungs">Wochenplanung Groß Gerungs</a>
+        <a href="/settings/employees">Mitarbeiter</a>
+    </nav>
+</header>
+
+<section>
+<h2>Wochenplanung {{ kw }}/{{ year }}</h2>
+
+<label for="locationSelect">Standort:</label>
+<select id="locationSelect">
+    <option value="engelbrechts" {% if location=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
+    <option value="gross-gerungs" {% if location=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
+</select>
 
 <table id="weekTable">
-    <thead>
-        <tr>
-            <th>Mitarbeiter</th>
-            {% for d in days %}
-                <th>{{ d.label }} {{ d.date }}</th>
-            {% endfor %}
-        </tr>
-    </thead>
-    <tbody></tbody>
+<thead>
+<tr>
+    <th>Mitarbeiter</th>
+    {% for day in days %}
+    <th>{{ day.label }}<br>{{ day.date }}</th>
+    {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for i, row in enumerate(grid) %}
+<tr>
+    <td>
+        {% if employees|length > i %}
+        {{ employees[i] }}
+        {% else %}
+        -
+        {% endif %}
+    </td>
+    {% for cell in row %}
+    <td><input type="text" value="{{ cell.text }}" data-row="{{ loop.parent.index0 }}" data-day="{{ loop.index0 }}"></td>
+    {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
 </table>
-{% endblock %}
 
-{% block scripts %}
+</section>
+
 <script>
-/* ---------- Einstellungen ---------- */
-const WORKDAYS = 5;
-let EMPLOYEE_LINES = {{ grid|length }};
-let dragValue = null;
+const locationSelect = document.getElementById('locationSelect');
+locationSelect.onchange = () => {
+    const loc = locationSelect.value;
+    const params = new URLSearchParams(window.location.search);
+    params.set('standort', loc);
+    window.location.search = params.toString();
+};
 
-/* ---------- Farben ---------- */
-const SPECIAL_RED = ['urlaub','krank','za','xxx'];
-const colors = {};
-const palette = ['#d1e7ff','#ffe0b2','#dcedc8','#f8bbd0','#e1bee7','#c8e6c9','#fff9c4','#b2ebf2'];
-let colorIndex = 0;
-
-/* ---------- KW & Jahr ---------- */
-const kwSelect = document.getElementById('kw');
-const yearSelect = document.getElementById('year');
-for (let i=1;i<=53;i++) kwSelect.innerHTML += `<option>${i}</option>`;
-for (let y=new Date().getFullYear()-1;y<=new Date().getFullYear()+2;y++) yearSelect.innerHTML += `<option>${y}</option>`;
-kwSelect.value = {{ kw }};
-yearSelect.value = {{ year }};
-kwSelect.onchange = yearSelect.onchange = () => { location.href = `?kw=${kwSelect.value}&year=${yearSelect.value}`; };
-
-/* ---------- Tabelle ---------- */
-const tbody = document.querySelector('#weekTable tbody');
-let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
-if(employeeNames.length===0){ employeeNames = Array.from({length: EMPLOYEE_LINES}, (_,i)=>`Mitarbeiter ${i+1}`); }
-
-function buildTable(grid){
-    tbody.innerHTML='';
-    EMPLOYEE_LINES=Math.max(grid.length,employeeNames.length);
-    for(let r=0;r<EMPLOYEE_LINES;r++){
-        const tr=document.createElement('tr');
-        const name = employeeNames[r] || `Mitarbeiter ${r+1}`;
-        tr.innerHTML = `<th>${name}</th>`;
-        for(let d=0;d<WORKDAYS;d++){
-            const td=document.createElement('td');
-            const input=document.createElement('input');
-            input.value=grid[r]?.[d]?.text || '';
-            applyColor(td,input.value);
-
-            input.oninput=()=>applyColor(td,input.value);
-            input.onchange=()=>saveCell(r,d,input.value);
-
-            input.onmousedown=(e)=>{ if(e.button===2) dragValue=input.value; };
-            input.onmouseover=()=>{ if(dragValue!==null){ input.value=dragValue; applyColor(td,dragValue); saveCell(r,d,dragValue); } };
-            input.onmouseup=()=>dragValue=null;
-
-            td.appendChild(input);
-            tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-    }
-}
-
-/* ---------- Farben ---------- */
-function applyColor(td,value){
-    if(!value){ td.style.background=''; return; }
-    const v=value.toLowerCase();
-    if(SPECIAL_RED.includes(v)){ td.style.background='#f28b82'; return; }
-    if(!colors[v]){ colors[v]=palette[colorIndex % palette.length]; colorIndex++; }
-    td.style.background = colors[v];
-}
-
-/* ---------- Speichern ---------- */
-async function saveCell(row,day,value){
-    try{
-        await fetch('/api/week/set-cell',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({kw:{{ kw }},year:{{ year }},row:row,day:day,value:value})
+// Save on blur
+document.querySelectorAll('#weekTable input').forEach(input => {
+    input.addEventListener('blur', async () => {
+        const row = input.dataset.row;
+        const day = input.dataset.day;
+        const value = input.value;
+        const res = await fetch('/api/week/set-cell', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                year: {{ year }},
+                kw: {{ kw }},
+                row: parseInt(row),
+                day: parseInt(day),
+                value: value,
+                location: locationSelect.value
+            })
         });
-    }catch(e){ console.warn('Speichern fehlgeschlagen'); }
-}
-
-/* ---------- Init ---------- */
-const initialGrid = {{ grid|tojson }};
-buildTable(initialGrid);
+        const data = await res.json();
+        if(!data.ok) alert('Fehler beim Speichern');
+    });
+});
 </script>
-{% endblock %}
+
+</body>
+</html>
