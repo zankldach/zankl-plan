@@ -2,76 +2,120 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>{% block title %}Zankl Plan{% endblock %}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>{% block title %}Zankl Plan{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<style>
-/* ---------- Grundlayout ---------- */
-body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
-header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; position:relative; }
-main { padding:20px; }
+  <style>
+    /* ---------- Grundlayout ---------- */
+    :root {
+      --blue: #003a8f;
+      --blue-2: #0b57d0;
+      --bg: #f4f6f8;
+      --border: #d9dee5;
+    }
+    html, body { height: 100%; }
+    body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
-/* ---------- Menü ---------- */
-nav { background:#003a8f; padding:5px 20px; color:white; display:flex; gap:15px; }
-nav a { color:white; text-decoration:none; font-weight:bold; }
-nav a:hover { text-decoration:underline; }
+    header.site {
+      background: var(--blue);
+      color: #fff;
+      padding: 10px 20px;
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 10;
+    }
 
-/* ---------- Zahnrad ---------- */
-#settingsGear {
-    position:absolute;
-    right:20px;
-    top:50%;
-    transform:translateY(-50%);
-    cursor:pointer;
-    font-size:20px;
-}
+    /* ---------- Menü ---------- */
+    nav.site {
+      background: var(--blue);
+      padding: 6px 20px;
+      color: white;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      position: sticky; /* bleibt oben beim Scrollen */
+      top: 0;
+      z-index: 9;
+    }
+    nav.site a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    nav.site a:hover { background: rgba(255,255,255,0.12); }
 
-/* ---------- Tabellen ---------- */
-table { width:100%; border-collapse:collapse; background:white; }
-th, td { border:1px solid #ddd; padding:6px; text-align:center; }
-th { background:#eef2f6; }
-td { cursor:pointer; position:relative; }
-td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
+    /* ---------- Zahnrad ---------- */
+    #settingsGear {
+      position:absolute;
+      right:20px;
+      top:50%;
+      transform:translateY(-50%);
+      cursor:pointer;
+      font-size:20px;
+    }
 
-/* ---------- Sonstiges ---------- */
-button { padding:5px 10px; font-size:14px; cursor:pointer; }
-.special-red { background:#f28b82 !important; }
-</style>
+    /* ---------- Seiteninhalt ---------- */
+    main {
+      padding: 20px;
+      position: relative;
+      z-index: 1;
+    }
 
-{% block head %}{% endblock %}
+    /* ---------- Tabellen (Default) ---------- */
+    table { width:100%; border-collapse: collapse; background: #fff; }
+    th, td { border:1px solid #ddd; padding:6px; text-align:center; }
+    th { background:#eef2f6; }
+    td { position:relative; }
+    td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
+
+    button { padding:5px 10px; font-size:14px; cursor:pointer; }
+    .special-red { background:#f28b82 !important; }
+  </style>
+
+  {% block head %}{% endblock %}
 </head>
 
 <body>
 
-<header>
+  <header class="site" role="banner" aria-label="Kopfbereich">
     <strong>Zankl Plan</strong>
-    <div id="settingsGear" title="Einstellungen">⚙️</div>
-</header>
+    <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
+  </header>
 
-<nav>
-    /weekWochenplanung</a>
-    <a href="/settings/emtarbeiter</a>
-    <a hrefhr</a>
-    <a hrefHealth</a>
-</nav>
+  <!-- WICHTIG: Alle href korrekt und vollständig, keine Tippfehler -->
+  <nav class="site" role="navigation" aria-label="Hauptnavigation">
+    <aeekWochenplanung</a>
+    /settings/employeesMitarbeiter</a>
+    /yearJahr</a>
+    /healthHealth</a>
+  </nav>
 
-<main>
+  <main role="main">
     {% block content %}{% endblock %}
-</main>
+  </main>
 
-<script>
-/* ---------- Zahnrad: Einstellungen öffnen ---------- */
-document.getElementById('settingsGear').onclick = () => {
-    window.location.href='/settings/employees';
-};
+  <!-- Optionales globales JS -->
+  <script src="/static/app.js<script>
+    // Zahnrad: per Klick und Enter/Space (zugänglich)
+    function openSettings() { window.location.href = '/settings/employees'; }
+    const gear = document.getElementById('settingsGear');
+    gear.addEventListener('click', openSettings);
+    gear.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
+    });
 
-/* ---------- Kontextmenü global verhindern (optional) ---------- */
-document.addEventListener('contextmenu', e => {
-    if(e.target.tagName==='INPUT') e.preventDefault();
-});
-</script>
+    // Kontextmenü bei Input optional verhindern
+    document.addEventListener('contextmenu', e => {
+      if (e.target.tagName === 'INPUT') e.preventDefault();
+    });
+  </script>
 
-{% block scripts %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>
