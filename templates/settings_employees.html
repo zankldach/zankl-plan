@@ -1,85 +1,61 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8">
-<title>Mitarbeiter – Einstellungen</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "base.html" %}
 
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background:#f4f6f8;
-    margin:0;
-}
-header {
-    background:#003a8f;
-    color:white;
-    padding:12px 20px;
-    font-size:18px;
-}
-main {
-    max-width:600px;
-    margin:30px auto;
-    background:white;
-    padding:20px;
-    border-radius:6px;
-}
-input {
-    width:100%;
-    padding:8px;
-    margin-bottom:8px;
-    font-size:14px;
-}
-button {
-    padding:10px 16px;
-    font-size:14px;
-    cursor:pointer;
-}
-.back {
-    margin-left:10px;
-}
-</style>
-</head>
+{% block title %}Mitarbeiter Einstellungen{% endblock %}
 
-<body>
+{% block content %}
+<h2>Mitarbeiter verwalten</h2>
 
-<header>
-    Mitarbeiter – Einstellungen
-</header>
+<ul id="employeeList">
+    {% for emp in employees %}
+        <li data-index="{{ loop.index0 }}">
+            {{ emp }}
+            <button class="deleteBtn">❌</button>
+        </li>
+    {% endfor %}
+</ul>
 
-<main>
-    <div id="list">
-        {% for name in employees %}
-            <input value="{{ name }}">
-        {% endfor %}
-    </div>
+<input type="text" id="newEmployee" placeholder="Neuer Mitarbeiter">
+<button id="addEmployee">Hinzufügen</button>
+{% endblock %}
 
-    <button onclick="add()">+ Mitarbeiter</button>
-    <br><br>
-    <button onclick="save()">Speichern</button>
-    <button class="back" onclick="location.href='/'">Zurück</button>
-</main>
-
+{% block scripts %}
 <script>
-function add(){
-    const i=document.createElement('input');
-    document.getElementById('list').appendChild(i);
-}
+let employees = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
 
-async function save(){
-    const names=[...document.querySelectorAll('#list input')]
-        .map(i=>i.value.trim())
-        .filter(v=>v);
-
-    await fetch('/settings/employees',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({employees:names})
+/* ---------- Liste rendern ---------- */
+function renderList(){
+    const ul = document.getElementById('employeeList');
+    ul.innerHTML='';
+    employees.forEach((e,i)=>{
+        const li = document.createElement('li');
+        li.dataset.index=i;
+        li.textContent=e + ' ';
+        const btn = document.createElement('button');
+        btn.textContent='❌';
+        btn.onclick=()=>{ employees.splice(i,1); saveEmployees(); renderList(); };
+        li.appendChild(btn);
+        ul.appendChild(li);
     });
-
-    alert('Gespeichert');
 }
-</script>
 
-</body>
-</html>
+/* ---------- Hinzufügen ---------- */
+document.getElementById('addEmployee').onclick=()=>{
+    const name=document.getElementById('newEmployee').value.trim();
+    if(name){ employees.push(name); document.getElementById('newEmployee').value=''; saveEmployees(); renderList(); }
+};
+
+/* ---------- Speichern ---------- */
+async function saveEmployees(){
+    try{
+        await fetch('/settings/employees',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({employees})
+        });
+    }catch(e){ console.warn('Speichern fehlgeschlagen'); }
+}
+
+/* ---------- Init ---------- */
+renderList();
+</script>
+{% endblock %}
