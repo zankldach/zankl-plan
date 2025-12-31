@@ -1,236 +1,390 @@
 
-# src/main.py
-from fastapi import FastAPI, Request, Body
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-import sqlite3
-from pathlib import Path
-from datetime import date, timedelta
-import logging
-import traceback
+{% extends "base.html" %}
+{% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
 
-# ----------------------------
-# App Setup
-# ----------------------------
-app = FastAPI(title="Zankl-Plan MVP")
+{% block head %}
+<style>
+  .plan-wrap { margin-top: 12px; }
 
-# Verzeichnisstruktur:
-# project_root/
-#   src/main.py
-#   templates/
-#   static/
-BASE_DIR = Path(__file__).resolve().parent            # .../src
-ROOT_DIR = BASE_DIR.parent                            # Projekt-Root
-DB_PATH = BASE_DIR / "zankl.db"                       # DB liegt in src/
+  /* Tabelle */
+  table.planner {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    background: #fff;
+    border: 1px solid #d9dee5;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  }
+  .planner thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #0b57d0;
+    color: #fff;
+    padding: 10px 8px;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+  .planner thead th:first-child,
+  .planner tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f7f9fc;
+    font-weight: 600;
+    width: 200px;
+    text-align: left;
+  }
+  .planner tbody td {
+    border-top: 1px solid #eef2f6;
+    border-right: 1px solid #eef2f6;
+    padding: 0;
+    height: 44px;
+  }
+  .planner tbody tr:nth-child(even) td:first-child { background: #f1f5fb; }
+  .planner tbody tr:hover td { background: #fbfdff; }
 
-templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
+  .planner input.cell {
+    width: 100%;
+    height: 44px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 14px;
+    outline: none;
+  }
+  .planner input.cell:focus { outline: 2px solid #7db3ff; background: #fff; }
 
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("zankl-plan")
+  /* Drag & Drop */
+  .drag-over { outline: 2px dashed #2196f3; outline-offset: -4px; background: #eef7ff !important; }
+  .dragging { opacity: .6; }
+  .is-empty { background: transparent !important; }
 
-# ----------------------------
-# Database
-# ----------------------------
-def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+  /* Kopfbereich dieser Seite */
+  header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
+  /* Toolbar (Standort + KW/Jahr) */
+  .toolbar { display:flex; gap:16px; align-items:center; flex-wrap: wrap; margin-bottom:8px; }
+  .toolbar .group { display:flex; gap:8px; align-items:center; }
+  .toolbar label { font-weight: 600; }
+  .toolbar select, .toolbar button {
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+  .toolbar .badge {
+    display:inline-block;
+    padding:4px 8px;
+    background:#eef2f6;
+    border-radius:999px;
+    font-size:12px;
+    color:#334155;
+  }
+</style>
+{% endblock %}
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS week_plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            year INTEGER,
-            kw INTEGER,
-            standort TEXT,
-            row_count INTEGER DEFAULT 5,
-            UNIQUE(year, kw, standort)
-        )
-    """)
+{% block content %}
+<header class="page">
+  <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
+  <!-- keine Links mehr hier (vermeidet kaputte URLs) -->
+</header>
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS week_cells (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            week_plan_id INTEGER,
-            row_index INTEGER,
-            day_index INTEGER,
-            text TEXT,
-            UNIQUE(week_plan_id, row_index, day_index)
-        )
-    """)
+<div class="toolbar">
+  <!-- Standort -->
+  <div class="group">
+    <label for="locationSelect">Standort:</label>
+    <select id="locationSelect">
+      <option value="engelbrechts" {% if standort=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
+      <option value="gross-gerungs" {% if standort=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
+    </select>
+  </div>
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE,
-            standort TEXT
-        )
-    """)
+  <!-- KW / Jahr Navigation -->
+  <div class="group">
+    <button id="prevWeekBtn" title="Vorherige Woche">←</button>
 
-    conn.commit()
-    conn.close()
+    <label for="kwSelect">KW:</label>
+    <select id="kwSelect"></select>
 
-init_db()
+    <label for="yearSelect">Jahr:</label>
+    <select id="yearSelect"></select>
 
-# ----------------------------
-# Hilfsfunktionen
-# ----------------------------
-def build_days(year: int, kw: int) -> list[dict]:
-    """Erzeugt Mo–Fr mit Datum aus ISO-Kalender (KW/Jahr)."""
-    start = date.fromisocalendar(year, kw, 1)  # Montag
-    labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
-    return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
+    <button id="nextWeekBtn" title="Nächste Woche">→</button>
+    <button id="goBtn" title="Auswahl öffnen">Öffnen</button>
+  </div>
 
-# ----------------------------
-# Healthcheck & Diagnose
-# ----------------------------
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+  <!-- Hinweise -->
+  <span class="badge">KW {{ kw }} / {{ year }}</span>
+  <span class="badge">Tipp: <kbd>Strg</kbd> beim Ziehen = Kopieren</span>
+</div>
 
-@app.get("/week-plain")
-def week_plain(kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
-    return {"kw": kw, "year": year, "standort": standort}
+<div class="plan-wrap">
+  <table class="planner" id="weekTable">
+    <thead>
+      <tr>
+        <th>Mitarbeiter / Tag</th>
+        {% for day in days %}
+          <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in grid %}
+        {% set row_index = loop.index0 %}
+        <tr>
+          <td>
+            {% if employees and employees|length > row_index and employees[row_index] %}
+              {{ employees[row_index].name }}
+            {% else %}
+              Unbenannt
+            {% endif %}
+          </td>
+          {% for cell in row %}
+            {% set day_index = loop.index0 %}
+            <td data-row="{{ row_index }}" data-day="{{ day_index }}">
+              <input class="cell" draggable="true"
+                     value="{{ cell.text if cell and cell.text is defined else '' }}"
+                     data-row="{{ row_index }}" data-day="{{ day_index }}">
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-# ----------------------------
-# Week View
-# ----------------------------
-@app.get("/", response_class=HTMLResponse)
-@app.get("/week", response_class=HTMLResponse)
-def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
-    conn = get_conn()
-    cur = conn.cursor()
+  <div style="margin-top:10px;">
+    <button id="saveAllBtn">Alles speichern</button>
+  </div>
+</div>
+{% endblock %}
 
-    try:
-        # Plan abrufen oder erstellen
-        cur.execute("""
-            SELECT id,row_count FROM week_plans
-            WHERE year=? AND kw=? AND standort=?
-        """, (year, kw, standort))
-        plan = cur.fetchone()
+{% block scripts %}
+<script>
+  /* -------------------------
+   * Kontext & Navigation
+   * ------------------------- */
+  const KW   = parseInt('{{ kw }}', 10);
+  const YEAR = parseInt('{{ year }}', 10);
+  const CURRENT_LOC = "{{ standort|e }}";
 
-        if not plan:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count) VALUES(?,?,?,5)", (year, kw, standort))
-            conn.commit()
-            plan_id = cur.lastrowid
-            rows = 5
-        else:
-            plan_id = plan["id"]
-            rows = plan["row_count"]
+  // Wir erlauben 53 als Max – exakte ISO-Berechnung können wir später nachrüsten
+  const MAX_WEEKS = 53;
 
-        # Mitarbeiter laden
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
-        employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
+  function initSelectors(){
+    const kwSel = document.getElementById('kwSelect');
+    const yearSel = document.getElementById('yearSelect');
 
-        # Zeilenanzahl mindestens so groß wie Mitarbeiterliste
-        rows = max(rows, len(employees)) if employees else rows
+    // KW 1..53
+    kwSel.innerHTML = "";
+    for (let w=1; w<=MAX_WEEKS; w++){
+      const opt = document.createElement('option');
+      opt.value = String(w);
+      opt.textContent = String(w);
+      if (w === KW) opt.selected = true;
+      kwSel.appendChild(opt);
+    }
 
-        # Grid vorbereiten (rows × 5 Tage)
-        grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
-        cur.execute("SELECT row_index, day_index, text FROM week_cells WHERE week_plan_id=?", (plan_id,))
-        for r in cur.fetchall():
-            row = r["row_index"]
-            day = r["day_index"]
-            if 0 <= row < rows and 0 <= day < 5:
-                grid[row][day]["text"] = r["text"]
+    // Jahr: aktuell-1, aktuell, aktuell+1
+    const years = [YEAR-1, YEAR, YEAR+1];
+    yearSel.innerHTML = "";
+    years.forEach(y=>{
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      if (y === YEAR) opt.selected = true;
+      yearSel.appendChild(opt);
+    });
+  }
 
-        # Tage berechnen aus KW/Jahr (Mo–Fr)
-        days = build_days(year, kw)
+  function navigate(standort, kw, year){
+    if (kw < 1) kw = 1;
+    if (kw > MAX_WEEKS) kw = MAX_WEEKS;
+    window.location.href = `/week?standort=${encodeURIComponent(standort)}&kw=${kw}&year=${year}`;
+  }
 
-        return templates.TemplateResponse("week.html", {
-            "request": request,
-            "grid": grid,
-            "employees": employees,
-            "kw": kw,
-            "year": year,
-            "days": days,
-            "standort": standort
+  function prevWeek(kw, year){
+    if (kw > 1) return {kw: kw-1, year};
+    return {kw: MAX_WEEKS, year: year-1};
+  }
+
+  function nextWeek(kw, year){
+    if (kw < MAX_WEEKS) return {kw: kw+1, year};
+    return {kw: 1, year: year+1};
+  }
+
+  // Events
+  document.getElementById('locationSelect').onchange = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    navigate(loc, kw, yr);
+  };
+
+  document.getElementById('prevWeekBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    const p   = prevWeek(kw, yr);
+    navigate(loc, p.kw, p.year);
+  };
+
+  document.getElementById('nextWeekBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    const n   = nextWeek(kw, yr);
+    navigate(loc, n.kw, n.year);
+  };
+
+  document.getElementById('goBtn').onclick = ()=>{
+    const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+    const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+    const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+    navigate(loc, kw, yr);
+  };
+
+  // Initial befüllen
+  initSelectors();
+
+  /* -------------------------
+   * Farben
+   * ------------------------- */
+  const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
+  function colorFor(text){
+    const n = normalize(text);
+    if(!n) return null;
+    const h = hashCode(n) % 360, s = 70, l = 80;
+    return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
+  }
+  function applyColors(){
+    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+      const c = colorFor(inp.value);
+      if(c){ inp.classList.remove('is-empty'); inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
+      else { inp.classList.add('is-empty'); inp.style.background='transparent'; inp.style.border='none'; }
+    });
+  }
+
+  /* -------------------------
+   * Speichern
+   * ------------------------- */
+  async function saveCell(row, day, value){
+    try{
+      const res = await fetch('/api/week/set-cell',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          row:Number(row),
+          day:Number(day),
+          value:value ?? "",
+          kw:KW,
+          year:YEAR,
+          standort:(document.getElementById('locationSelect').value || CURRENT_LOC)
         })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn('Save HTTP-Fehler:', res.status, text);
+        return false;
+      }
+      const r = await res.json();
+      if(!r.ok) { console.warn('Save-Fehler:', r.error); return false; }
+      return true;
+    }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+  }
 
-    except Exception as e:
-        tb = traceback.format_exc()
-        logger.error("Fehler in /week:\n%s", tb)
-        return HTMLResponse(f"<h1>Fehler beim Laden der Woche</h1><pre>{tb}</pre>", status_code=500)
-    finally:
-        conn.close()
+  async function saveAll(){
+    const ops=[];
+    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+      ops.push(saveCell(inp.dataset.row, inp.dataset.day, inp.value));
+    });
+    await Promise.all(ops);
+    alert('Alle Zellen gespeichert.');
+  }
 
-# ----------------------------
-# Set Cell
-# ----------------------------
-@app.post("/api/week/set-cell")
-async def set_cell(data: dict = Body(...)):
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (data.get("year"), data.get("kw"), data.get("standort")))
-        plan = cur.fetchone()
-        if not plan:
-            return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
+  /* -------------------------
+   * Drag & Drop
+   * ------------------------- */
+  let dragData=null;
 
-        plan_id = plan["id"]
+  function attachDnD(){
+    const cells = document.querySelectorAll('#weekTable td');
+    const inputs = document.querySelectorAll('#weekTable input.cell');
 
-        cur.execute("""
-            INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
-            VALUES(?,?,?,?)
-            ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-        """, (plan_id, data.get("row",0), data.get("day",0), data.get("value","")))
-        conn.commit()
-        return {"ok": True}
-    except Exception as e:
-        tb = traceback.format_exc()
-        logger.error("Fehler in /api/week/set-cell:\n%s", tb)
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    finally:
-        conn.close()
+    inputs.forEach(inp=>{
+      inp.addEventListener('dragstart',e=>{
+        dragData = { row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
+        e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+        e.dataTransfer.dropEffect='move';
+        inp.classList.add('dragging');
+      });
+      inp.addEventListener('dragend',()=>{
+        document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+        document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+        dragData=null;
+      });
 
-# ----------------------------
-# Employees Settings
-# ----------------------------
-@app.get("/settings/employees", response_class=HTMLResponse)
-def employees_settings(request: Request):
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT id,name,standort FROM employees ORDER BY id")
-        employees = [{"id": e["id"], "name": e["name"], "standort": e["standort"]} for e in cur.fetchall()]
-        return templates.TemplateResponse("settings_employees.html", {"request": request, "employees": employees})
-    except Exception as e:
-        tb = traceback.format_exc()
-        logger.error("Fehler in /settings/employees GET:\n%s", tb)
-        return HTMLResponse(f"<h1>Fehler Mitarbeiter</h1><pre>{tb}</pre>", status_code=500)
-    finally:
-        conn.close()
+      // Speichern beim Verlassen/Enter
+      inp.addEventListener('blur', async ()=>{
+        await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
+        applyColors();
+      });
+      inp.addEventListener('keydown', async (ev)=>{
+        if(ev.key==='Enter'){
+          ev.preventDefault();
+          await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
+          applyColors();
+          const r=Number(inp.dataset.row), d=Number(inp.dataset.day);
+          const next = document.querySelector(`input.cell[data-row="${r}"][data-day="${d+1}"]`);
+          (next||inp).focus();
+        }
+      });
+      inp.addEventListener('input', applyColors);
+    });
 
-@app.post("/settings/employees")
-async def employees_save(data: dict = Body(...)):
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM employees")
-        for e in data.get("employees", []):
-            name = (e.get("name") or "").strip()
-            standort = e.get("standort") or "engelbrechts"
-            if name:
-                cur.execute("INSERT INTO employees(name,standort) VALUES(?,?)", (name, standort))
-        conn.commit()
-        return {"ok": True}
-    except Exception as e:
-        tb = traceback.format_exc()
-        logger.error("Fehler in /settings/employees POST:\n%s", tb)
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    finally:
-        conn.close()
+    cells.forEach(td=>{
+      td.addEventListener('dragover',e=>{ e.preventDefault(); td.classList.add('drag-over'); });
+      td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
+      td.addEventListener('drop', async e=>{
+        e.preventDefault();
+        td.classList.remove('drag-over');
+        try{
+          const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
+          if(!payload || typeof payload.row==='undefined') return;
 
-# ----------------------------
-# Year View (Optional)
-# ----------------------------
-@app.get("/year", response_class=HTMLResponse)
-def year_view(request: Request, year: int = 2025):
-    ctx = {"request": request, "year": year}
-    return templates.TemplateResponse("year.html", ctx)
+          const targetRow = Number(td.dataset.row);
+          const targetDay = Number(td.dataset.day);
+          const tgtInput = td.querySelector('input.cell');
+          const srcInput = document.querySelector(`input.cell[data-row="${payload.row}"][data-day="${payload.day}"]`);
+          if(!tgtInput || !srcInput) return;
+
+          const copy = e.ctrlKey || e.metaKey; // Strg/Cmd = kopieren
+
+          // Ziel setzen + speichern
+          tgtInput.value = payload.value;
+          await saveCell(targetRow, targetDay, payload.value);
+
+          // Move: Quelle leeren + speichern
+          if(!copy && (payload.row!==targetRow || payload.day!==targetDay)){
+            srcInput.value = "";
+            await saveCell(payload.row, payload.day, "");
+          }
+
+          applyColors();
+        }catch(err){ console.warn('Drop-Fehler:', err); }
+      });
+    });
+  }
+
+  // Buttons
+  document.getElementById('saveAllBtn').onclick = saveAll;
+
+  // Aktivieren
+  attachDnD();
+  applyColors();
+</script>
+{% endblock %}
+``
