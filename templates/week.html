@@ -1,120 +1,77 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Wochenplanung Zankl Dach</title>
+<title>{% block title %}Zankl Plan{% endblock %}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
+/* ---------- Grundlayout ---------- */
 body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
-header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
-nav { display:flex; gap:15px; }
+header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; position:relative; }
+main { padding:20px; }
+
+/* ---------- Menü ---------- */
+nav { background:#003a8f; padding:5px 20px; color:white; display:flex; gap:15px; }
 nav a { color:white; text-decoration:none; font-weight:bold; }
-section { padding:20px; }
-h2 { margin-top:0; }
-table { width:100%; border-collapse:collapse; background:white; margin-bottom:20px; }
+nav a:hover { text-decoration:underline; }
+
+/* ---------- Zahnrad ---------- */
+#settingsGear {
+    position:absolute;
+    right:20px;
+    top:50%;
+    transform:translateY(-50%);
+    cursor:pointer;
+    font-size:20px;
+}
+
+/* ---------- Tabellen ---------- */
+table { width:100%; border-collapse:collapse; background:white; }
 th, td { border:1px solid #ddd; padding:6px; text-align:center; }
 th { background:#eef2f6; }
-td input { width:100%; padding:4px; box-sizing:border-box; }
-button { padding:4px 8px; margin-left:4px; cursor:pointer; }
-button.delete { background:#f44336; color:white; border:none; }
-button.edit { background:#2196f3; color:white; border:none; }
-.add-row { margin-top:10px; padding:6px 12px; background:#4caf50; color:white; border:none; cursor:pointer; }
-#saveBtn { padding:6px 12px; background:#003a8f; color:white; border:none; cursor:pointer; }
+td { cursor:pointer; position:relative; }
+td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
 
-/* Einfaches responsive Menü */
-@media(max-width:600px){
-    nav { flex-direction:column; gap:5px; }
-}
+/* ---------- Sonstiges ---------- */
+button { padding:5px 10px; font-size:14px; cursor:pointer; }
+.special-red { background:#f28b82 !important; }
 </style>
+
+{% block head %}{% endblock %}
 </head>
+
 <body>
 
 <header>
-    <strong>Zankl Dach – Wochenplanung</strong>
-    <nav>
-        <a href="/week?standort=engelbrechts">Engelbrechts</a>
-        <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
-        <a href="/settings/employees">Mitarbeiter</a>
-    </nav>
+    <strong>Zankl Plan</strong>
+    <div id="settingsGear" title="Einstellungen">⚙️</div>
 </header>
 
-<section>
-<h2>Wochenplanung – Standort: <span id="currentLocationLabel">{{ standort }}</span></h2>
+<nav>
+    /weekWochenplanung</a>
+    <a href="/settings/emtarbeiter</a>
+    <a hrefhr</a>
+    <a hrefHealth</a>
+</nav>
 
-<label for="locationSelect">Standort wechseln:</label>
-<select id="locationSelect">
-    <option value="engelbrechts" {% if standort=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
-    <option value="gross-gerungs" {% if standort=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
-</select>
-
-<table id="weekTable">
-    <thead>
-        <tr>
-            <th>Mitarbeiter / Tag</th>
-            {% for day in days %}
-            <th>{{ day.label }}<br>{{ day.date }}</th>
-            {% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-        {% for row_index, row in grid|enumerate %}
-        <tr>
-            <td>
-                {% if employees[row_index] %}
-                    {{ employees[row_index].name }}
-                {% else %}
-                    Unbenannt
-                {% endif %}
-            </td>
-            {% for day_index, cell in row|enumerate %}
-            <td>
-                <input type="text" value="{{ cell.text }}" data-row="{{ row_index }}" data-day="{{ day_index }}">
-            </td>
-            {% endfor %}
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-
-<button id="saveBtn">Speichern</button>
-</section>
+<main>
+    {% block content %}{% endblock %}
+</main>
 
 <script>
-const locationSelect = document.getElementById('locationSelect');
-const currentLocationLabel = document.getElementById('currentLocationLabel');
-const saveBtn = document.getElementById('saveBtn');
-
-locationSelect.onchange = () => {
-    const loc = locationSelect.value;
-    window.location.href = `/week?standort=${loc}&kw={{ kw }}&year={{ year }}`;
+/* ---------- Zahnrad: Einstellungen öffnen ---------- */
+document.getElementById('settingsGear').onclick = () => {
+    window.location.href='/settings/employees';
 };
 
-saveBtn.onclick = () => {
-    const updates = [];
-    document.querySelectorAll('#weekTable tbody input').forEach(input => {
-        updates.push({
-            row: parseInt(input.dataset.row),
-            day: parseInt(input.dataset.day),
-            value: input.value,
-            kw: {{ kw }},
-            year: {{ year }},
-            standort: locationSelect.value
-        });
-    });
-
-    updates.forEach(data => {
-        fetch('/api/week/set-cell', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify(data)
-        }).then(res => res.json())
-          .then(r => console.log('Gespeichert:', r))
-          .catch(e => console.warn('Fehler:', e));
-    });
-
-    alert('Änderungen gespeichert!');
-};
+/* ---------- Kontextmenü global verhindern (optional) ---------- */
+document.addEventListener('contextmenu', e => {
+    if(e.target.tagName==='INPUT') e.preventDefault();
+});
 </script>
 
+{% block scripts %}{% endblock %}
 </body>
 </html>
