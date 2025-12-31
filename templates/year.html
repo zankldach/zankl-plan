@@ -1,45 +1,12 @@
+
 {% extends "base.html" %}
-{% block title %}Jahresplanung {{ year }}{% endblock %}
+{% block title %}Jahresplan {{ year }} – Zankl Plan{% endblock %}
+
 {% block content %}
-
-<h1>Jahresplanung {{ year }}</h1>
-<p>Rolle: {{ role }}</p>
-
-<h2>Standorte</h2>
+<h2>Jahresplan {{ year }}</h2>
+<p>Platzhalter-Ansicht. Hier kann später die Jahresübersicht folgen.</p>
 <ul>
-  {% for st in standorte %}
-    <li>{{ st.name }}</li>
-  {% endfor %}
+  <li><a href="/weeknplanung</a></li>
 </ul>
-
-<h2>Events</h2>
-<table class="table" border="1" cellspacing="0" cellpadding="4">
-  <thead>
-    <tr>
-      <th>Standort</th>
-      <th>Start</th>
-      <th>Ende</th>
-      <th>Job</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for e in events %}
-      {# Status 'fertig' => keine Farbhinterlegung #}
-      <tr style="background-color: {% if e.status != 'fertig' and e.color %}{{ e.color }}{% else %}#fff{% endif %}">
-        <td>{{ e.standort_id }}</td>
-        <td>{{ e.start_date }}</td>
-        <td>{{ e.end_date }}</td>
-        <td>{{ e.title }} – {{ e.customer_name }}</td>
-        <td>{{ e.status }}</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<p style="margin-top:16px;">
-  /weekZur Wochenansicht</a> |
-  /settingsEinstellungen</a>
-</p>
-
 {% endblock %}
+``
