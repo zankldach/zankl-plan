@@ -1,65 +1,85 @@
-{% extends "base.html" %}
-{% block title %}Mitarbeiterverwaltung{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Mitarbeiter – Einstellungen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-<h1>Mitarbeiterverwaltung</h1>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background:#f4f6f8;
+    margin:0;
+}
+header {
+    background:#003a8f;
+    color:white;
+    padding:12px 20px;
+    font-size:18px;
+}
+main {
+    max-width:600px;
+    margin:30px auto;
+    background:white;
+    padding:20px;
+    border-radius:6px;
+}
+input {
+    width:100%;
+    padding:8px;
+    margin-bottom:8px;
+    font-size:14px;
+}
+button {
+    padding:10px 16px;
+    font-size:14px;
+    cursor:pointer;
+}
+.back {
+    margin-left:10px;
+}
+</style>
+</head>
 
-<div id="settings">
-    <h3>Mitarbeiterliste</h3>
-    <div id="employeeList"></div>
-    <button id="addEmployee">+ Mitarbeiter</button>
-    <button id="saveEmployees" style="margin-left:10px;">Speichern</button>
-</div>
+<body>
+
+<header>
+    Mitarbeiter – Einstellungen
+</header>
+
+<main>
+    <div id="list">
+        {% for name in employees %}
+            <input value="{{ name }}">
+        {% endfor %}
+    </div>
+
+    <button onclick="add()">+ Mitarbeiter</button>
+    <br><br>
+    <button onclick="save()">Speichern</button>
+    <button class="back" onclick="location.href='/'">Zurück</button>
+</main>
 
 <script>
-const MAX_EMPLOYEES = 15;
-let employeeNames = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
+function add(){
+    const i=document.createElement('input');
+    document.getElementById('list').appendChild(i);
+}
 
-const employeeListDiv = document.getElementById('employeeList');
+async function save(){
+    const names=[...document.querySelectorAll('#list input')]
+        .map(i=>i.value.trim())
+        .filter(v=>v);
 
-function renderEmployeeList() {
-    employeeListDiv.innerHTML = '';
-    employeeNames.forEach((name,index)=>{
-        const div = document.createElement('div');
-        div.style.display='flex';
-        div.style.marginBottom='4px';
-        const input = document.createElement('input');
-        input.value = name;
-        input.style.flex='1';
-        input.style.padding='6px';
-        input.oninput = () => { employeeNames[index]=input.value; };
-        const delBtn = document.createElement('button');
-        delBtn.innerText = '–';
-        delBtn.onclick = () => {
-            employeeNames.splice(index,1);
-            renderEmployeeList();
-        };
-        div.appendChild(input);
-        div.appendChild(delBtn);
-        employeeListDiv.appendChild(div);
+    await fetch('/settings/employees',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({employees:names})
     });
-}
 
-document.getElementById('addEmployee').onclick = () => {
-    if(employeeNames.length >= MAX_EMPLOYEES) return;
-    employeeNames.push(`Mitarbeiter ${employeeNames.length+1}`);
-    renderEmployeeList();
+    alert('Gespeichert');
 }
-
-document.getElementById('saveEmployees').onclick = async () => {
-    try {
-        await fetch('/settings/employees',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({employees: employeeNames})
-        });
-        alert('Mitarbeiter gespeichert!');
-    } catch(e) {
-        alert('Speichern fehlgeschlagen!');
-    }
-}
-
-renderEmployeeList();
 </script>
 
-{% endblock %}
+</body>
+</html>
