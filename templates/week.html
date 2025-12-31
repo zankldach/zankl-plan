@@ -15,7 +15,8 @@ table { width:100%; border-collapse:collapse; background:white; margin-bottom:20
 th, td { border:1px solid #ddd; padding:6px; text-align:center; }
 th { background:#eef2f6; }
 td input { width:100%; padding:4px; box-sizing:border-box; }
-button { padding:4px 8px; margin-left:4px; cursor:pointer; }
+button { padding:6px 12px; margin:4px 0; cursor:pointer; background:#003a8f; color:white; border:none; }
+button:hover { opacity:0.9; }
 
 /* Einfaches responsive Menü */
 @media(max-width:600px){
@@ -28,20 +29,14 @@ button { padding:4px 8px; margin-left:4px; cursor:pointer; }
 <header>
     <strong>Zankl Dach – Wochenplanung</strong>
     <nav>
-        <a href="/week?standort=engelbrechts">Wochenplanung Engelbrechts</a>
-        <a href="/week?standort=gross-gerungs">Wochenplanung Groß Gerungs</a>
+        <a href="/week?standort=engelbrechts">Engelbrechts</a>
+        <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
         <a href="/settings/employees">Mitarbeiter</a>
     </nav>
 </header>
 
 <section>
-<h2>Wochenplanung {{ kw }}/{{ year }}</h2>
-
-<label for="locationSelect">Standort:</label>
-<select id="locationSelect">
-    <option value="engelbrechts" {% if location=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
-    <option value="gross-gerungs" {% if location=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
-</select>
+<h2>Wochenplanung – Standort: <span id="locLabel">{{ standort }}</span></h2>
 
 <table id="weekTable">
 <thead>
@@ -53,56 +48,52 @@ button { padding:4px 8px; margin-left:4px; cursor:pointer; }
 </tr>
 </thead>
 <tbody>
-{% for i, row in enumerate(grid) %}
+{% for r in range(grid|length) %}
 <tr>
-    <td>
-        {% if employees|length > i %}
-        {{ employees[i] }}
-        {% else %}
-        -
-        {% endif %}
-    </td>
-    {% for cell in row %}
-    <td><input type="text" value="{{ cell.text }}" data-row="{{ loop.parent.index0 }}" data-day="{{ loop.index0 }}"></td>
+    <td><input type="text" value="" data-row="{{ r }}" data-day="-1"></td>
+    {% for d in range(5) %}
+    <td><input type="text" value="{{ grid[r][d].text }}" data-row="{{ r }}" data-day="{{ d }}"></td>
     {% endfor %}
 </tr>
 {% endfor %}
 </tbody>
 </table>
 
+<button id="saveBtn">Änderungen speichern</button>
 </section>
 
 <script>
-const locationSelect = document.getElementById('locationSelect');
-locationSelect.onchange = () => {
-    const loc = locationSelect.value;
-    const params = new URLSearchParams(window.location.search);
-    params.set('standort', loc);
-    window.location.search = params.toString();
-};
+let changes = [];
 
-// Save on blur
 document.querySelectorAll('#weekTable input').forEach(input => {
-    input.addEventListener('blur', async () => {
-        const row = input.dataset.row;
-        const day = input.dataset.day;
+    input.addEventListener('input', () => {
+        const row = parseInt(input.dataset.row);
+        const day = parseInt(input.dataset.day);
         const value = input.value;
-        const res = await fetch('/api/week/set-cell', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                year: {{ year }},
-                kw: {{ kw }},
-                row: parseInt(row),
-                day: parseInt(day),
-                value: value,
-                location: locationSelect.value
-            })
-        });
-        const data = await res.json();
-        if(!data.ok) alert('Fehler beim Speichern');
+        const idx = changes.findIndex(c => c.row===row && c.day===day);
+        if(idx>=0) changes[idx].value = value;
+        else changes.push({row, day, value});
     });
 });
+
+document.getElementById('saveBtn').onclick = async () => {
+    if(changes.length===0) return alert('Keine Änderungen zum Speichern.');
+    const res = await fetch('/api/week/set-cell', {
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            year: {{ year }},
+            kw: {{ kw }},
+            standort: "{{ standort }}",
+            changes: changes
+        })
+    });
+    const data = await res.json();
+    if(data.ok){
+        alert('Änderungen gespeichert!');
+        changes = [];
+    } else alert('Fehler beim Speichern.');
+};
 </script>
 
 </body>
