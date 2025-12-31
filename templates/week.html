@@ -21,7 +21,7 @@
     position: sticky;
     top: 0;
     z-index: 3;
-    background: #0b57d0;           /* dunkles Blau */
+    background: #0b57d0;
     color: #fff;
     padding: 10px 8px;
     font-weight: 700;
@@ -43,12 +43,9 @@
     padding: 0;
     height: 44px;
   }
-  .planner tbody tr:nth-child(even) td:first-child {
-    background: #f1f5fb;
-  }
-  .planner tbody tr:hover td {
-    background: #fbfdff;
-  }
+  .planner tbody tr:nth-child(even) td:first-child { background: #f1f5fb; }
+  .planner tbody tr:hover td { background: #fbfdff; }
+
   .planner input.cell {
     width: 100%;
     height: 44px;
@@ -59,43 +56,21 @@
     font-size: 14px;
     outline: none;
   }
-  .planner input.cell:focus {
-    outline: 2px solid #7db3ff;
-    background: #fff;
-  }
+  .planner input.cell:focus { outline: 2px solid #7db3ff; background: #fff; }
 
-  /* Drag & Drop-Zustände */
-  .drag-over {
-    outline: 2px dashed #2196f3;
-    outline-offset: -4px;
-    background: #eef7ff !important;
-  }
-  .dragging {
-    opacity: .6;
-  }
+  /* Drag & Drop */
+  .drag-over { outline: 2px dashed #2196f3; outline-offset: -4px; background: #eef7ff !important; }
+  .dragging { opacity: .6; }
 
-  /* Farbcodierung (automatisch via JS mit HSLA) */
-  .is-empty {
-    background: transparent !important;
-  }
+  .is-empty { background: transparent !important; }
 
-  /* Kopfbereich innerhalb der Seite */
-  header.page {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:10px;
-  }
+  header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   nav.page { display:flex; gap:15px; }
   nav.page a { color:#fff; text-decoration:none; font-weight:bold; padding:4px 8px; background:#0b57d0; border-radius:6px; }
   nav.page a:hover { background:#0847ad; }
 
-  .toolbar {
-    display:flex; gap:12px; align-items:center; margin-bottom:8px;
-  }
-  .badge {
-    display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155;
-  }
+  .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
+  .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
 </style>
 {% endblock %}
 
@@ -103,9 +78,9 @@
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
   <nav class="page">
-    <a href="/week?standort=engelbrechts&kw={{ kw|int }}&ear|int }}Engelbrechts</a>
-    <a href="/week?standort=gross-gerungs&kw={{ kw|int }}&year={{ yearoß Gerungs</a>
-    <a hrefgs/employeesMitarbeiter</a>
+    <a href="/week?standort=engelbrechts&amp;kw={{ kw }}&ampyear }}Engelbrechts</a>
+    <a href="/week?standort=gross-gerungs&amp;kw={{ kw }}&ampyear }}Groß Gerungs</a>
+    <a href="/settings/emtarbeiter</a>
   </nav>
 </header>
 
@@ -137,7 +112,7 @@
         {% set row_index = loop.index0 %}
         <tr>
           <td>
-            {% if employees and employees|length > row_index and employees[row_index] %}
+            {% if employees && employees|length > row_index && employees[row_index] %}
               {{ employees[row_index].name }}
             {% else %}
               Unbenannt
@@ -166,77 +141,44 @@
 
 {% block scripts %}
 <script>
-  // --- Konstante Kontextwerte ---
-  const KW = {{ kw|int }};
-  const YEAR = {{ year|int }};
+  // --- Kontextwerte (als Number/Strings) ---
+  const KW = Number('{{ kw }}');
+  const YEAR = Number('{{ year }}');
   const CURRENT_LOC = "{{ standort|e }}";
 
-  // --- Hilfsfunktionen für Farbe ---
+  // --- Farblogik ---
   const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-  function hashCode(str) {
-    // einfache, stabile Hashfunktion
-    let hash = 0;
-    for (let i=0;i<str.length;i++) {
-      hash = ((hash<<5)-hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash);
-  }
-  function colorFor(text) {
+  function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
+  function colorFor(text){
     const n = normalize(text);
-    if (!n) return null;
-    const h = hashCode(n) % 360;          // Farbton 0..359
-    const s = 70;                          // Sättigung
-    const l = 80;                          // Helligkeit (pastell)
-    const bg = `hsla(${h}, ${s}%, ${l}%, 0.65)`;
-    const border = `hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)`;
-    return { bg, border };
+    if(!n) return null;
+    const h = hashCode(n) % 360, s = 70, l = 80;
+    return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
   }
-  function applyColors() {
-    document.querySelectorAll('#weekTable input.cell').forEach(inp => {
-      const v = inp.value;
-      const c = colorFor(v);
-      if (c) {
-        inp.classList.remove('is-empty');
-        inp.style.background = c.bg;
-        inp.style.border = `1px solid ${c.border}`;
-        inp.style.borderRadius = '6px';
-      } else {
-        inp.classList.add('is-empty');
-        inp.style.background = 'transparent';
-        inp.style.border = 'none';
-      }
+  function applyColors(){
+    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+      const c = colorFor(inp.value);
+      if(c){ inp.classList.remove('is-empty'); inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
+      else { inp.classList.add('is-empty'); inp.style.background='transparent'; inp.style.border='none'; }
     });
   }
 
-  // --- Speichern einer einzelnen Zelle ---
-  async function saveCell(row, day, value) {
-    try {
-      const res = await fetch('/api/week/set-cell', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          row: Number(row),
-          day: Number(day),
-          value: value ?? "",
-          kw: KW,
-          year: YEAR,
-          standort: document.getElementById('locationSelect').value || CURRENT_LOC
-        })
+  // --- Speichern einer Zelle ---
+  async function saveCell(row, day, value){
+    try{
+      const res = await fetch('/api/week/set-cell',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ row:Number(row), day:Number(day), value:value??"", kw:KW, year:YEAR, standort: (document.getElementById('locationSelect').value || CURRENT_LOC) })
       });
       const r = await res.json();
-      if (!r.ok) console.warn('Save-Fehler:', r.error);
+      if(!r.ok) console.warn('Save-Fehler:', r.error);
       return r.ok;
-    } catch (e) {
-      console.warn('Netz- oder Serverfehler beim Speichern:', e);
-      return false;
-    }
+    }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
   }
-
-  // --- Alle speichern (Backup, falls man viel tippt) ---
-  async function saveAll() {
-    const ops = [];
-    document.querySelectorAll('#weekTable input.cell').forEach(inp => {
+  async function saveAll(){
+    const ops=[];
+    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
       ops.push(saveCell(inp.dataset.row, inp.dataset.day, inp.value));
     });
     await Promise.all(ops);
@@ -244,66 +186,54 @@
   }
 
   // --- Drag & Drop ---
-  let dragData = null;
-  function attachDnD() {
+  let dragData=null;
+  function attachDnD(){
     const cells = document.querySelectorAll('#weekTable td');
     const inputs = document.querySelectorAll('#weekTable input.cell');
 
-    inputs.forEach(inp => {
-      inp.addEventListener('dragstart', e => {
-        dragData = {
-          row: Number(inp.dataset.row),
-          day: Number(inp.dataset.day),
-          value: inp.value
-        };
+    inputs.forEach(inp=>{
+      inp.addEventListener('dragstart',e=>{
+        dragData = { row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
         e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
-        e.dataTransfer.dropEffect = 'move';
+        e.dataTransfer.dropEffect='move';
         inp.classList.add('dragging');
       });
-      inp.addEventListener('dragend', () => {
-        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-        document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-        dragData = null;
+      inp.addEventListener('dragend',()=>{
+        document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+        document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+        dragData=null;
       });
-
-      // Beim Tippen direkt speichern (Blur oder Enter)
-      inp.addEventListener('blur', async () => {
+      inp.addEventListener('blur', async ()=>{
         await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
         applyColors();
       });
-      inp.addEventListener('keydown', async (ev) => {
-        if (ev.key === 'Enter') {
+      inp.addEventListener('keydown', async (ev)=>{
+        if(ev.key==='Enter'){
           ev.preventDefault();
           await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
           applyColors();
-          // Focus nächste Zelle nach rechts
-          const r = Number(inp.dataset.row), d = Number(inp.dataset.day);
+          const r=Number(inp.dataset.row), d=Number(inp.dataset.day);
           const next = document.querySelector(`input.cell[data-row="${r}"][data-day="${d+1}"]`);
-          (next || inp).focus();
+          (next||inp).focus();
         }
       });
-      // Bei jeder Änderung neu einfärben
       inp.addEventListener('input', applyColors);
     });
 
-    cells.forEach(td => {
-      td.addEventListener('dragover', e => {
-        e.preventDefault(); // damit drop möglich
-        td.classList.add('drag-over');
-      });
-      td.addEventListener('dragleave', () => td.classList.remove('drag-over'));
-      td.addEventListener('drop', async e => {
+    cells.forEach(td=>{
+      td.addEventListener('dragover',e=>{ e.preventDefault(); td.classList.add('drag-over'); });
+      td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
+      td.addEventListener('drop', async e=>{
         e.preventDefault();
         td.classList.remove('drag-over');
-        try {
-          const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
-          if (!payload || typeof payload.row === 'undefined') return;
-
+        try{
+          const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
+          if(!payload || typeof payload.row==='undefined') return;
           const targetRow = Number(td.dataset.row);
           const targetDay = Number(td.dataset.day);
           const tgtInput = td.querySelector('input.cell');
           const srcInput = document.querySelector(`input.cell[data-row="${payload.row}"][data-day="${payload.day}"]`);
-          if (!tgtInput || !srcInput) return;
+          if(!tgtInput || !srcInput) return;
 
           const copy = e.ctrlKey || e.metaKey; // Strg/Cmd = kopieren
           // Ziel setzen
@@ -311,21 +241,18 @@
           await saveCell(targetRow, targetDay, payload.value);
 
           // Wenn Move: Quelle leeren + speichern
-          if (!copy && (payload.row !== targetRow || payload.day !== targetDay)) {
+          if(!copy && (payload.row!==targetRow || payload.day!==targetDay)){
             srcInput.value = "";
             await saveCell(payload.row, payload.day, "");
           }
-
           applyColors();
-        } catch (err) {
-          console.warn('Drop-Fehler:', err);
-        }
+        }catch(err){ console.warn('Drop-Fehler:', err); }
       });
     });
   }
 
   // --- Standortwechsel ---
-  document.getElementById('locationSelect').onchange = () => {
+  document.getElementById('locationSelect').onchange = ()=>{
     const loc = document.getElementById('locationSelect').value;
     window.location.href = `/week?standort=${encodeURIComponent(loc)}&kw=${KW}&year=${YEAR}`;
   };
