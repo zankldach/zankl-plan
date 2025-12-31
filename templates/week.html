@@ -1,10 +1,9 @@
-```html
+
 {% extends "base.html" %}
 {% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
 
 {% block head %}
 <style>
-  /* ---------- Layout der Wochen-Tabelle ---------- */
   .plan-wrap { margin-top: 12px; }
   table.planner {
     width: 100%;
@@ -18,55 +17,24 @@
     box-shadow: 0 3px 12px rgba(0,0,0,0.06);
   }
   .planner thead th {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: #0b57d0;
-    color: #fff;
-    padding: 10px 8px;
-    font-weight: 700;
+    position: sticky; top: 0; z-index: 3;
+    background: #0b57d0; color: #fff; padding: 10px 8px; font-weight: 700;
     border-bottom: 1px solid rgba(255,255,255,0.2);
   }
   .planner thead th:first-child,
   .planner tbody td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    background: #f7f9fc;
-    font-weight: 600;
-    width: 200px;
-    text-align: left;
+    position: sticky; left: 0; z-index: 2;
+    background: #f7f9fc; font-weight: 600; width: 200px; text-align: left;
   }
-  .planner tbody td {
-    border-top: 1px solid #eef2f6;
-    border-right: 1px solid #eef2f6;
-    padding: 0;
-    height: 44px;
-  }
+  .planner tbody td { border-top: 1px solid #eef2f6; border-right: 1px solid #eef2f6; padding: 0; height: 44px; }
   .planner tbody tr:nth-child(even) td:first-child { background: #f1f5fb; }
   .planner tbody tr:hover td { background: #fbfdff; }
-
-  .planner input.cell {
-    width: 100%;
-    height: 44px;
-    padding: 6px 8px;
-    border: none;
-    background: transparent;
-    text-align: center;
-    font-size: 14px;
-    outline: none;
-  }
+  .planner input.cell { width: 100%; height: 44px; padding: 6px 8px; border: none; background: transparent; text-align: center; font-size: 14px; outline: none; }
   .planner input.cell:focus { outline: 2px solid #7db3ff; background: #fff; }
-
-  /* Drag & Drop */
   .drag-over { outline: 2px dashed #2196f3; outline-offset: -4px; background: #eef7ff !important; }
   .dragging { opacity: .6; }
-
   .is-empty { background: transparent !important; }
-
   header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  /* Navigation im Header entfällt (um URL-Mischfehler auszuschließen) */
-
   .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
   .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
 </style>
@@ -75,7 +43,7 @@
 {% block content %}
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
-  <!-- Keine <a>-Links hier, Standortwechsel nur per Select -->
+  <!-- keine Links hier, Standortwechsel nur per Select -->
 </header>
 
 <div class="toolbar">
@@ -86,7 +54,6 @@
       <option value="gross-gerungs" {% if standort=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
     </select>
   </div>
-
   <span class="badge">KW {{ kw }} / {{ year }}</span>
   <span class="badge">Tipp: <kbd>Strg</kbd> halten beim Ziehen = Kopieren</span>
 </div>
@@ -115,11 +82,9 @@
           {% for cell in row %}
             {% set day_index = loop.index0 %}
             <td data-row="{{ row_index }}" data-day="{{ day_index }}">
-              <input class="cell"
-                     draggable="true"
+              <input class="cell" draggable="true"
                      value="{{ cell.text if cell and cell.text is defined else '' }}"
-                     data-row="{{ row_index }}"
-                     data-day="{{ day_index }}">
+                     data-row="{{ row_index }}" data-day="{{ day_index }}">
             </td>
           {% endfor %}
         </tr>
@@ -135,17 +100,14 @@
 
 {% block scripts %}
 <script>
-  // --- Kontextwerte robust parsen ---
   const KW = parseInt('{{ kw }}', 10);
   const YEAR = parseInt('{{ year }}', 10);
   const CURRENT_LOC = "{{ standort|e }}";
 
-  // --- Farblogik ---
   const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
   function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
   function colorFor(text){
-    const n = normalize(text);
-    if(!n) return null;
+    const n = normalize(text); if(!n) return null;
     const h = hashCode(n) % 360, s = 70, l = 80;
     return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
   }
@@ -157,50 +119,26 @@
     });
   }
 
-  // --- Speichern einer Zelle (mit klaren Fehler-Hinweisen) ---
   async function saveCell(row, day, value){
     try{
-      const payload = {
-        row: Number(row),
-        day: Number(day),
-        value: value ?? "",
-        kw: KW,
-        year: YEAR,
-        standort: (document.getElementById('locationSelect').value || CURRENT_LOC)
-      };
       const res = await fetch('/api/week/set-cell',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ row:Number(row), day:Number(day), value:value??"", kw:KW, year:YEAR, standort:(document.getElementById('locationSelect').value || CURRENT_LOC) })
       });
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn('Save HTTP-Fehler:', res.status, text);
-        alert(`Speichern fehlgeschlagen (HTTP ${res.status}). Details siehe Konsole (F12 → Netzwerk).`);
-        return false;
-      }
+      if (!res.ok) { const text = await res.text(); console.warn('Save HTTP-Fehler:', res.status, text); return false; }
       const r = await res.json();
-      if(!r.ok) {
-        console.warn('Save-Fehler:', r.error);
-        alert('Speichern fehlgeschlagen: ' + (r.error || 'unbekannt'));
-      }
-      return r.ok;
-    }catch(e){
-      console.warn('Netz-/Serverfehler:', e);
-      alert('Netz-/Serverfehler beim Speichern. Bitte später erneut.');
-      return false;
-    }
+      if(!r.ok) { console.warn('Save-Fehler:', r.error); return false; }
+      return true;
+    }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
   }
   async function saveAll(){
-    const ops=[];
-    document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+    const ops=[]; document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
       ops.push(saveCell(inp.dataset.row, inp.dataset.day, inp.value));
     });
-    await Promise.all(ops);
-    alert('Alle Zellen gespeichert.');
+    await Promise.all(ops); alert('Alle Zellen gespeichert.');
   }
 
-  // --- Drag & Drop ---
   let dragData=null;
   function attachDnD(){
     const cells = document.querySelectorAll('#weekTable td');
@@ -239,8 +177,7 @@
       td.addEventListener('dragover',e=>{ e.preventDefault(); td.classList.add('drag-over'); });
       td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
       td.addEventListener('drop', async e=>{
-        e.preventDefault();
-        td.classList.remove('drag-over');
+        e.preventDefault(); td.classList.remove('drag-over');
         try{
           const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
           if(!payload || typeof payload.row==='undefined') return;
@@ -251,11 +188,9 @@
           if(!tgtInput || !srcInput) return;
 
           const copy = e.ctrlKey || e.metaKey; // Strg/Cmd = kopieren
-          // Ziel setzen
           tgtInput.value = payload.value;
           await saveCell(targetRow, targetDay, payload.value);
 
-          // Wenn Move: Quelle leeren + speichern
           if(!copy && (payload.row!==targetRow || payload.day!==targetDay)){
             srcInput.value = "";
             await saveCell(payload.row, payload.day, "");
@@ -266,15 +201,12 @@
     });
   }
 
-  // --- Standortwechsel nur per Select ---
   document.getElementById('locationSelect').onchange = ()=>{
     const loc = document.getElementById('locationSelect').value;
     window.location.href = `/week?standort=${encodeURIComponent(loc)}&kw=${KW}&year=${YEAR}`;
   };
 
-  // --- Init ---
   document.getElementById('saveAllBtn').onclick = saveAll;
-  attachDnD();
-  applyColors();
+  attachDnD(); applyColors();
 </script>
 {% endblock %}
