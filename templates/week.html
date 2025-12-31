@@ -15,8 +15,11 @@ table { width:100%; border-collapse:collapse; background:white; margin-bottom:20
 th, td { border:1px solid #ddd; padding:6px; text-align:center; }
 th { background:#eef2f6; }
 td input { width:100%; padding:4px; box-sizing:border-box; }
-button { padding:6px 12px; margin:4px 0; cursor:pointer; background:#003a8f; color:white; border:none; }
-button:hover { opacity:0.9; }
+button { padding:4px 8px; margin-left:4px; cursor:pointer; }
+button.delete { background:#f44336; color:white; border:none; }
+button.edit { background:#2196f3; color:white; border:none; }
+.add-row { margin-top:10px; padding:6px 12px; background:#4caf50; color:white; border:none; cursor:pointer; }
+#saveBtn { padding:6px 12px; background:#003a8f; color:white; border:none; cursor:pointer; }
 
 /* Einfaches responsive Menü */
 @media(max-width:600px){
@@ -36,63 +39,80 @@ button:hover { opacity:0.9; }
 </header>
 
 <section>
-<h2>Wochenplanung – Standort: <span id="locLabel">{{ standort }}</span></h2>
+<h2>Wochenplanung – Standort: <span id="currentLocationLabel">{{ standort }}</span></h2>
+
+<label for="locationSelect">Standort wechseln:</label>
+<select id="locationSelect">
+    <option value="engelbrechts" {% if standort=='engelbrechts' %}selected{% endif %}>Engelbrechts</option>
+    <option value="gross-gerungs" {% if standort=='gross-gerungs' %}selected{% endif %}>Groß Gerungs</option>
+</select>
 
 <table id="weekTable">
-<thead>
-<tr>
-    <th>Mitarbeiter</th>
-    {% for day in days %}
-    <th>{{ day.label }}<br>{{ day.date }}</th>
-    {% endfor %}
-</tr>
-</thead>
-<tbody>
-{% for r in range(grid|length) %}
-<tr>
-    <td><input type="text" value="" data-row="{{ r }}" data-day="-1"></td>
-    {% for d in range(5) %}
-    <td><input type="text" value="{{ grid[r][d].text }}" data-row="{{ r }}" data-day="{{ d }}"></td>
-    {% endfor %}
-</tr>
-{% endfor %}
-</tbody>
+    <thead>
+        <tr>
+            <th>Mitarbeiter / Tag</th>
+            {% for day in days %}
+            <th>{{ day.label }}<br>{{ day.date }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for i, row in enumerate(grid) %}
+        <tr>
+            <td>
+                {% if employees[i] %}
+                    {{ employees[i].name }}
+                {% else %}
+                    Unbenannt
+                {% endif %}
+            </td>
+            {% for cell in row %}
+            <td><input type="text" value="{{ cell.text }}" data-row="{{ i }}" data-day="{{ loop.index0 }}"></td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 
-<button id="saveBtn">Änderungen speichern</button>
+<button id="saveBtn">Speichern</button>
 </section>
 
 <script>
-let changes = [];
+const locationSelect = document.getElementById('locationSelect');
+const currentLocationLabel = document.getElementById('currentLocationLabel');
+const saveBtn = document.getElementById('saveBtn');
+const inputs = document.querySelectorAll('#weekTable tbody input');
 
-document.querySelectorAll('#weekTable input').forEach(input => {
-    input.addEventListener('input', () => {
-        const row = parseInt(input.dataset.row);
-        const day = parseInt(input.dataset.day);
-        const value = input.value;
-        const idx = changes.findIndex(c => c.row===row && c.day===day);
-        if(idx>=0) changes[idx].value = value;
-        else changes.push({row, day, value});
-    });
-});
+locationSelect.onchange = () => {
+    const loc = locationSelect.value;
+    window.location.href = `/week?standort=${loc}&kw={{ kw }}&year={{ year }}`;
+};
 
-document.getElementById('saveBtn').onclick = async () => {
-    if(changes.length===0) return alert('Keine Änderungen zum Speichern.');
-    const res = await fetch('/api/week/set-cell', {
-        method:'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-            year: {{ year }},
+// Änderungen speichern
+saveBtn.onclick = () => {
+    const updates = [];
+    document.querySelectorAll('#weekTable tbody input').forEach(input => {
+        updates.push({
+            row: parseInt(input.dataset.row),
+            day: parseInt(input.dataset.day),
+            value: input.value,
             kw: {{ kw }},
-            standort: "{{ standort }}",
-            changes: changes
-        })
+            year: {{ year }},
+            standort: locationSelect.value
+        });
     });
-    const data = await res.json();
-    if(data.ok){
-        alert('Änderungen gespeichert!');
-        changes = [];
-    } else alert('Fehler beim Speichern.');
+
+    updates.forEach(data => {
+        fetch('/api/week/set-cell', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(data)
+        }).then(res => res.json())
+          .then(r => console.log('Gespeichert:', r))
+          .catch(e => console.warn('Fehler:', e));
+    });
+
+    alert('Änderungen gespeichert!');
 };
 </script>
 
