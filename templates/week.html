@@ -57,17 +57,19 @@ button.edit { background:#2196f3; color:white; border:none; }
         </tr>
     </thead>
     <tbody>
-        {% for i, row in enumerate(grid) %}
+        {% for row in grid %}
         <tr>
             <td>
-                {% if employees[i] %}
-                    {{ employees[i].name }}
+                {% if employees[loop.index0] %}
+                    {{ employees[loop.index0].name }}
                 {% else %}
                     Unbenannt
                 {% endif %}
             </td>
             {% for cell in row %}
-            <td><input type="text" value="{{ cell.text }}" data-row="{{ i }}" data-day="{{ loop.index0 }}"></td>
+            <td>
+                <input type="text" value="{{ cell.text }}" data-row="{{ loop.parent.index0 }}" data-day="{{ loop.index0 }}">
+            </td>
             {% endfor %}
         </tr>
         {% endfor %}
@@ -81,14 +83,12 @@ button.edit { background:#2196f3; color:white; border:none; }
 const locationSelect = document.getElementById('locationSelect');
 const currentLocationLabel = document.getElementById('currentLocationLabel');
 const saveBtn = document.getElementById('saveBtn');
-const inputs = document.querySelectorAll('#weekTable tbody input');
 
 locationSelect.onchange = () => {
     const loc = locationSelect.value;
     window.location.href = `/week?standort=${loc}&kw={{ kw }}&year={{ year }}`;
 };
 
-// Änderungen speichern
 saveBtn.onclick = () => {
     const updates = [];
     document.querySelectorAll('#weekTable tbody input').forEach(input => {
