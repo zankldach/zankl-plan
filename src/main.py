@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -13,9 +13,9 @@ DB_PATH = BASE_DIR / "zankl.db"
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --------------------------------------------------
-# DB
-# --------------------------------------------------
+# ----------------------------
+# Database
+# ----------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -25,6 +25,7 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
+    # Week plans
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +37,7 @@ def init_db():
         )
     """)
 
+    # Week cells
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,10 +49,11 @@ def init_db():
         )
     """)
 
+    # Employees
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
+            name TEXT UNIQUE,
             standort TEXT
         )
     """)
@@ -60,130 +63,127 @@ def init_db():
 
 init_db()
 
-# --------------------------------------------------
-# WEEK VIEW
-# --------------------------------------------------
+# ----------------------------
+# Week view
+# ----------------------------
 @app.get("/", response_class=HTMLResponse)
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT id,row_count FROM week_plans
-        WHERE year=? AND kw=? AND standort=?
-    """,(year,kw,standort))
-    plan = cur.fetchone()
-
-    if not plan:
+    try:
+        # Plan abrufen oder erstellen
         cur.execute("""
-            INSERT INTO week_plans(year,kw,standort,row_count)
-            VALUES(?,?,?,5)
-        """,(year,kw,standort))
-        conn.commit()
-        plan_id = cur.lastrowid
-        rows = 5
-    else:
-        plan_id = plan["id"]
-        rows = plan["row_count"]
+            SELECT id,row_count FROM week_plans
+            WHERE year=? AND kw=? AND standort=?
+        """, (year, kw, standort))
+        plan = cur.fetchone()
 
-    grid = [[{"text":""} for _ in range(5)] for _ in range(rows)]
+        if not plan:
+            cur.execute("""
+                INSERT INTO week_plans(year,kw,standort,row_count)
+                VALUES(?,?,?,5)
+            """, (year, kw, standort))
+            conn.commit()
+            plan_id = cur.lastrowid
+            rows = 5
+        else:
+            plan_id = plan["id"]
+            rows = plan["row_count"]
 
-    cur.execute("""
-        SELECT row_index,day_index,text
-        FROM week_cells
-        WHERE week_plan_id=?
-    """,(plan_id,))
-    for r in cur.fetchall():
-        grid[r["row_index"]][r["day_index"]]["text"] = r["text"]
+        # Grid vorbereiten
+        grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
+        cur.execute("""
+            SELECT row_index,day_index,text
+            FROM week_cells
+            WHERE week_plan_id=?
+        """, (plan_id,))
+        for r in cur.fetchall():
+            grid[r["row_index"]][r["day_index"]]["text"] = r["text"]
 
-    # Mitarbeiter für Standort
-    cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id",(standort,))
-    employees = [{"id":e["id"],"name":e["name"]} for e in cur.fetchall()]
+        # Mitarbeiter für diesen Standort
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
 
-    conn.close()
+        days = [
+            {"label":"Montag","date":"06.01"},
+            {"label":"Dienstag","date":"07.01"},
+            {"label":"Mittwoch","date":"08.01"},
+            {"label":"Donnerstag","date":"09.01"},
+            {"label":"Freitag","date":"10.01"},
+        ]
 
-    days = [
-        {"label":"Montag","date":"06.01"},
-        {"label":"Dienstag","date":"07.01"},
-        {"label":"Mittwoch","date":"08.01"},
-        {"label":"Donnerstag","date":"09.01"},
-        {"label":"Freitag","date":"10.01"},
-    ]
+        return templates.TemplateResponse("week.html", {
+            "request": request,
+            "grid": grid,
+            "employees": employees,
+            "kw": kw,
+            "year": year,
+            "days": days,
+            "standort": standort
+        })
 
-    return templates.TemplateResponse("week.html",{
-        "request":request,
-        "grid":grid,
-        "employees":employees,
-        "kw":kw,
-        "year":year,
-        "days":days,
-        "standort":standort
-    })
+    finally:
+        conn.close()
 
-# --------------------------------------------------
-# CELL SAVE (Batch)
-# --------------------------------------------------
+# ----------------------------
+# Cell save
+# ----------------------------
 @app.post("/api/week/set-cell")
 async def set_cell(data: dict):
     conn = get_conn()
     cur = conn.cursor()
-
-    standort = data.get("standort","engelbrechts")
-
-    cur.execute("""
-        SELECT id FROM week_plans
-        WHERE year=? AND kw=? AND standort=?
-    """,(data["year"],data["kw"],standort))
-    plan = cur.fetchone()
-    if not plan:
+    try:
         cur.execute("""
-            INSERT INTO week_plans(year,kw,standort,row_count)
-            VALUES(?,?,?,5)
-        """,(data["year"],data["kw"],standort))
-        conn.commit()
-        plan_id = cur.lastrowid
-    else:
+            SELECT id FROM week_plans
+            WHERE year=? AND kw=? AND standort=?
+        """, (data["year"], data["kw"], data["standort"]))
+        plan = cur.fetchone()
+        if not plan:
+            return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
         plan_id = plan["id"]
 
-    for change in data.get("changes",[]):
         cur.execute("""
             INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
             VALUES(?,?,?,?)
             ON CONFLICT(week_plan_id,row_index,day_index)
             DO UPDATE SET text=excluded.text
-        """,(plan_id, change["row"], change["day"], change["value"]))
+        """, (plan_id, data["row"], data["day"], data["value"]))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
 
-    conn.commit()
-    conn.close()
-    return {"ok":True}
-
-# --------------------------------------------------
-# SETTINGS – EMPLOYEES
-# --------------------------------------------------
+# ----------------------------
+# Employees settings
+# ----------------------------
 @app.get("/settings/employees", response_class=HTMLResponse)
 def employees_settings(request: Request):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT id,name,standort FROM employees ORDER BY id")
-    employees = [{"id":e["id"],"name":e["name"],"standort":e["standort"]} for e in cur.fetchall()]
-    conn.close()
-
-    return templates.TemplateResponse("settings_employees.html",{
-        "request":request,
-        "employees":employees
-    })
+    try:
+        cur.execute("SELECT id,name,standort FROM employees ORDER BY id")
+        employees = [{"id": e["id"], "name": e["name"], "standort": e["standort"]} for e in cur.fetchall()]
+        return templates.TemplateResponse("settings_employees.html", {
+            "request": request,
+            "employees": employees
+        })
+    finally:
+        conn.close()
 
 @app.post("/settings/employees")
 async def employees_save(data: dict):
     conn = get_conn()
     cur = conn.cursor()
-
-    cur.execute("DELETE FROM employees")
-    for emp in data.get("employees",[]):
-        if emp.get("name","").strip():
-            cur.execute("INSERT INTO employees(name,standort) VALUES(?,?)",(emp["name"].strip(), emp["standort"]))
-
-    conn.commit()
-    conn.close()
-    return {"ok":True}
+    try:
+        cur.execute("DELETE FROM employees")
+        for e in data.get("employees", []):
+            name = e.get("name", "").strip()
+            standort = e.get("standort", "engelbrechts")
+            if name:
+                cur.execute("INSERT INTO employees(name,standort) VALUES(?,?)", (name, standort))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
