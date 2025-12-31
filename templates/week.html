@@ -57,18 +57,18 @@ button.edit { background:#2196f3; color:white; border:none; }
         </tr>
     </thead>
     <tbody>
-        {% for row in grid %}
+        {% for row_index, row in grid|enumerate %}
         <tr>
             <td>
-                {% if employees[loop.index0] %}
-                    {{ employees[loop.index0].name }}
+                {% if employees[row_index] %}
+                    {{ employees[row_index].name }}
                 {% else %}
                     Unbenannt
                 {% endif %}
             </td>
-            {% for cell in row %}
+            {% for day_index, cell in row|enumerate %}
             <td>
-                <input type="text" value="{{ cell.text }}" data-row="{{ loop.parent.index0 }}" data-day="{{ loop.index0 }}">
+                <input type="text" value="{{ cell.text }}" data-row="{{ row_index }}" data-day="{{ day_index }}">
             </td>
             {% endfor %}
         </tr>
