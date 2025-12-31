@@ -1,4 +1,4 @@
-
+```html
 {% extends "base.html" %}
 {% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
 
@@ -65,9 +65,7 @@
   .is-empty { background: transparent !important; }
 
   header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  nav.page { display:flex; gap:15px; }
-  nav.page a { color:#fff; text-decoration:none; font-weight:bold; padding:4px 8px; background:#0b57d0; border-radius:6px; }
-  nav.page a:hover { background:#0847ad; }
+  /* Navigation im Header entfällt (um URL-Mischfehler auszuschließen) */
 
   .toolbar { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
   .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
@@ -77,11 +75,7 @@
 {% block content %}
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
-  <nav class="page">
-    <a href="/week?standort=engelbrechts&amp;}}&amp;year={{ year }}Engelbrechts</a>
-    /week?standort=gross-gerungs&amp;kw={{ kw }}&amp;year={{ year }}Groß Gerungs</a>
-    /settings/employeesMitarbeiter</a>
-  </nav>
+  <!-- Keine <a>-Links hier, Standortwechsel nur per Select -->
 </header>
 
 <div class="toolbar">
@@ -141,9 +135,9 @@
 
 {% block scripts %}
 <script>
-  // --- Kontextwerte ---
-  const KW = Number('{{ kw }}');
-  const YEAR = Number('{{ year }}');
+  // --- Kontextwerte robust parsen ---
+  const KW = parseInt('{{ kw }}', 10);
+  const YEAR = parseInt('{{ year }}', 10);
   const CURRENT_LOC = "{{ standort|e }}";
 
   // --- Farblogik ---
@@ -163,18 +157,39 @@
     });
   }
 
-  // --- Speichern einer Zelle ---
+  // --- Speichern einer Zelle (mit klaren Fehler-Hinweisen) ---
   async function saveCell(row, day, value){
     try{
+      const payload = {
+        row: Number(row),
+        day: Number(day),
+        value: value ?? "",
+        kw: KW,
+        year: YEAR,
+        standort: (document.getElementById('locationSelect').value || CURRENT_LOC)
+      };
       const res = await fetch('/api/week/set-cell',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ row:Number(row), day:Number(day), value:value??"", kw:KW, year:YEAR, standort: (document.getElementById('locationSelect').value || CURRENT_LOC) })
+        body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn('Save HTTP-Fehler:', res.status, text);
+        alert(`Speichern fehlgeschlagen (HTTP ${res.status}). Details siehe Konsole (F12 → Netzwerk).`);
+        return false;
+      }
       const r = await res.json();
-      if(!r.ok) console.warn('Save-Fehler:', r.error);
+      if(!r.ok) {
+        console.warn('Save-Fehler:', r.error);
+        alert('Speichern fehlgeschlagen: ' + (r.error || 'unbekannt'));
+      }
       return r.ok;
-    }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+    }catch(e){
+      console.warn('Netz-/Serverfehler:', e);
+      alert('Netz-/Serverfehler beim Speichern. Bitte später erneut.');
+      return false;
+    }
   }
   async function saveAll(){
     const ops=[];
@@ -251,7 +266,7 @@
     });
   }
 
-  // --- Standortwechsel ---
+  // --- Standortwechsel nur per Select ---
   document.getElementById('locationSelect').onchange = ()=>{
     const loc = document.getElementById('locationSelect').value;
     window.location.href = `/week?standort=${encodeURIComponent(loc)}&kw=${KW}&year=${YEAR}`;
@@ -263,4 +278,3 @@
   applyColors();
 </script>
 {% endblock %}
-``
