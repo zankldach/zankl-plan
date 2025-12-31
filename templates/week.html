@@ -78,9 +78,9 @@
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
   <nav class="page">
-    <a href="/week?standort=engelbrechts&amp;kw={{ kw }}&ampyear }}Engelbrechts</a>
-    <a href="/week?standort=gross-gerungs&amp;kw={{ kw }}&ampyear }}Groß Gerungs</a>
-    <a href="/settings/emtarbeiter</a>
+    <a href="/week?standort=engelbrechts&amp;}}&amp;year={{ year }}Engelbrechts</a>
+    /week?standort=gross-gerungs&amp;kw={{ kw }}&amp;year={{ year }}Groß Gerungs</a>
+    /settings/employeesMitarbeiter</a>
   </nav>
 </header>
 
@@ -112,7 +112,7 @@
         {% set row_index = loop.index0 %}
         <tr>
           <td>
-            {% if employees && employees|length > row_index && employees[row_index] %}
+            {% if employees and employees|length > row_index and employees[row_index] %}
               {{ employees[row_index].name }}
             {% else %}
               Unbenannt
@@ -141,7 +141,7 @@
 
 {% block scripts %}
 <script>
-  // --- Kontextwerte (als Number/Strings) ---
+  // --- Kontextwerte ---
   const KW = Number('{{ kw }}');
   const YEAR = Number('{{ year }}');
   const CURRENT_LOC = "{{ standort|e }}";
@@ -263,3 +263,4 @@
   applyColors();
 </script>
 {% endblock %}
+``
