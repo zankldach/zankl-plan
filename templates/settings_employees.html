@@ -1,61 +1,140 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Mitarbeiterverwaltung Zankl Dach</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { font-family: Arial, sans-serif; margin:0; background:#f4f6f8; }
+header { background:#003a8f; color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+nav { display:flex; gap:15px; }
+nav a { color:white; text-decoration:none; font-weight:bold; }
+section { padding:20px; }
+h2 { margin-top:0; }
+table { width:100%; border-collapse:collapse; background:white; margin-bottom:20px; }
+th, td { border:1px solid #ddd; padding:6px; text-align:center; }
+th { background:#eef2f6; }
+td input { width:100%; padding:4px; box-sizing:border-box; }
+button { padding:4px 8px; margin-left:4px; cursor:pointer; }
+button.delete { background:#f44336; color:white; border:none; }
+button.edit { background:#2196f3; color:white; border:none; }
+.add-row { margin-top:10px; padding:6px 12px; background:#4caf50; color:white; border:none; cursor:pointer; }
 
-{% block title %}Mitarbeiter Einstellungen{% endblock %}
+/* Einfaches responsive Menü */
+@media(max-width:600px){
+    nav { flex-direction:column; gap:5px; }
+}
+</style>
+</head>
+<body>
 
-{% block content %}
-<h2>Mitarbeiter verwalten</h2>
+<header>
+    <strong>Zankl Dach – Mitarbeiterverwaltung</strong>
+    <nav>
+        <a href="/week?location=engelbrechts">Wochenplanung Engelbrechts</a>
+        <a href="/week?location=gross-gerungs">Wochenplanung Groß Gerungs</a>
+        <a href="/settings/employees">Mitarbeiter</a>
+    </nav>
+</header>
 
-<ul id="employeeList">
-    {% for emp in employees %}
-        <li data-index="{{ loop.index0 }}">
-            {{ emp }}
-            <button class="deleteBtn">❌</button>
-        </li>
-    {% endfor %}
-</ul>
+<section>
+<h2>Mitarbeiterverwaltung</h2>
 
-<input type="text" id="newEmployee" placeholder="Neuer Mitarbeiter">
-<button id="addEmployee">Hinzufügen</button>
-{% endblock %}
+<label for="locationSelect">Standort:</label>
+<select id="locationSelect">
+    <option value="engelbrechts">Engelbrechts</option>
+    <option value="gross-gerungs">Groß Gerungs</option>
+</select>
 
-{% block scripts %}
+<div id="employeesContainer"></div>
+
+<button class="add-row" onclick="addEmployee()">Neuen Mitarbeiter hinzufügen</button>
+</section>
+
 <script>
-let employees = {% if employees %}{{ employees|tojson }}{% else %}[] {% endif %};
+let employees = {{ employees|tojson }} || []; // alle Mitarbeiter als Array von Objekten: {name, location}
+let currentLocation = document.getElementById('locationSelect').value;
 
-/* ---------- Liste rendern ---------- */
-function renderList(){
-    const ul = document.getElementById('employeeList');
-    ul.innerHTML='';
-    employees.forEach((e,i)=>{
-        const li = document.createElement('li');
-        li.dataset.index=i;
-        li.textContent=e + ' ';
-        const btn = document.createElement('button');
-        btn.textContent='❌';
-        btn.onclick=()=>{ employees.splice(i,1); saveEmployees(); renderList(); };
-        li.appendChild(btn);
-        ul.appendChild(li);
+const container = document.getElementById('employeesContainer');
+
+function renderEmployees() {
+    container.innerHTML = '';
+    const filtered = employees.filter(e => e.location === currentLocation);
+    if(filtered.length === 0){
+        container.innerHTML = `<p>Keine Mitarbeiter für ${currentLocation} vorhanden.</p>`;
+        return;
+    }
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr><th>Name</th><th>Aktionen</th></tr>`;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    filtered.forEach((emp, index) => {
+        const tr = document.createElement('tr');
+        const nameTd = document.createElement('td');
+        const input = document.createElement('input');
+        input.value = emp.name;
+        input.onchange = () => { emp.name = input.value; saveEmployees(); };
+        nameTd.appendChild(input);
+
+        const actionTd = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Bearbeiten';
+        editBtn.className = 'edit';
+        editBtn.onclick = () => { input.focus(); };
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Löschen';
+        deleteBtn.className = 'delete';
+        deleteBtn.onclick = () => { removeEmployee(emp); };
+
+        actionTd.appendChild(editBtn);
+        actionTd.appendChild(deleteBtn);
+
+        tr.appendChild(nameTd);
+        tr.appendChild(actionTd);
+        tbody.appendChild(tr);
     });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
 }
 
-/* ---------- Hinzufügen ---------- */
-document.getElementById('addEmployee').onclick=()=>{
-    const name=document.getElementById('newEmployee').value.trim();
-    if(name){ employees.push(name); document.getElementById('newEmployee').value=''; saveEmployees(); renderList(); }
+function saveEmployees() {
+    fetch('/settings/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employees })
+    }).then(res => res.json())
+      .then(data => console.log('Speichern erfolgreich', data))
+      .catch(e => console.warn('Speichern fehlgeschlagen', e));
+}
+
+function removeEmployee(emp) {
+    if(!confirm(`Mitarbeiter "${emp.name}" wirklich löschen?`)) return;
+    employees = employees.filter(e => e !== emp);
+    saveEmployees();
+    renderEmployees();
+}
+
+function addEmployee() {
+    const name = prompt('Name des neuen Mitarbeiters:');
+    if(!name) return;
+    employees.push({name, location: currentLocation});
+    saveEmployees();
+    renderEmployees();
+}
+
+document.getElementById('locationSelect').onchange = (e) => {
+    currentLocation = e.target.value;
+    renderEmployees();
 };
 
-/* ---------- Speichern ---------- */
-async function saveEmployees(){
-    try{
-        await fetch('/settings/employees',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({employees})
-        });
-    }catch(e){ console.warn('Speichern fehlgeschlagen'); }
-}
-
-/* ---------- Init ---------- */
-renderList();
+// Initial render
+renderEmployees();
 </script>
-{% endblock %}
+
+</body>
+</html>
