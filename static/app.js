@@ -1,7 +1,9 @@
 
-// static/app.js — Austausch Jänner 2026
+// static/app.js — Safe Fallback (Jänner 2026)
 (function () {
-  // ----- Utilities -----
+  console.log('app.js boot ✔');
+
+  // --- Helpers ---
   function getParam(name, def) {
     const v = new URLSearchParams(location.search).get(name);
     return v !== null ? v : def;
@@ -11,54 +13,49 @@
     return Number.isFinite(n) ? n : def;
   }
   async function postJSON(url, data) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
     try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
       return await res.json();
-    } catch {
-      return { ok: false, error: "Invalid JSON response" };
+    } catch (e) {
+      console.error('POST fail', url, e);
+      return { ok: false, error: String(e) };
     }
   }
 
-  // Standort/KW/Jahr aus URL oder Fallback-Inputs ziehen
-  const standort = getParam("standort", (document.getElementById("wk-standort")?.value) || "engelbrechts");
-  const kw = toInt(getParam("kw", (document.getElementById("wk-kw")?.value) || "1"), 1);
-  const year = toInt(getParam("year", (document.getElementById("wk-year")?.value) || "2025"), 2025);
+  // Standort/KW/Jahr aus URL (oder Fallback)
+  const standort = getParam("standort", "engelbrechts");
+  const kw = toInt(getParam("kw", "1"), 1);
+  const year = toInt(getParam("year", "2025"), 2025);
 
-  // ----- Eingaben wieder aktivieren (falls versehentlich deaktiviert) -----
-  document.querySelectorAll('input[readonly], input[disabled], textarea[readonly], textarea[disabled]').forEach(el => {
-    el.removeAttribute('readonly');
-    el.removeAttribute('disabled');
-  });
+  // --- Eingaben freischalten (falls disabled/readonly) ---
+  document.querySelectorAll('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
+  document.querySelectorAll('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
 
-  // ----- Zellen speichern (Week-Grid) -----
-  // Versucht zuerst data-Attribute (data-row, data-day). Fällt sonst auf DOM-Position zurück.
+  // --- Week-Zellen speichern ---
   document.addEventListener("input", function (e) {
     const el = e.target;
-    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return;
+    if (!(el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+    if (el.closest(".wk-sidebar")) return; // Sidebar separat
 
-    // Ignore inputs aus der Sidebar (Kleinbaustellen) – die werden separat gespeichert
-    if (el.closest(".wk-sidebar")) return;
-
+    // Datenquelle: data-row/data-day oder DOM-Position
     let rowIdx = el.dataset.row ? parseInt(el.dataset.row, 10) : null;
     let dayIdx = el.dataset.day ? parseInt(el.dataset.day, 10) : null;
 
     if (rowIdx == null || dayIdx == null) {
-      // 1) Tabellenstruktur
+      // Tabellenstruktur
       const td = el.closest("td");
       const tr = td?.closest("tr");
       if (tr && td) {
         const cells = Array.from(tr.children);
-        const tdIndex = cells.indexOf(td);
-        dayIdx = tdIndex - 1; // erste Spalte = Team/Mitarbeiter
-        const tbody = tr.parentElement;
-        const rows = Array.from(tbody.children);
+        dayIdx = cells.indexOf(td) - 1; // erste Spalte = Label
+        const rows = Array.from(tr.parentElement.children);
         rowIdx = rows.indexOf(tr);
       } else {
-        // 2) Grid-Struktur (.wk-grid/.wk-cell)
+        // Grid-Struktur
         const cell = el.closest(".wk-cell");
         const grid = cell?.closest(".wk-grid");
         if (grid && cell) {
@@ -73,29 +70,20 @@
       }
     }
 
-    // Nur gültige Mo–Fr speichern
     if (rowIdx != null && dayIdx != null && dayIdx >= 0 && dayIdx <= 4) {
       postJSON("/api/week/set-cell", {
-        year,
-        kw,
-        standort,
-        row: rowIdx,
-        day: dayIdx,
-        value: el.value || "",
-      })
-        .then((res) => {
-          if (!res.ok && !res.skipped) {
-            console.warn("Speichern fehlgeschlagen:", res);
-          }
-        })
-        .catch((err) => console.error(err));
+        year, kw, standort,
+        row: rowIdx, day: dayIdx,
+        value: el.value || ""
+      }).then(res => {
+        if (!res.ok && !res.skipped) console.warn("Speichern fehlgeschlagen", res);
+      });
     }
   });
 
-  // ----- Kleinbaustellen speichern -----
-  // Erwartet inputs mit class .sj-input ODER beliebige inputs in der Sidebar .wk-sidebar
+  // --- Kleinbaustellen speichern ---
   function saveSmallJob(el) {
-    // Index ermitteln (entweder data-row-index oder Position innerhalb der Sidebar)
+    // Index bestimmen
     let idx = el.dataset.rowIndex ? parseInt(el.dataset.rowIndex, 10) : null;
     if (idx == null) {
       const sidebar = el.closest(".wk-sidebar");
@@ -103,22 +91,17 @@
         const items = Array.from(sidebar.querySelectorAll("input, textarea"));
         idx = items.indexOf(el);
       } else {
-        // Fallback: globale Reihenfolge aller .sj-inputs
         const items = Array.from(document.querySelectorAll(".sj-input"));
         idx = items.indexOf(el);
       }
     }
-    idx = Number.isFinite(idx) ? idx : 0;
+    if (!Number.isFinite(idx)) idx = 0;
 
     postJSON("/api/klein/set", {
-      standort,
-      row_index: idx,
-      text: el.value || "",
-    })
-      .then((res) => {
-        if (!res.ok) console.warn("Kleinbaustelle speichern fehlgeschlagen:", res);
-      })
-      .catch((err) => console.error(err));
+      standort, row_index: idx, text: el.value || ""
+    }).then(res => {
+      if (!res.ok) console.warn("Kleinbaustelle Speichern fehlgeschlagen", res);
+    });
   }
 
   document.addEventListener("change", function (e) {
@@ -130,12 +113,11 @@
   document.addEventListener("input", function (e) {
     const el = e.target;
     if (el.matches(".sj-input")) {
-      // Optional: Live-Speichern beim Tippen (nicht nur bei change)
       saveSmallJob(el);
     }
   });
 
-  // ----- Navigation: Standort / KW / Jahr -----
+  // --- Navigation Standort/KW/Jahr ---
   function navigate(newStandort, newKw, newYear) {
     const params = new URLSearchParams(location.search);
     params.set("standort", newStandort ?? standort);
@@ -152,7 +134,7 @@
   if (kwInput) kwInput.addEventListener("change", (e) => navigate(null, e.target.value, null));
   if (yearInput) yearInput.addEventListener("change", (e) => navigate(null, null, e.target.value));
 
-  // ----- Safety: verhindert, dass Overlay/Styles Clicks sperren -----
-  // (Falls irgendwo pointer-events:none gesetzt wurde.)
-  document.querySelectorAll(".disable-pointer-events").forEach(el => el.classList.remove("disable-pointer-events"));
+  // --- Debug ---
+  window.__zankl_dbg = { standort, kw, year };
+  console.log('state:', window.__zankl_dbg);
 })();
