@@ -6,8 +6,11 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+  <!-- CSS fest einbinden -->
   /static/style.v2.css
   /static/style.css
+
+  <!-- App-Skript -->
   /static/app.js</script>
 
   <style>
@@ -15,14 +18,17 @@
     html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
+    /* Navbar Basis */
     header.site {
       background: var(--blue); color: #fff; padding: 10px 20px;
       display:flex; justify-content: space-between; align-items: center; position: relative;
+      z-index: 1001;
     }
-
     nav.site {
-      background: var(--blue); padding: 6px 20px; color: white;
+      background: var(--blue);
+      padding: 6px 20px; color: white;
       display: flex; gap: 16px; align-items: center;
+      position: sticky; top: 0; z-index: 1000;
     }
     nav.site a {
       color: white; text-decoration: none; font-weight: 600; padding: 6px 10px; border-radius: 6px;
@@ -37,23 +43,36 @@
 
     main { padding: 20px; }
 
+    /* Tabellen Defaults (werden von week.html überschrieben) */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
     td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
+
+    /* 🔧 EMERGENCY: Navbar sichtbar erzwingen, auch wenn Week-CSS dagegen arbeitet */
+    nav.site, header.site {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      height: auto !important;
+      pointer-events: auto !important;
+    }
   </style>
 
   {% block head %}{% endblock %}
 </head>
 
 <body>
+
+  <!-- Kopfbereich -->
   <header class="site" role="banner" aria-label="Kopfbereich">
     <strong>Zankl Plan</strong>
     <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
   </header>
 
+  <!-- Navigationsleiste -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    <a href="/week?standortchtsEngelbrechts</a>
+    /week?standort=engelbrechtsEngelbrechts</a>
     /week?standort=gross-gerungsGroß Gerungs</a>
     /settings/employeesEinstellungen</a>
     /yearJahr</a>
@@ -65,16 +84,18 @@
   </main>
 
   <script>
+    // Zahnrad → Einstellungen
     function openSettings() { window.location.href = '/settings/employees'; }
-    const gear = document.getElementById('settingsGear');
-    if (gear) {
-      gear.addEventListener('click', openSettings);
-      gear.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
-      });
-    }
+    (function(){
+      const gear = document.getElementById('settingsGear');
+      if (gear) {
+        gear.addEventListener('click', openSettings);
+        gear.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
+        });
+      }
 
-    (function markActiveNav(){
+      // Aktiven Menüpunkt markieren (Pfad-basiert)
       const currentPath = window.location.pathname;
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
@@ -82,11 +103,17 @@
           a.classList.add('is-active');
         }
       });
-    })();
 
-    document.addEventListener('contextmenu', e => {
-      if (e.target.tagName === 'INPUT') e.preventDefault();
-    });
+      // 🔧 EMERGENCY: Eingaben sicher aktivieren (falls irgendwo disabled/readonly gesetzt wurde)
+      document.querySelectorAll('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
+      document.querySelectorAll('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
+
+      // 🔧 EMERGENCY: pointer-events-Reparatur
+      document.querySelectorAll('.disable-pointer-events').forEach(el => el.classList.remove('disable-pointer-events'));
+
+      // Debug-Marker
+      console.log('base.html geladen ✔');
+    })();
   </script>
 
   {% block scripts %}{% endblock %}
