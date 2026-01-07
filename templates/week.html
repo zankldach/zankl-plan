@@ -6,7 +6,6 @@
 <style>
   .plan-wrap { margin-top: 12px; }
 
-  /* Tabelle */
   table.planner {
     width: 100%;
     border-collapse: separate; border-spacing: 0; table-layout: fixed;
@@ -30,23 +29,24 @@
   .planner input.cell { width: 100%; height: 44px; padding: 6px 8px; border: none; background: transparent; text-align: center; font-size: 14px; outline: none; }
   .planner input.cell:focus { outline: 2px solid #7db3ff; background: #fff; }
 
-  /* Drag & Drop */
   .drag-over { outline: 2px dashed #2196f3; outline-offset: -4px; background: #eef7ff !important; }
   .dragging { opacity: .6; }
 
-  /* Bereich-Füllen (Shift + Ziehen) */
+  /* Bereich-Füllen */
   td.paint-select { outline: 2px dashed #fb923c; outline-offset: -4px; background: #fff7ed !important; }
+
+  /* Freitag gesperrt */
+  td.disabled-day { background: #eceff4 !important; }
+  td.disabled-day input.cell { pointer-events: none; color: #64748b; }
+  td.disabled-day .hint { position:absolute; top:4px; left:4px; font-size:10px; color:#64748b; }
 
   .is-empty { background: transparent !important; }
 
-  /* Kopfbereich */
   header.page { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-
-  /* Toolbar */
   .toolbar { display:flex; gap:16px; align-items:center; flex-wrap: wrap; margin-bottom:8px; }
   .toolbar .group { display:flex; gap:8px; align-items:center; }
   .toolbar label { font-weight: 600; }
-  .toolbar select, .toolbar button { padding: 6px 8px; font-size: 14px; }
+  .toolbar select, .toolbar button, .toolbar input[type="checkbox"] { padding: 6px 8px; font-size: 14px; }
   .toolbar .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
 </style>
 {% endblock %}
@@ -80,9 +80,15 @@
     <button id="goBtn" title="Auswahl öffnen">Öffnen</button>
   </div>
 
+  <!-- 4-Tage-Woche -->
+  <div class="group">
+    <label for="fourDayChk">4‑Tage‑Woche:</label>
+    <input type="checkbox" id="fourDayChk" {% if four_day_week %}checked{% endif %} />
+    <span class="badge">KW {{ kw }} / {{ year }}</span>
+  </div>
+
   <!-- Hinweise -->
-  <span class="badge">KW {{ kw }} / {{ year }}</span>
-  <span class="badge">Tipp: <kbd>Strg</kbd> beim Ziehen = Kopieren · <kbd>Shift</kbd> = Bereich füllen</span>
+  <span class="badge">Tipp: <kbd>Strg</kbd> Kopieren · <kbd>Shift</kbd> Bereich füllen</span>
 </div>
 
 <div class="plan-wrap">
@@ -112,6 +118,9 @@
               <input class="cell" draggable="true"
                      value="{{ cell.text if cell and cell.text is defined else '' }}"
                      data-row="{{ row_index }}" data-day="{{ day_index }}">
+              {% if day_index == 4 %}
+                <span class="hint"></span>
+              {% endif %}
             </td>
           {% endfor %}
         </tr>
@@ -133,7 +142,8 @@
   const KW   = parseInt('{{ kw }}', 10);
   const YEAR = parseInt('{{ year }}', 10);
   const CURRENT_LOC = "{{ standort|e }}";
-  const MAX_WEEKS = 53; // grob – exakte ISO-Berechnung optional nachrüstbar
+  const MAX_WEEKS = 53; // grob – exakte ISO-Berechnung optional
+  const FOUR_DAY_WEEK = {{ 1 if four_day_week else 0 }} === 1;
 
   function initSelectors(){
     const kwSel = document.getElementById('kwSelect');
@@ -195,14 +205,59 @@
   initSelectors();
 
   /* -------------------------
-   * Farben
+   * 4-Tage-Woche UI + Server
    * ------------------------- */
+  function applyFourDayWeekUI(flag){
+    // Friday = day_index 4
+    document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
+      td.classList.toggle('disabled-day', flag);
+      const inp = td.querySelector('input.cell');
+      if (inp) inp.disabled = flag;
+      const hint = td.querySelector('.hint');
+      if (hint) hint.textContent = flag ? "gesperrt" : "";
+    });
+  }
+  async function setFourDayWeek(flag){
+    const payload = { year: YEAR, kw: KW, standort: (document.getElementById('locationSelect').value || CURRENT_LOC), four_day_week: !!flag };
+    try{
+      const res = await fetch('/api/week/options', {
+        method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      const r = await res.json();
+      if (!res.ok || !r.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', r);
+    }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
+  }
+  const fourChk = document.getElementById('fourDayChk');
+  fourChk.addEventListener('change', async ()=>{
+    const flag = fourChk.checked;
+    applyFourDayWeekUI(flag);
+    await setFourDayWeek(flag);
+  });
+  // beim Start anwenden
+  applyFourDayWeekUI(FOUR_DAY_WEEK);
+
+  /* -------------------------
+   * Farben: reserviertes Rot
+   * ------------------------- */
+  const RESERVED_RED = new Set(["urlaub","krank","arzt","xxx"]);
   const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-  function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
+
   function colorFor(text){
     const n = normalize(text);
     if(!n) return null;
-    const h = hashCode(n) % 360, s = 70, l = 80;
+
+    // fixe rote Farbe für reservierte Begriffe
+    if (RESERVED_RED.has(n)) {
+      return { bg: "hsla(0, 85%, 75%, 0.65)", border: "hsl(0, 85%, 45%)" };
+    }
+
+    // sonst generiere Farbe ohne Rot-Anteil
+    // Hash → Hue, dann falls nahe Rotbereich (≈ -10..20°) → verschieben
+    let h = (function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); })(n) % 360;
+    const isRedish = (h <= 20) || (h >= 340);
+    if (isRedish) h = (h + 40) % 360; // weg von Rotbereich
+
+    const s = 70, l = 80;
     return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
   }
   function applyColors(){
@@ -217,6 +272,8 @@
    * Speichern: Einzel + Batch
    * ------------------------- */
   async function saveCell(row, day, value){
+    // Bei 4-Tage-Woche: Freitag ignorieren
+    if (fourChk.checked && day === 4) return true;
     try{
       const res = await fetch('/api/week/set-cell',{
         method:'POST',
@@ -235,13 +292,14 @@
   }
 
   async function saveBatch(updates){
+    // Freitag-Updates rausfiltern, wenn 4-Tage-Woche
+    if (fourChk.checked) updates = updates.filter(u => u.day !== 4);
     try{
       const res = await fetch('/api/week/batch',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          year: YEAR,
-          kw: KW,
+          year: YEAR, kw: KW,
           standort: (document.getElementById('locationSelect').value || CURRENT_LOC),
           updates
         })
@@ -254,7 +312,7 @@
   }
 
   async function saveAll(){
-    const updates=[];
+    let updates=[];
     document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
       updates.push({ row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value ?? "" });
     });
@@ -286,13 +344,13 @@
 
       // Speichern beim Verlassen/Enter
       inp.addEventListener('blur', async ()=>{
-        await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
+        await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
         applyColors();
       });
       inp.addEventListener('keydown', async (ev)=>{
         if(ev.key==='Enter'){
           ev.preventDefault();
-          await saveCell(inp.dataset.row, inp.dataset.day, inp.value);
+          await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
           applyColors();
           const r=Number(inp.dataset.row), d=Number(inp.dataset.day);
           const next = document.querySelector(`input.cell[data-row="${r}"][data-day="${d+1}"]`);
@@ -303,7 +361,13 @@
     });
 
     cells.forEach(td=>{
-      td.addEventListener('dragover',e=>{ e.preventDefault(); td.classList.add('drag-over'); });
+      td.addEventListener('dragover',e=>{
+        e.preventDefault();
+        // Freitag sperren
+        const targetDay = Number(td.dataset.day);
+        if (fourChk.checked && targetDay === 4) return;
+        td.classList.add('drag-over');
+      });
       td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
       td.addEventListener('drop', async e=>{
         e.preventDefault();
@@ -314,6 +378,8 @@
 
           const targetRow = Number(td.dataset.row);
           const targetDay = Number(td.dataset.day);
+          if (fourChk.checked && targetDay === 4) return; // Freitag gesperrt
+
           const tgtInput = td.querySelector('input.cell');
           const srcInput = document.querySelector(`input.cell[data-row="${payload.row}"][data-day="${payload.day}"]`);
           if(!tgtInput || !srcInput) return;
@@ -336,7 +402,7 @@
   }
 
   /* -------------------------
-   * Bereich-Füllen (Shift + Ziehen)
+   * Bereich-Füllen (Shift + Ziehen) – respektiert 4-Tage-Woche
    * ------------------------- */
   function getCellInput(row, day) {
     return document.querySelector(`#weekTable input.cell[data-row="${row}"][data-day="${day}"]`);
@@ -347,6 +413,7 @@
   function paintRange(row, d1, d2, on=true) {
     const [from, to] = d1 <= d2 ? [d1, d2] : [d2, d1];
     for (let d = from; d <= to; d++) {
+      if (fourChk.checked && d === 4) continue; // Freitag nicht markieren
       const td = getCellTd(row, d);
       if (!td) continue;
       td.classList.toggle('paint-select', on);
@@ -375,9 +442,9 @@
     const d1  = Math.min(fillState.startDay, fillState.lastDay);
     const d2  = Math.max(fillState.startDay, fillState.lastDay);
 
-    // Batch-Updates für den Bereich
-    const updates = [];
+    let updates = [];
     for (let d = d1; d <= d2; d++) {
+      if (fourChk.checked && d === 4) continue; // Freitag auslassen
       const inp = getCellInput(row, d);
       if (!inp) continue;
       inp.value = fillState.value;
@@ -401,6 +468,7 @@
 
       td.addEventListener('mousedown', (e) => {
         if (e.button !== 0 || !e.shiftKey) return;
+        if (fourChk.checked && day === 4) return; // Freitag gesperrt
         e.preventDefault(); // wir füllen, nicht tippen
         const startValue = (inp?.value ?? "");
         startFill(row, day, startValue);
@@ -424,6 +492,7 @@
 
   attachDnD();
   attachPaintFill();
+  applyFourDayWeekUI(FOUR_DAY_WEEK);
   applyColors();
 </script>
 {% endblock %}
