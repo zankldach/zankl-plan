@@ -79,7 +79,7 @@ def init_db():
         )
     """)
 
-    # *** NEU: Globale Kleinbaustellen (nicht wochenabhängig) ***
+    # Globale Kleinbaustellen (nicht wochenabhängig)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS global_small_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +89,7 @@ def init_db():
         )
     """)
 
-    # (Alt) Wochen-spezifische Kleinbaustellen — bleibt bestehen, wird aber nicht mehr genutzt:
+    # (Alt) Wochen-spezifische Kleinbaustellen – bleiben bestehen, werden aber nicht mehr genutzt
     cur.execute("""
         CREATE TABLE IF NOT EXISTS small_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,11 +179,10 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
-        # *** NEU: Globale Kleinbaustellen laden, nicht wochenabhängig ***
+        # Globale Kleinbaustellen laden
         cur.execute("SELECT row_index, text FROM global_small_jobs ORDER BY row_index")
         sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in sj], default=-1)
-        # Leereinträge auffüllen bis min. 10
         while len(sj) < 10:
             max_idx += 1
             sj.append({"row_index": max_idx, "text": ""})
@@ -244,25 +243,20 @@ async def week_options(data: dict = Body(...)):
         conn.close()
 
 # ----------------------------
-# *** NEU: Globale Kleinbaustellen APIs ***
+# Globale Kleinbaustellen APIs
 # ----------------------------
 @app.get("/api/klein/list")
 def small_job_list():
-    """
-    Liefert die globale Liste (min. 10 Einträge als Fallback).
-    """
+    """Liefert die globale Liste (min. 10 Einträge als Fallback)."""
     conn = get_conn()
     cur = conn.cursor()
     try:
         cur.execute("SELECT row_index, text FROM global_small_jobs ORDER BY row_index")
         rows = [{"row_index": r["row_index"], "text": r["text"] or ""} for r in cur.fetchall()]
-
-        # min. 10 Einträge auffüllen (Frontend macht das i. d. R. selbst, hier optional)
         max_idx = max([x["row_index"] for x in rows], default=-1)
         while len(rows) < 10:
             max_idx += 1
             rows.append({"row_index": max_idx, "text": ""})
-
         return {"ok": True, "items": rows}
     except Exception:
         tb = traceback.format_exc()
@@ -274,15 +268,13 @@ def small_job_list():
 @app.post("/api/klein/set")
 async def small_job_set(data: dict = Body(...)):
     """
-    body: {row_index, text}
-    Speichert einen globalen Kleinbaustellen-Eintrag (Upsert).
+    body: {row_index, text} – speichert einen globalen Kleinbaustellen-Eintrag (Upsert).
     """
     conn = get_conn()
     cur = conn.cursor()
     try:
         row_index = int(data.get("row_index"))
         text = (data.get("text") or "")
-
         cur.execute("""
             INSERT INTO global_small_jobs(row_index, text)
             VALUES(?,?)
@@ -437,4 +429,3 @@ async def employees_save(data: dict = Body(...)):
 def year_view(request: Request, year: int = 2025):
     ctx = {"request": request, "year": year}
     return templates.TemplateResponse("year.html", ctx)
-``
