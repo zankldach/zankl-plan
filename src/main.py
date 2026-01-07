@@ -12,6 +12,11 @@ import traceback
 
 app = FastAPI(title="Zankl-Plan MVP")
 
+# Verzeichnisstruktur:
+# project_root/
+#   src/main.py
+#   templates/
+#   static/
 BASE_DIR = Path(__file__).resolve().parent         # .../src
 ROOT_DIR = BASE_DIR.parent                         # Projekt-Root
 DB_PATH = BASE_DIR / "zankl.db"                    # DB liegt in src/
@@ -38,7 +43,7 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
-    # Week plans mit 4-Tage-Woche Flag
+    # Week plans mit 4-Tage-Woche Flag (Default: aktiv)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +79,17 @@ def init_db():
         )
     """)
 
-    # Kleinbaustellen: eigene Liste pro Woche/Standort
+    # *** NEU: Globale Kleinbaustellen (nicht wochenabhängig) ***
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS global_small_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            row_index INTEGER,
+            text TEXT,
+            UNIQUE(row_index)
+        )
+    """)
+
+    # (Alt) Wochen-spezifische Kleinbaustellen — bleibt bestehen, wird aber nicht mehr genutzt:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS small_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,7 +154,6 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         plan = cur.fetchone()
 
         if not plan:
-            # NEU: Standardmäßig 4-Tage-Woche = aktiv (1)
             cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
                         (year, kw, standort, 5))
             conn.commit()
@@ -165,10 +179,11 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
-        # Kleinbaustellen laden (Liste mit mindestens 10 Einträgen)
-        cur.execute("SELECT row_index, text FROM small_jobs WHERE week_plan_id=? ORDER BY row_index", (plan_id,))
+        # *** NEU: Globale Kleinbaustellen laden, nicht wochenabhängig ***
+        cur.execute("SELECT row_index, text FROM global_small_jobs ORDER BY row_index")
         sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in sj], default=-1)
+        # Leereinträge auffüllen bis min. 10
         while len(sj) < 10:
             max_idx += 1
             sj.append({"row_index": max_idx, "text": ""})
@@ -184,7 +199,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             "days": days,
             "standort": standort,
             "four_day_week": bool(four_day_week),
-            "small_jobs": sj,
+            "small_jobs": sj,   # global
         })
 
     except Exception:
@@ -229,33 +244,50 @@ async def week_options(data: dict = Body(...)):
         conn.close()
 
 # ----------------------------
-# Kleinbaustellen – Set/Upsert
+# *** NEU: Globale Kleinbaustellen APIs ***
 # ----------------------------
-@app.post("/api/klein/set")
-async def small_job_set(data: dict = Body(...)):
+@app.get("/api/klein/list")
+def small_job_list():
     """
-    body: {year, kw, standort, row_index, text}
+    Liefert die globale Liste (min. 10 Einträge als Fallback).
     """
     conn = get_conn()
     cur = conn.cursor()
     try:
-        year = int(data.get("year"))
-        kw = int(data.get("kw"))
-        standort = data.get("standort") or "engelbrechts"
+        cur.execute("SELECT row_index, text FROM global_small_jobs ORDER BY row_index")
+        rows = [{"row_index": r["row_index"], "text": r["text"] or ""} for r in cur.fetchall()]
+
+        # min. 10 Einträge auffüllen (Frontend macht das i. d. R. selbst, hier optional)
+        max_idx = max([x["row_index"] for x in rows], default=-1)
+        while len(rows) < 10:
+            max_idx += 1
+            rows.append({"row_index": max_idx, "text": ""})
+
+        return {"ok": True, "items": rows}
+    except Exception:
+        tb = traceback.format_exc()
+        logger.error("Fehler in /api/klein/list:\n%s", tb)
+        return JSONResponse({"ok": False, "error": "server"}, status_code=500)
+    finally:
+        conn.close()
+
+@app.post("/api/klein/set")
+async def small_job_set(data: dict = Body(...)):
+    """
+    body: {row_index, text}
+    Speichert einen globalen Kleinbaustellen-Eintrag (Upsert).
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
         row_index = int(data.get("row_index"))
         text = (data.get("text") or "")
 
-        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
-        plan = cur.fetchone()
-        if not plan:
-            return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
-        plan_id = plan["id"]
-
         cur.execute("""
-            INSERT INTO small_jobs(week_plan_id,row_index,text)
-            VALUES(?,?,?)
-            ON CONFLICT(week_plan_id,row_index) DO UPDATE SET text=excluded.text
-        """, (plan_id, row_index, text))
+            INSERT INTO global_small_jobs(row_index, text)
+            VALUES(?,?)
+            ON CONFLICT(row_index) DO UPDATE SET text=excluded.text
+        """, (row_index, text))
         conn.commit()
         return {"ok": True}
     except Exception:
@@ -405,3 +437,4 @@ async def employees_save(data: dict = Body(...)):
 def year_view(request: Request, year: int = 2025):
     ctx = {"request": request, "year": year}
     return templates.TemplateResponse("year.html", ctx)
+``
