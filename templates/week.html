@@ -87,7 +87,7 @@
     flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;
   }
   .side .row input.job:focus { outline: 2px solid #7db3ff; }
-  .job.selected { outline: 2px solid #f87171; background: #fee2e2; }
+  .job.selected { outline: 2px solid #94a3b8; background: #f1f5f9; } /* neutrale Markierung */
 </style>
 {% endblock %}
 
@@ -183,52 +183,375 @@
 
 {% block scripts %}
 <script>
-  const KW = parseInt('{{ kw }}', 10);
-  const YEAR = parseInt('{{ year }}', 10);
-  const CURRENT_LOC = "{{ standort|e }}";
-  const FOUR_DAY_WEEK = {{ 1 if four_day_week else 0 }} === 1;
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const KW = parseInt('{{ kw }}', 10);
+    const YEAR = parseInt('{{ year }}', 10);
+    const CURRENT_LOC = "{{ standort|e }}";
+    const MAX_WEEKS = 53;
+    const FOUR_DAY_WEEK = !!({{ 1 if four_day_week else 0 }});
 
-  /* Navigation */
-  function initSelectors(){
-    const kwSel = document.getElementById('kwSelect');
-    const yearSel = document.getElementById('yearSelect');
-    for (let w=1; w<=53; w++){
-      const opt = document.createElement('option');
-      opt.value = w; opt.textContent = w;
-      if (w === KW) opt.selected = true;
-      kwSel.appendChild(opt);
-    }
-    [YEAR-1,YEAR,YEAR+1].forEach(y=>{
-      const opt = document.createElement('option');
-      opt.value = y; opt.textContent = y;
-      if (y === YEAR) opt.selected = true;
-      yearSel.appendChild(opt);
-    });
-  }
-  initSelectors();
-
-  /* Kleinbaustellen: Doppelklick + Entf */
-  async function saveSmallJob(row,text){
-    await fetch('/api/klein/set',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({row_index:Number(row),text:text})
-    });
-  }
-  function bindJobInput(input){
-    input.addEventListener('dragstart',e=>{
-      e.dataTransfer.setData('text/plain',JSON.stringify({source:'klein',value:input.value}));
-    });
-    input.addEventListener('dblclick',()=>{
-      document.querySelectorAll('.job').forEach(el=>el.classList.remove('selected'));
-      input.classList.add('selected');
-    });
-    input.addEventListener('keydown',async ev=>{
-      if(ev.key==='Delete'){
-        input.value=""; await saveSmallJob(input.dataset.row,"");
+    /* ---------- KW/Jahr Selects ---------- */
+    function initSelectors(){
+      const kwSel = document.getElementById('kwSelect');
+      const yearSel = document.getElementById('yearSelect');
+      kwSel.innerHTML = "";
+      for (let w=1; w<=MAX_WEEKS; w++){
+        const opt = document.createElement('option');
+        opt.value = w; opt.textContent = w;
+        if (w === KW) opt.selected = true;
+        kwSel.appendChild(opt);
       }
+      yearSel.innerHTML = "";
+      [YEAR-1,YEAR,YEAR+1].forEach(y=>{
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        if (y === YEAR) opt.selected = true;
+        yearSel.appendChild(opt);
+      });
+    }
+    initSelectors();
+
+    /* ---------- 4-Tage-Woche ---------- */
+    const fourChk = document.getElementById('fourDayChk');
+    function applyFourDayWeekUI(flag){
+      document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
+        td.classList.toggle('disabled-day', flag);
+        const inp = td.querySelector('input.cell');
+        if (inp) inp.disabled = flag;
+        const hint = td.querySelector('.hint');
+        if (hint) hint.textContent = flag ? "gesperrt" : "";
+      });
+    }
+    async function setFourDayWeek(flag){
+      const payload = { year: YEAR, kw: KW, standort: (document.getElementById('locationSelect').value || CURRENT_LOC), four_day_week: !!flag };
+      try{
+        const res = await fetch('/api/week/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (!res.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', await res.text());
+      }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
+    }
+    fourChk.addEventListener('change', async ()=>{
+      const flag = fourChk.checked;
+      applyFourDayWeekUI(flag);
+      await setFourDayWeek(flag);
     });
-    input.addEventListener('blur',async()=>await saveSmallJob(input.dataset.row,input.value));
+    applyFourDayWeekUI(FOUR_DAY_WEEK);
+
+    /* ---------- Farben ---------- */
+    const RESERVED_RED = new Set(["urlaub","krank","arzt","xxx"]);
+    const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
+    function colorFor(text){
+      const n = normalize(text);
+      if(!n) return null;
+      if (RESERVED_RED.has(n)) {
+        return { bg: "hsla(0, 85%, 75%, 0.65)", border: "hsl(0, 85%, 45%)" };
+      }
+      let h = hashCode(n) % 360;
+      const isRedish = (h <= 20) || (h >= 340);
+      if (isRedish) h = (h + 40) % 360;
+      const s = 70, l = 80;
+      return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
+    }
+    function applyColors(){
+      document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+        const c = colorFor(inp.value);
+        if(c){ inp.classList.remove('is-empty'); inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
+        else { inp.classList.add('is-empty'); inp.style.background='transparent'; inp.style.border='none'; }
+      });
+    }
+
+    /* ---------- Speichern ---------- */
+    async function saveCell(row, day, value){
+      if (fourChk.checked && Number(day) === 4) return true;
+      try{
+        const res = await fetch('/api/week/set-cell',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            row:Number(row), day:Number(day), value:value ?? "",
+            kw:KW, year:YEAR,
+            standort:(document.getElementById('locationSelect').value || CURRENT_LOC)
+          })
+        });
+        if (!res.ok) { console.warn('Save HTTP-Fehler:', res.status); return false; }
+        const r = await res.json();
+        if(!r.ok) { console.warn('Save-Fehler:', r.error); return false; }
+        return true;
+      }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+    }
+    async function saveBatch(updates){
+      if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
+      try{
+        const res = await fetch('/api/week/batch',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            year: YEAR, kw: KW,
+            standort: (document.getElementById('locationSelect').value || CURRENT_LOC),
+            updates
+          })
+        });
+        if (!res.ok) { console.warn('Batch HTTP-Fehler:', res.status); return false; }
+        const r = await res.json();
+        if(!r.ok) { console.warn('Batch-Fehler:', r.error); return false; }
+        return true;
+      }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+    }
+    document.getElementById('saveAllBtn').onclick = async ()=>{
+      let updates=[];
+      document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
+        updates.push({ row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value ?? "" });
+      });
+      const ok = await saveBatch(updates);
+      alert(ok ? 'Alle Zellen gespeichert.' : 'Speichern fehlgeschlagen.');
+    };
+
+    /* ---------- Kleinbaustellen (global) ---------- */
+    async function saveSmallJob(row_index, text){
+      try{
+        const res = await fetch('/api/klein/set',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ row_index:Number(row_index), text:text ?? "" })
+        });
+        if (!res.ok) console.warn('Klein HTTP-Fehler:', res.status, await res.text());
+      }catch(e){ console.warn('Netz-/Serverfehler (klein):', e); }
+    }
+    function bindJobInput(input){
+      input.addEventListener('dragstart',e=>{
+        e.dataTransfer.setData('text/plain',JSON.stringify({source:'klein',value:input.value}));
+        e.dataTransfer.dropEffect='copy';
+        input.classList.add('dragging');
+      });
+      input.addEventListener('dragend',()=> input.classList.remove('dragging'));
+
+      input.addEventListener('dblclick',()=>{
+        document.querySelectorAll('.job').forEach(el=>el.classList.remove('selected'));
+        input.classList.add('selected');
+      });
+
+      input.addEventListener('keydown',async ev=>{
+        if (ev.key === 'Delete'){
+          ev.preventDefault();
+          input.value = "";
+          input.classList.remove('selected');       // Auswahl entfernen, kein roter Stil
+          await saveSmallJob(input.dataset.row, "");
+        }
+      });
+
+      input.addEventListener('blur',async()=>{
+        if ((input.value ?? "").trim() === "") input.classList.remove('selected');
+        await saveSmallJob(input.dataset.row, input.value);
+      });
+    }
+    document.querySelectorAll('.job').forEach(bindJobInput);
+
+    /* ---------- Drag & Drop Week ---------- */
+    let dragData=null;
+    function attachDnD(){
+      const cells = document.querySelectorAll('#weekTable td');
+      const inputs = document.querySelectorAll('#weekTable input.cell');
+
+      inputs.forEach(inp=>{
+        inp.addEventListener('dragstart',e=>{
+          dragData = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
+          e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+          e.dataTransfer.dropEffect='move';
+          inp.classList.add('dragging');
+        });
+        inp.addEventListener('dragend',()=>{
+          document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+          document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+          dragData=null;
+        });
+
+        inp.addEventListener('blur', async ()=>{
+          await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
+          applyColors();
+        });
+        inp.addEventListener('keydown', async (ev)=>{
+          if(ev.key==='Enter'){
+            ev.preventDefault();
+            await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
+            applyColors();
+            const r=Number(inp.dataset.row), d=Number(inp.dataset.day);
+            const next = document.querySelector(`input.cell[data-row="${r}"][data-day="${d+1}"]`);
+            (next||inp).focus();
+          }
+        });
+        inp.addEventListener('input', applyColors);
+      });
+
+      cells.forEach(td=>{
+        td.addEventListener('dragover',e=>{
+          e.preventDefault();
+          const targetDay = Number(td.dataset.day);
+          if (fourChk.checked && targetDay === 4) return; // Freitag gesperrt
+          td.classList.add('drag-over');
+        });
+        td.addEventListener('dragleave',()=> td.classList.remove('drag-over'));
+        td.addEventListener('drop', async e=>{
+          e.preventDefault();
+          td.classList.remove('drag-over');
+          try{
+            const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
+            const targetRow = Number(td.dataset.row);
+            const targetDay = Number(td.dataset.day);
+            if (fourChk.checked && targetDay === 4) return;
+
+            const tgtInput = td.querySelector('input.cell');
+            if(!tgtInput) return;
+
+            if (payload && payload.source === 'klein') {
+              const value = payload.value ?? "";
+              tgtInput.value = value;
+              await saveCell(targetRow, targetDay, value);
+              applyColors();
+              return;
+            }
+
+            if (payload && payload.source === 'grid') {
+              const srcInput = document.querySelector(`input.cell[data-row="${payload.row}"][data-day="${payload.day}"]`);
+              if(!srcInput) return;
+              const copy = e.ctrlKey || e.metaKey;
+
+              tgtInput.value = payload.value;
+              await saveCell(targetRow, targetDay, payload.value);
+
+              if(!copy && (payload.row!==targetRow || payload.day!==targetDay)){
+                srcInput.value = "";
+                await saveCell(payload.row, payload.day, "");
+              }
+              applyColors();
+            }
+          }catch(err){ console.warn('Drop-Fehler:', err); }
+        });
+      });
+    }
+
+    /* ---------- Bereich-Füllen (Shift + Ziehen) ---------- */
+    function getCellInput(row, day) {
+      return document.querySelector(`#weekTable input.cell[data-row="${row}"][data-day="${day}"]`);
+    }
+    function getCellTd(row, day) {
+      return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`);
+    }
+    function paintRange(row, d1, d2, on=true) {
+      const [from, to] = d1 <= d2 ? [d1, d2] : [d2, d1];
+      for (let d = from; d <= to; d++) {
+        if (fourChk.checked && d === 4) continue;
+        const td = getCellTd(row, d);
+        if (!td) continue;
+        td.classList.toggle('paint-select', on);
+      }
+    }
+
+    const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
+
+    function startFill(row, day, value) {
+      fillState.active = true;
+      fillState.row = row;
+      fillState.startDay = day;
+      fillState.lastDay = day;
+      fillState.value = value ?? "";
+      paintRange(row, day, day, true);
+    }
+    function updateFill(day) {
+      if (!fillState.active) return;
+      paintRange(fillState.row, fillState.startDay, fillState.lastDay, false);
+      fillState.lastDay = day;
+      paintRange(fillState.row, fillState.startDay, fillState.lastDay, true);
+    }
+    async function endFill() {
+      if (!fillState.active) return;
+      const row = fillState.row;
+      const d1  = Math.min(fillState.startDay, fillState.lastDay);
+      const d2  = Math.max(fillState.startDay, fillState.lastDay);
+
+      let updates = [];
+      for (let d = d1; d <= d2; d++) {
+        if (fourChk.checked && d === 4) continue;
+        const inp = getCellInput(row, d);
+        if (!inp) continue;
+        inp.value = fillState.value;
+        updates.push({ row, day:d, value: fillState.value });
+      }
+      await saveBatch(updates);
+      applyColors();
+
+      paintRange(row, d1, d2, false);
+      fillState.active = false;
+      fillState.row = null; fillState.startDay = null; fillState.lastDay = null; fillState.value = "";
+    }
+
+    function attachPaintFill() {
+      const tds = document.querySelectorAll('#weekTable td');
+
+      tds.forEach(td => {
+        const row = Number(td.dataset.row);
+        const day = Number(td.dataset.day);
+        const inp = td.querySelector('input.cell');
+
+        td.addEventListener('mousedown', (e) => {
+          if (e.button !== 0 || !e.shiftKey) return;
+          if (fourChk.checked && day === 4) return;
+          e.preventDefault();
+          const startValue = (inp?.value ?? "");
+          startFill(row, day, startValue);
+        });
+
+        td.addEventListener('mouseenter', () => {
+          if (fillState.active && row === fillState.row) {
+            updateFill(day);
+          }
+        });
+      });
+
+      document.addEventListener('mouseup', () => { if (fillState.active) endFill(); });
+      document.addEventListener('mouseleave', () => { if (fillState.active) endFill(); });
+    }
+
+    /* ---------- Standort/KW/Jahr Navigation ---------- */
+    function navigate(standort, kw, year){
+      const url = `/week?standort=${encodeURIComponent(standort)}&kw=${kw}&year=${year}`;
+      window.location.href = url;
+    }
+    document.getElementById('locationSelect').onchange = ()=>{
+      const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+      navigate(loc, kw, yr);
+    };
+    document.getElementById('prevWeekBtn').onclick = ()=>{
+      const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+      const p   = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
+      navigate(loc, p.kw, p.year);
+    };
+    document.getElementById('nextWeekBtn').onclick = ()=>{
+      const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+      const n   = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
+      navigate(loc, n.kw, n.year);
+    };
+    document.getElementById('goBtn').onclick = ()=>{
+      const loc = document.getElementById('locationSelect').value || CURRENT_LOC;
+      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
+      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
+      navigate(loc, kw, yr);
+    };
+
+    /* ---------- Init ---------- */
+    attachDnD();
+    attachPaintFill();
+    applyColors();
+
+  } catch (err) {
+    console.error('Init-Fehler in week.html:', err);
+    alert('Fehler beim Laden der Wochenansicht. Bitte Seite hart neu laden (Strg+F5).');
   }
-  document.querySelectorAll('.job').forEach(bindJobInput);
+});
 </script>
 {% endblock %}
