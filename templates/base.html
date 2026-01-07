@@ -8,9 +8,7 @@
 
   <!-- CSS über feste Pfade -->
   /static/style.v2.css
-  /static/style.css
-
-  <!-- App-Skript (Interaktionen für Week/Mitarbeiter etc.) -->
+  <link rel="stylesheet" href="/static/style.css"onen für Week/Mitarbeiter etc.) -->
   /static/app.js</script>
 
   <style>
@@ -23,14 +21,16 @@
       display:flex; justify-content: space-between; align-items: center; position: relative;
     }
 
-    /* Navbar-Grundlayout (Sichtbarkeit erzwingen) */
+    /* Navbar */
     nav.site {
       background: #003a8f;
       padding: 6px 20px;
       color: white;
-      display: flex !important;
+      display: flex;
       gap: 16px;
       align-items: center;
+      z-index: 5;
+      position: relative;
     }
     nav.site a {
       color: white;
@@ -49,7 +49,7 @@
 
     main { padding: 20px; }
 
-    /* Tabellen Defaults (werden von week.html überschrieben) */
+    /* Tabellen Defaults */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
