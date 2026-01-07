@@ -6,11 +6,11 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- CSS fest einbinden -->
+  <!-- CSS -->
   /static/style.v2.css
   /static/style.css
 
-  <!-- App-Skript -->
+  <!-- App JS -->
   /static/app.js</script>
 
   <style>
@@ -18,15 +18,14 @@
     html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
-    /* Navbar Basis */
     header.site {
       background: var(--blue); color: #fff; padding: 10px 20px;
       display:flex; justify-content: space-between; align-items: center; position: relative;
       z-index: 1001;
     }
+
     nav.site {
-      background: var(--blue);
-      padding: 6px 20px; color: white;
+      background: var(--blue); padding: 6px 20px; color: white;
       display: flex; gap: 16px; align-items: center;
       position: sticky; top: 0; z-index: 1000;
     }
@@ -43,13 +42,13 @@
 
     main { padding: 20px; }
 
-    /* Tabellen Defaults (werden von week.html überschrieben) */
+    /* Tabellen Defaults */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
     td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
 
-    /* 🔧 EMERGENCY: Navbar sichtbar erzwingen, auch wenn Week-CSS dagegen arbeitet */
+    /* Sicherstellen, dass Navbar sichtbar bleibt */
     nav.site, header.site {
       display: flex !important;
       visibility: visible !important;
@@ -63,6 +62,10 @@
 </head>
 
 <body>
+  <!-- Übergabe des 4-Tage-Flags ins JS -->
+  <script>
+    window.__fourDay = {{ 'true' if four_day_week else 'false' }};
+  </script>
 
   <!-- Kopfbereich -->
   <header class="site" role="banner" aria-label="Kopfbereich">
@@ -95,7 +98,7 @@
         });
       }
 
-      // Aktiven Menüpunkt markieren (Pfad-basiert)
+      // Aktiven Menüpunkt markieren
       const currentPath = window.location.pathname;
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
@@ -104,15 +107,9 @@
         }
       });
 
-      // 🔧 EMERGENCY: Eingaben sicher aktivieren (falls irgendwo disabled/readonly gesetzt wurde)
+      // Notfall: Inputs/Selects aktivieren
       document.querySelectorAll('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
       document.querySelectorAll('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
-
-      // 🔧 EMERGENCY: pointer-events-Reparatur
-      document.querySelectorAll('.disable-pointer-events').forEach(el => el.classList.remove('disable-pointer-events'));
-
-      // Debug-Marker
-      console.log('base.html geladen ✔');
     })();
   </script>
 
