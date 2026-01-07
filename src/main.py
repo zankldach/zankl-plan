@@ -38,6 +38,7 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
+    # Week plans mit 4-Tage-Woche Flag
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,15 +46,14 @@ def init_db():
             kw INTEGER,
             standort TEXT,
             row_count INTEGER DEFAULT 5,
-            four_day_week INTEGER DEFAULT 0,
+            four_day_week INTEGER DEFAULT 1,
             UNIQUE(year, kw, standort)
         )
     """)
-
-    # Falls Tabelle bereits existiert, aber Spalte fehlt → hinzufügen
     if not column_exists(cur, "week_plans", "four_day_week"):
-        cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
 
+    # Zellen der Wochenplanung
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,11 +65,23 @@ def init_db():
         )
     """)
 
+    # Mitarbeiter
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE,
             standort TEXT
+        )
+    """)
+
+    # Kleinbaustellen: eigene Liste pro Woche/Standort
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS small_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_plan_id INTEGER,
+            row_index INTEGER,
+            text TEXT,
+            UNIQUE(week_plan_id, row_index)
         )
     """)
 
@@ -87,6 +99,9 @@ def build_days(year: int, kw: int) -> list[dict]:
     start = date.fromisocalendar(year, kw, 1)  # Montag
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
+
+def is_friday(day_index: int) -> bool:
+    return day_index == 4  # 0..4 = Mo..Fr
 
 # ----------------------------
 # Health & Diagnose
@@ -124,12 +139,13 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         plan = cur.fetchone()
 
         if not plan:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,0)",
+            # NEU: Standardmäßig 4-Tage-Woche = aktiv (1)
+            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
                         (year, kw, standort, 5))
             conn.commit()
             plan_id = cur.lastrowid
             rows = 5
-            four_day_week = 0
+            four_day_week = 1
         else:
             plan_id = plan["id"]
             rows = plan["row_count"]
@@ -149,6 +165,14 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
+        # Kleinbaustellen laden (Liste mit mindestens 10 Einträgen)
+        cur.execute("SELECT row_index, text FROM small_jobs WHERE week_plan_id=? ORDER BY row_index", (plan_id,))
+        sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
+        max_idx = max([x["row_index"] for x in sj], default=-1)
+        while len(sj) < 10:
+            max_idx += 1
+            sj.append({"row_index": max_idx, "text": ""})
+
         days = build_days(year, kw)
 
         return templates.TemplateResponse("week.html", {
@@ -160,6 +184,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             "days": days,
             "standort": standort,
             "four_day_week": bool(four_day_week),
+            "small_jobs": sj,
         })
 
     except Exception:
@@ -188,7 +213,6 @@ async def week_options(data: dict = Body(...)):
         cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
         if not plan:
-            # falls Plan nicht existiert → anlegen
             cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)",
                         (year, kw, standort, 5, four_day_week))
             conn.commit()
@@ -205,11 +229,45 @@ async def week_options(data: dict = Body(...)):
         conn.close()
 
 # ----------------------------
+# Kleinbaustellen – Set/Upsert
+# ----------------------------
+@app.post("/api/klein/set")
+async def small_job_set(data: dict = Body(...)):
+    """
+    body: {year, kw, standort, row_index, text}
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        year = int(data.get("year"))
+        kw = int(data.get("kw"))
+        standort = data.get("standort") or "engelbrechts"
+        row_index = int(data.get("row_index"))
+        text = (data.get("text") or "")
+
+        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        plan = cur.fetchone()
+        if not plan:
+            return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
+        plan_id = plan["id"]
+
+        cur.execute("""
+            INSERT INTO small_jobs(week_plan_id,row_index,text)
+            VALUES(?,?,?)
+            ON CONFLICT(week_plan_id,row_index) DO UPDATE SET text=excluded.text
+        """, (plan_id, row_index, text))
+        conn.commit()
+        return {"ok": True}
+    except Exception:
+        tb = traceback.format_exc()
+        logger.error("Fehler in /api/klein/set:\n%s", tb)
+        return JSONResponse({"ok": False, "error": "server"}, status_code=500)
+    finally:
+        conn.close()
+
+# ----------------------------
 # Set Cell (einzelne Zelle)
 # ----------------------------
-def is_friday(day_index: int) -> bool:
-    return day_index == 4  # 0..4 = Mo..Fr
-
 @app.post("/api/week/set-cell")
 async def set_cell(data: dict = Body(...)):
     conn = get_conn()
@@ -227,12 +285,11 @@ async def set_cell(data: dict = Body(...)):
         if not plan:
             return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
 
-        # Freitag gesperrt, wenn 4-Tage-Woche aktiv
+        # Freitag gesperrt bei 4-Tage-Woche
         if plan["four_day_week"] and is_friday(day):
-            return {"ok": True, "skipped": True}  # still ok, nur ignoriert
+            return {"ok": True, "skipped": True}
 
         plan_id = plan["id"]
-
         cur.execute("""
             INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
             VALUES(?,?,?,?)
@@ -283,7 +340,6 @@ async def week_batch(data: dict = Body(...)):
             day = int(u.get("day", 0))
             val = u.get("value", "")
 
-            # Freitag sperren (bei 4-Tage-Woche)
             if four_day_week and is_friday(day):
                 continue
 
