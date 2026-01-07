@@ -6,11 +6,11 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- CSS -->
+  <!-- CSS über feste Pfade -->
   /static/style.v2.css
   /static/style.css
 
-  <!-- App JS -->
+  <!-- App-Skript (Interaktionen für Week/Mitarbeiter etc.) -->
   /static/app.js</script>
 
   <style>
@@ -21,16 +21,23 @@
     header.site {
       background: var(--blue); color: #fff; padding: 10px 20px;
       display:flex; justify-content: space-between; align-items: center; position: relative;
-      z-index: 1001;
     }
 
+    /* Navbar-Grundlayout (Sichtbarkeit erzwingen) */
     nav.site {
-      background: var(--blue); padding: 6px 20px; color: white;
-      display: flex; gap: 16px; align-items: center;
-      position: sticky; top: 0; z-index: 1000;
+      background: #003a8f;
+      padding: 6px 20px;
+      color: white;
+      display: flex !important;
+      gap: 16px;
+      align-items: center;
     }
     nav.site a {
-      color: white; text-decoration: none; font-weight: 600; padding: 6px 10px; border-radius: 6px;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
     }
     nav.site a:hover { background: rgba(255,255,255,0.14); }
     nav.site a.is-active { background: rgba(255,255,255,0.22); }
@@ -42,30 +49,17 @@
 
     main { padding: 20px; }
 
-    /* Tabellen Defaults */
+    /* Tabellen Defaults (werden von week.html überschrieben) */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
     td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
-
-    /* Sicherstellen, dass Navbar sichtbar bleibt */
-    nav.site, header.site {
-      display: flex !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      height: auto !important;
-      pointer-events: auto !important;
-    }
   </style>
 
   {% block head %}{% endblock %}
 </head>
 
 <body>
-  <!-- Übergabe des 4-Tage-Flags ins JS -->
-  <script>
-    window.__fourDay = {{ 'true' if four_day_week else 'false' }};
-  </script>
 
   <!-- Kopfbereich -->
   <header class="site" role="banner" aria-label="Kopfbereich">
@@ -73,15 +67,10 @@
     <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
   </header>
 
-  <!-- Navigationsleiste -->
-  <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    /week?standort=engelbrechtsEngelbrechts</a>
-    /week?standort=gross-gerungsGroß Gerungs</a>
-    /settings/employeesEinstellungen</a>
-    /yearJahr</a>
-    /healthHealth</a>
-  </nav>
+  <!-- Menüleiste (Partial) -->
+  {% include "_navbar.html" %}
 
+  <!-- Hauptinhalt -->
   <main role="main">
     {% block content %}{% endblock %}
   </main>
@@ -89,16 +78,16 @@
   <script>
     // Zahnrad → Einstellungen
     function openSettings() { window.location.href = '/settings/employees'; }
-    (function(){
-      const gear = document.getElementById('settingsGear');
-      if (gear) {
-        gear.addEventListener('click', openSettings);
-        gear.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
-        });
-      }
+    const gear = document.getElementById('settingsGear');
+    if (gear) {
+      gear.addEventListener('click', openSettings);
+      gear.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
+      });
+    }
 
-      // Aktiven Menüpunkt markieren
+    // Aktiven Menüpunkt markieren (Pfad-basiert, Query ignoriert)
+    (function markActiveNav(){
       const currentPath = window.location.pathname;
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
@@ -106,10 +95,6 @@
           a.classList.add('is-active');
         }
       });
-
-      // Notfall: Inputs/Selects aktivieren
-      document.querySelectorAll('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
-      document.querySelectorAll('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
     })();
   </script>
 
