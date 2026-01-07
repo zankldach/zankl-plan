@@ -6,12 +6,8 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Richtiges Laden der CSS (statt bloßem Text) -->
   /static/style.v2.css
-  <!-- Optional: deine zweite CSS-Datei, falls vorhanden -->
   /static/style.css
-
-  <!-- App-Skript (für Interaktionen der Week-Seite) -->
   /static/app.js</script>
 
   <style>
@@ -41,7 +37,6 @@
 
     main { padding: 20px; }
 
-    /* Tabellen-Defaults (werden von week.html überschrieben) */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
@@ -52,16 +47,13 @@
 </head>
 
 <body>
-
-  <!-- Kopfbereich -->
   <header class="site" role="banner" aria-label="Kopfbereich">
     <strong>Zankl Plan</strong>
     <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
   </header>
 
-  <!-- Fixe Navigationsleiste -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    /week?standort=engelbrechtsEngelbrechts</a>
+    <a href="/week?standortchtsEngelbrechts</a>
     /week?standort=gross-gerungsGroß Gerungs</a>
     /settings/employeesEinstellungen</a>
     /yearJahr</a>
@@ -73,7 +65,6 @@
   </main>
 
   <script>
-    // Zahnrad → Einstellungen
     function openSettings() { window.location.href = '/settings/employees'; }
     const gear = document.getElementById('settingsGear');
     if (gear) {
@@ -83,9 +74,8 @@
       });
     }
 
-    // Aktiven Menüpunkt markieren (Pfad-basiert)
     (function markActiveNav(){
-      const currentPath = window.location.pathname; // z.B. "/week"
+      const currentPath = window.location.pathname;
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
         if (currentPath === aPath || currentPath.startsWith(aPath)) {
@@ -94,7 +84,6 @@
       });
     })();
 
-    // Kontextmenü bei Input optional verhindern
     document.addEventListener('contextmenu', e => {
       if (e.target.tagName === 'INPUT') e.preventDefault();
     });
