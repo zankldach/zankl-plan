@@ -1,111 +1,12 @@
 
-/* style.v2.css — Austausch, Navbar + Basiselemente */
-
-/* Grundlayout */
-body {
-  font-family: system-ui, Arial, sans-serif;
-  margin: 20px; /* wird von base.html überschrieben, ok */
+/* Freitag in 4-Tage-Woche: Text sichtbar, aber grau & nicht editierbar */
+.fri-disabled {
+  background: #f1f3f5 !important;
+  color: #555 !important;
 }
-a { color: #007bff; text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-/* Topbar (optional, falls irgendwo verwendet) */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  background: #f3f3f3;
-  border-bottom: 1px solid #ddd;
-}
-.topbar .logo { font-weight: 600; }
-.topbar .nav a { margin-right: 12px; }
-
-/* Container */
-.container { padding: 16px; }
-.hint { color: #666; margin: 8px 0 16px; }
-
-/* Standort-Tabs */
-.standort-tabs { margin: 8px 0 12px; }
-.standort-tabs .tab {
-  display: inline-block;
-  padding: 6px 10px;
-  border: 1px solid #bbb;
-  margin-right: 6px;
-  border-radius: 4px;
-  background: #fafafa;
-}
-.standort-tabs .tab.active {
-  background: #e8f2ff;
-  border-color: #99c5ff;
-}
-
-/* Wochenraster */
-.grid { display: flex; flex-direction: column; }
-.grid-header {
-  display: grid;
-  grid-template-columns: 140px repeat(5, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.grid-body { display: grid; grid-template-rows: repeat(10, auto); gap: 6px; }
-.row { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 6px; align-items: stretch; }
-.col, .cell { padding: 8px; background: #fff; border: 1px solid #ddd; }
-.row-label { font-weight: 600; background: #f9f9f9; }
-.job { padding: 6px; color: #fff; font-weight: 600; border-radius: 4px; }
-.job.free { background: #eee; color: #333; font-weight: normal; }
-
-/* Sidebar */
-.sidebar {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid #ddd;
-  background: #f9f9f9;
-}
-
-/* Tabellen */
-.table { border-collapse: collapse; width: 100%; }
-.table th, .table td { padding: 8px; border: 1px solid #ddd; }
-.table th { background: #f7f7f7; text-align: left; }
-
-/* Inline-Formulare */
-.form-inline { display: flex; gap: 6px; margin-top: 6px; }
-.form-inline select,
-.form-inline input[type="number"],
-.form-inline input[type="text"] {
-  padding: 4px;
-  border: 1px solid #bbb;
-  border-radius: 4px;
-}
-.form-inline button { padding: 4px 8px; }
-
-/* Navbar (aus base.html kompatibel) */
-nav.site {
-  background: #003a8f;
-  padding: 6px 20px;
-  color: white;
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-nav.site a {
-  color: white;
-  text-decoration: none;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-nav.site a:hover {
-  background: rgba(255,255,255,0.14);
-}
-nav.site a.is-active {
-  background: rgba(255,255,255,0.22);
-}
-
-/* Druck */
-@media print {
-  .topbar, .standort-tabs, .form-inline, .sidebar, nav.site { display: none !important; }
-  .container { padding: 0; }
-  .grid { page-break-inside: avoid; }
-  .grid-body .row { break-inside: avoid; }
+.fri-disabled input,
+.fri-disabled textarea {
+  background: transparent !important;
+  color: #555 !important;
+  pointer-events: none !important; /* keine Eingabe möglich */
 }
