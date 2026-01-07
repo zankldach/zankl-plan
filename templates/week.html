@@ -1,9 +1,22 @@
 
 {% extends "base.html" %}
-{% include "_navbar.html" %}
 {% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
 
 {% block head %}
+<style>
+  /* Layout: Wochenplan links, Kleinbaustellen rechts */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 12px;
+    align-items: start;
+  }
+  /* … dein weiterer Kopf-CSS … */
+</style>
+{% endblock %}
+
+{% block content %}
+
 <style>
   /* Layout: Wochenplan links, Kleinbaustellen rechts */
   .layout {
