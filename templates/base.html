@@ -6,11 +6,8 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Fester Pfad vermeidet Jinja/url_for-Probleme -->
-  /static/style.v2.css
-
-  <style>
-    :root { --blue: #003a8f; --bg: #f4f6f8; }
+  <!-- Richtiges Laden der CSS -->
+  <link rel="stylesheet" href="/static/style.v2.css": #003a8f; --bg: #f4f6f8; }
     html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
@@ -57,7 +54,7 @@
   <!-- Fixe Navigationsleiste -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
     /week?standort=engelbrechtsEngelbrechts</a>
-    /week?standort=gross-gerungsGroß Gerungs</a>
+    <a href="/week?standort=gngsGroß Gerungs</a>
     /settings/employeesEinstellungen</a>
     /yearJahr</a>
     /healthHealth</a>
@@ -98,3 +95,4 @@
   {% block scripts %}{% endblock %}
 </body>
 </html>
+``
