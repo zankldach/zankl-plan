@@ -1,15 +1,15 @@
 
-/* style.v2.css — 2025-12-23 09:xx, clean replacement */
+/* style.v2.css — Austausch, Navbar + Basiselemente */
 
 /* Grundlayout */
 body {
   font-family: system-ui, Arial, sans-serif;
-  margin: 20px;
+  margin: 20px; /* wird von base.html überschrieben, ok */
 }
 a { color: #007bff; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* Topbar */
+/* Topbar (optional, falls irgendwo verwendet) */
 .topbar {
   display: flex;
   align-items: center;
@@ -79,7 +79,7 @@ a:hover { text-decoration: underline; }
 }
 .form-inline button { padding: 4px 8px; }
 
-/* Navbar Ergänzung */
+/* Navbar (aus base.html kompatibel) */
 nav.site {
   background: #003a8f;
   padding: 6px 20px;
@@ -97,6 +97,9 @@ nav.site a {
 }
 nav.site a:hover {
   background: rgba(255,255,255,0.14);
+}
+nav.site a.is-active {
+  background: rgba(255,255,255,0.22);
 }
 
 /* Druck */
