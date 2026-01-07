@@ -6,8 +6,15 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Richtiges Laden der CSS -->
-  <link rel="stylesheet" href="/static/style.v2.css": #003a8f; --bg: #f4f6f8; }
+  <!-- CSS über feste Pfade -->
+  /static/style.v2.css
+  <static/style.css
+
+  <!-- App-Skript (Interaktionen für Week/Mitarbeiter etc.) -->
+  <script defer src="/pt>
+
+  <style>
+    :root { --blue: #003a8f; --bg: #f4f6f8; }
     html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
@@ -53,8 +60,8 @@
 
   <!-- Fixe Navigationsleiste -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    /week?standort=engelbrechtsEngelbrechts</a>
-    <a href="/week?standort=gngsGroß Gerungs</a>
+    <a href="/dort=engelbrechtsEngelbrechts</a>
+    <a href="/week?standort=gross-gerGerungs</a>
     /settings/employeesEinstellungen</a>
     /yearJahr</a>
     /healthHealth</a>
@@ -65,7 +72,7 @@
   </main>
 
   <script>
-    // Zahnrad führt zu Einstellungen
+    // Zahnrad → Einstellungen
     function openSettings() { window.location.href = '/settings/employees'; }
     const gear = document.getElementById('settingsGear');
     if (gear) {
@@ -75,9 +82,9 @@
       });
     }
 
-    // Aktiven Menüpunkt markieren (nur anhand des Pfads, Query ignoriert)
+    // Aktiven Menüpunkt markieren (Pfad-basiert, Query ignoriert)
     (function markActiveNav(){
-      const currentPath = window.location.pathname; // z.B. "/week"
+      const currentPath = window.location.pathname;
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
         if (currentPath === aPath || currentPath.startsWith(aPath)) {
@@ -95,4 +102,3 @@
   {% block scripts %}{% endblock %}
 </body>
 </html>
-``
