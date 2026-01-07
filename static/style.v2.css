@@ -79,9 +79,29 @@ a:hover { text-decoration: underline; }
 }
 .form-inline button { padding: 4px 8px; }
 
+/* Navbar Ergänzung */
+nav.site {
+  background: #003a8f;
+  padding: 6px 20px;
+  color: white;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+nav.site a {
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+nav.site a:hover {
+  background: rgba(255,255,255,0.14);
+}
+
 /* Druck */
 @media print {
-  .topbar, .standort-tabs, .form-inline, .sidebar { display: none !important; }
+  .topbar, .standort-tabs, .form-inline, .sidebar, nav.site { display: none !important; }
   .container { padding: 0; }
   .grid { page-break-inside: avoid; }
   .grid-body .row { break-inside: avoid; }
