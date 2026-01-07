@@ -6,12 +6,13 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- CSS über feste Pfade -->
+  <!-- Richtiges Laden der CSS (statt bloßem Text) -->
   /static/style.v2.css
-  <static/style.css
+  <!-- Optional: deine zweite CSS-Datei, falls vorhanden -->
+  /static/style.css
 
-  <!-- App-Skript (Interaktionen für Week/Mitarbeiter etc.) -->
-  <script defer src="/pt>
+  <!-- App-Skript (für Interaktionen der Week-Seite) -->
+  /static/app.js</script>
 
   <style>
     :root { --blue: #003a8f; --bg: #f4f6f8; }
@@ -40,7 +41,7 @@
 
     main { padding: 20px; }
 
-    /* Tabellen Defaults (werden von week.html überschrieben) */
+    /* Tabellen-Defaults (werden von week.html überschrieben) */
     table { width:100%; border-collapse: collapse; background: #fff; }
     th, td { border:1px solid #ddd; padding:6px; text-align:center; }
     th { background:#eef2f6; }
@@ -60,8 +61,8 @@
 
   <!-- Fixe Navigationsleiste -->
   <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    <a href="/dort=engelbrechtsEngelbrechts</a>
-    <a href="/week?standort=gross-gerGerungs</a>
+    /week?standort=engelbrechtsEngelbrechts</a>
+    /week?standort=gross-gerungsGroß Gerungs</a>
     /settings/employeesEinstellungen</a>
     /yearJahr</a>
     /healthHealth</a>
@@ -82,9 +83,9 @@
       });
     }
 
-    // Aktiven Menüpunkt markieren (Pfad-basiert, Query ignoriert)
+    // Aktiven Menüpunkt markieren (Pfad-basiert)
     (function markActiveNav(){
-      const currentPath = window.location.pathname;
+      const currentPath = window.location.pathname; // z.B. "/week"
       document.querySelectorAll('nav.site a').forEach(a => {
         const aPath = new URL(a.href, window.location.origin).pathname;
         if (currentPath === aPath || currentPath.startsWith(aPath)) {
