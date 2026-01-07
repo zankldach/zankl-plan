@@ -1,6 +1,6 @@
 
 # src/main.py
-from fastapi import FastAPI, Request, Body
+from fastapi import FastAPI, Request, Body, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import date, timedelta
 import logging
 import traceback
+from urllib.parse import urlparse, parse_qs
 
 app = FastAPI(title="Zankl-Plan MVP")
 
@@ -16,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent          # src/
 ROOT_DIR = BASE_DIR.parent                           # Projektwurzel
 DB_PATH = BASE_DIR / "zankl.db"
 
-# Templates/Static aus Projektstruktur laden
+# Templates/Static laden
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
 
@@ -93,13 +94,37 @@ init_db()
 def build_days(year: int, kw: int):
     """Gibt Liste mit 5 Einträgen {label, date} für Mo–Fr zurück."""
     kw = max(1, min(kw, 53))
-    # ISO-Kalender: Montag=1
-    start = date.fromisocalendar(year, kw, 1)
+    start = date.fromisocalendar(year, kw, 1)  # ISO: Montag=1
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
 
 def is_friday(day_index: int) -> bool:
     return day_index == 4
+
+def resolve_standort(request: Request, body_standort: str | None, query_standort: str | None) -> str:
+    """
+    Standort robust ermitteln:
+    1) Body (JSON/Form)
+    2) Query-Param des aktuellen Calls
+    3) Referer-URL (z.B. /week?standort=gross-gerungs)
+    4) Fallback: 'engelbrechts'
+    """
+    if body_standort and body_standort.strip():
+        return body_standort.strip()
+    if query_standort and query_standort.strip():
+        return query_standort.strip()
+
+    ref = request.headers.get("referer") or request.headers.get("Referer")
+    if ref:
+        try:
+            qs = parse_qs(urlparse(ref).query)
+            ref_st = (qs.get("standort") or [""])[0].strip()
+            if ref_st:
+                return ref_st
+        except Exception:
+            pass
+
+    return "engelbrechts"
 
 # -------------------------------------------------------------------
 # Routes
@@ -175,13 +200,17 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     finally:
         conn.close()
 
-# --- API: Kleinbaustellen setzen ------------------------------------------------
+# --- API: Kleinbaustellen setzen (mit Standort-Fallback) -----------------------
 @app.post("/api/klein/set")
-async def klein_set(data: dict = Body(...)):
+async def klein_set(
+    request: Request,
+    data: dict = Body(...),
+    standort_q: str | None = Query(None, alias="standort"),
+):
     conn = get_conn()
     cur = conn.cursor()
     try:
-        standort = data.get("standort") or "engelbrechts"
+        standort = resolve_standort(request, data.get("standort"), standort_q)
         row_index = int(data.get("row_index"))
         text = data.get("text") or ""
         cur.execute(
@@ -193,21 +222,25 @@ async def klein_set(data: dict = Body(...)):
             (standort, row_index, text),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, "standort": standort, "row_index": row_index}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
-# --- API: Zelle im Wochenplan setzen -------------------------------------------
+# --- API: Zelle im Wochenplan setzen (mit Standort-Fallback) -------------------
 @app.post("/api/week/set-cell")
-async def set_cell(data: dict = Body(...)):
+async def set_cell(
+    request: Request,
+    data: dict = Body(...),
+    standort_q: str | None = Query(None, alias="standort"),
+):
     conn = get_conn()
     cur = conn.cursor()
     try:
         year = int(data.get("year"))
         kw = int(data.get("kw"))
-        standort = data.get("standort") or "engelbrechts"
+        standort = resolve_standort(request, data.get("standort"), standort_q)
         row = int(data.get("row"))
         day = int(data.get("day"))
         val = data.get("value") or ""
@@ -232,33 +265,79 @@ async def set_cell(data: dict = Body(...)):
             (plan["id"], row, day, val),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, "standort": standort}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
-# --- Zusätzliche Seiten für Menü (minimal, damit Links funktionieren) -----------
+# --- Einstellungen: Mitarbeiter (GET zeigt, POST speichert) --------------------
+@app.get("/settings/employees", response_class=HTMLResponse)
+def settings_employees_page(request: Request, standort: str = "engelbrechts"):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": standort, "employees": employees},
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
+
+@app.post("/settings/employees", response_class=HTMLResponse)
+async def settings_employees_save(
+    request: Request,
+    standort: str = Form(...),
+    ids: str = Form(""),
+    names: str = Form(""),
+    new_names: str = Form(""),
+    delete_ids: str = Form(""),
+):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        # Delete
+        if delete_ids.strip():
+            for sid in [x for x in delete_ids.split(",") if x.strip()]:
+                try:
+                    cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), standort))
+                except Exception:
+                    pass
+
+        # Update bestehende
+        ids_list = [x.strip() for x in ids.split(",")] if ids else []
+        names_list = [x.strip() for x in names.split(",")] if names else []
+        for i, n in zip(ids_list, names_list):
+            if i and n:
+                cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), standort))
+
+        # Insert neue
+        if new_names.strip():
+            for n in [x.strip() for x in new_names.split(",") if x.strip()]:
+                cur.execute("INSERT OR IGNORE INTO employees(name, standort) VALUES(?, ?)", (n, standort))
+
+        conn.commit()
+
+        # zurück zur Seite
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": standort, "employees": employees, "saved": True},
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
+
+# --- Jahresseite minimal --------------------------------------------------------
 @app.get("/year", response_class=HTMLResponse)
 def year_page(request: Request, year: int = 2025):
-    # Falls es ein year.html Template gibt, rendern; sonst simple Platzhalterseite
     try:
         return templates.TemplateResponse("year.html", {"request": request, "year": year})
     except Exception:
-        return HTMLResponse(
-            f"<h1>Jahresplanung</h1><p>year={year}</p>",
-            status_code=200,
-        )
-
-@app.get("/settings/employees", response_class=HTMLResponse)
-def settings_employees_page(request: Request, standort: str = "engelbrechts"):
-    try:
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": standort},
-        )
-    except Exception:
-        return HTMLResponse(
-            f"<h1>Einstellungen · Mitarbeiter</h1><p>standort={standort}</p>",
-            status_code=200,
-        )
+        return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
