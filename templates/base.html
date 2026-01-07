@@ -6,8 +6,9 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="{{ url_for('static', path='style.v2.css')   html, body { height: 100%; }
+  <!-- Fester Pfad auf Static – vermeidet url_for-Probleme -->
+  <link rel="stylesheet" href="/static/style.v2.csse: #003a8f; --bg: #f4f6f8; }
+    html, body { height: 100%; }
     body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
 
     header.site {
@@ -46,38 +47,3 @@
   <!-- Kopfbereich -->
   <header class="site" role="banner" aria-label="Kopfbereich">
     <strong>Zankl Plan</strong>
-    <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
-  </header>
-
-  <!-- Navigationsleiste -->
-  <nav class="site" role="navigation" aria-label="Hauptnavigation">
-    /week?standort=engelbrechtsEngelbrechts</a>
-    <a href="/week?stand-gerungsGroß Gerungs</a>
-    <a href="/settingssEinstellungen</a>
-    <a href="/year    <a hrefHealth</a>
-  </nav>
-
-  <!-- Hauptinhalt -->
-  <main role="main">
-    {% block content %}{% endblock %}
-  </main>
-
-  <script>
-    function openSettings() { window.location.href = '/settings/employees'; }
-    const gear = document.getElementById('settingsGear');
-    if (gear) {
-      gear.addEventListener('click', openSettings);
-      gear.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
-      });
-    }
-
-    // Kontextmenü bei Input optional verhindern
-    document.addEventListener('contextmenu', e => {
-      if (e.target.tagName === 'INPUT') e.preventDefault();
-    });
-  </script>
-
-  {% block scripts %}{% endblock %}
-</body>
-</html>
