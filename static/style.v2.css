@@ -1,4 +1,7 @@
 
+/* Navbar immer sichtbar halten – Fallback */
+nav.site { display: flex !important; visibility: visible !important; opacity: 1 !important; }
+
 /* Freitag in 4-Tage-Woche: Text sichtbar, aber grau & nicht editierbar */
 .fri-disabled {
   background: #f1f3f5 !important;
