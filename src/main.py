@@ -12,11 +12,6 @@ import traceback
 
 app = FastAPI(title="Zankl-Plan MVP")
 
-# Verzeichnisstruktur:
-# project_root/
-#   src/main.py
-#   templates/
-#   static/
 BASE_DIR = Path(__file__).resolve().parent         # .../src
 ROOT_DIR = BASE_DIR.parent                         # Projekt-Root
 DB_PATH = BASE_DIR / "zankl.db"                    # DB liegt in src/
@@ -35,6 +30,10 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     return conn
 
+def column_exists(cur, table: str, column: str) -> bool:
+    cur.execute(f"PRAGMA table_info({table})")
+    return any(r[1] == column for r in cur.fetchall())
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
@@ -46,9 +45,14 @@ def init_db():
             kw INTEGER,
             standort TEXT,
             row_count INTEGER DEFAULT 5,
+            four_day_week INTEGER DEFAULT 0,
             UNIQUE(year, kw, standort)
         )
     """)
+
+    # Falls Tabelle bereits existiert, aber Spalte fehlt → hinzufügen
+    if not column_exists(cur, "week_plans", "four_day_week"):
+        cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 0")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells (
@@ -79,7 +83,6 @@ init_db()
 # ----------------------------
 def build_days(year: int, kw: int) -> list[dict]:
     """Erzeugt Mo–Fr mit Datum aus ISO-Kalender (KW/Jahr)."""
-    # Clamp KW grob 1..53 (exakte ISO-Berechnung später möglich)
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
@@ -109,32 +112,32 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     conn = get_conn()
     cur = conn.cursor()
 
-    # Robustheit: Grenzen
     kw = max(1, min(kw, 53))
     year = max(2000, min(year, 2100))
 
     try:
         # Plan abrufen oder erstellen
         cur.execute("""
-            SELECT id,row_count FROM week_plans
+            SELECT id,row_count,four_day_week FROM week_plans
             WHERE year=? AND kw=? AND standort=?
         """, (year, kw, standort))
         plan = cur.fetchone()
 
         if not plan:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count) VALUES(?,?,?,5)", (year, kw, standort))
+            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,0)",
+                        (year, kw, standort, 5))
             conn.commit()
             plan_id = cur.lastrowid
             rows = 5
+            four_day_week = 0
         else:
             plan_id = plan["id"]
             rows = plan["row_count"]
+            four_day_week = plan["four_day_week"] or 0
 
         # Mitarbeiter laden
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
         employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
-
-        # Zeilenanzahl mindestens so groß wie Mitarbeiterliste
         rows = max(rows, len(employees)) if employees else rows
 
         # Grid vorbereiten (rows × 5 Tage)
@@ -146,7 +149,6 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= row < rows and 0 <= day < 5:
                 grid[row][day]["text"] = r["text"]
 
-        # Tage berechnen
         days = build_days(year, kw)
 
         return templates.TemplateResponse("week.html", {
@@ -156,7 +158,8 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             "kw": kw,
             "year": year,
             "days": days,
-            "standort": standort
+            "standort": standort,
+            "four_day_week": bool(four_day_week),
         })
 
     except Exception:
@@ -167,8 +170,46 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         conn.close()
 
 # ----------------------------
+# Optionen (z. B. 4-Tage-Woche)
+# ----------------------------
+@app.post("/api/week/options")
+async def week_options(data: dict = Body(...)):
+    """
+    body: {year, kw, standort, four_day_week: true/false}
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        year = int(data.get("year"))
+        kw = int(data.get("kw"))
+        standort = data.get("standort") or "engelbrechts"
+        four_day_week = 1 if bool(data.get("four_day_week")) else 0
+
+        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        plan = cur.fetchone()
+        if not plan:
+            # falls Plan nicht existiert → anlegen
+            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)",
+                        (year, kw, standort, 5, four_day_week))
+            conn.commit()
+        else:
+            cur.execute("UPDATE week_plans SET four_day_week=? WHERE id=?", (four_day_week, plan["id"]))
+            conn.commit()
+
+        return {"ok": True, "four_day_week": bool(four_day_week)}
+    except Exception:
+        tb = traceback.format_exc()
+        logger.error("Fehler in /api/week/options:\n%s", tb)
+        return JSONResponse({"ok": False, "error": "server"}, status_code=500)
+    finally:
+        conn.close()
+
+# ----------------------------
 # Set Cell (einzelne Zelle)
 # ----------------------------
+def is_friday(day_index: int) -> bool:
+    return day_index == 4  # 0..4 = Mo..Fr
+
 @app.post("/api/week/set-cell")
 async def set_cell(data: dict = Body(...)):
     conn = get_conn()
@@ -177,11 +218,18 @@ async def set_cell(data: dict = Body(...)):
         year = int(data.get("year"))
         kw = int(data.get("kw"))
         standort = data.get("standort") or "engelbrechts"
+        row = int(data.get("row", 0))
+        day = int(data.get("day", 0))
+        val = data.get("value", "")
 
-        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
         if not plan:
             return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
+
+        # Freitag gesperrt, wenn 4-Tage-Woche aktiv
+        if plan["four_day_week"] and is_friday(day):
+            return {"ok": True, "skipped": True}  # still ok, nur ignoriert
 
         plan_id = plan["id"]
 
@@ -189,7 +237,7 @@ async def set_cell(data: dict = Body(...)):
             INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
             VALUES(?,?,?,?)
             ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-        """, (plan_id, int(data.get("row",0)), int(data.get("day",0)), data.get("value","")))
+        """, (plan_id, row, day, val))
         conn.commit()
         return {"ok": True}
     except Exception:
@@ -200,20 +248,16 @@ async def set_cell(data: dict = Body(...)):
         conn.close()
 
 # ----------------------------
-# Batch-Updates (schnell & robust)
+# Batch-Updates
 # ----------------------------
 @app.post("/api/week/batch")
 async def week_batch(data: dict = Body(...)):
     """
-    Erwartet:
     {
       "year": 2025,
       "kw": 1,
       "standort": "engelbrechts",
-      "updates": [
-        {"row": 0, "day": 0, "value": "Text"},
-        ...
-      ]
+      "updates": [ {"row":0,"day":0,"value":"Text"}, ... ]
     }
     """
     conn = get_conn()
@@ -224,25 +268,33 @@ async def week_batch(data: dict = Body(...)):
         standort = data.get("standort") or "engelbrechts"
         updates = data.get("updates") or []
 
-        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
         if not plan:
             return JSONResponse({"ok": False, "error": "Week plan not found"}, status_code=400)
 
         plan_id = plan["id"]
+        four_day_week = plan["four_day_week"]
 
         cur.execute("BEGIN")
+        count = 0
         for u in updates:
             row = int(u.get("row", 0))
             day = int(u.get("day", 0))
             val = u.get("value", "")
+
+            # Freitag sperren (bei 4-Tage-Woche)
+            if four_day_week and is_friday(day):
+                continue
+
             cur.execute("""
                 INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
                 VALUES(?,?,?,?)
                 ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
             """, (plan_id, row, day, val))
+            count += 1
         conn.commit()
-        return {"ok": True, "count": len(updates)}
+        return {"ok": True, "count": count}
     except Exception:
         conn.rollback()
         tb = traceback.format_exc()
@@ -291,7 +343,7 @@ async def employees_save(data: dict = Body(...)):
         conn.close()
 
 # ----------------------------
-# Year View (Platzhalter)
+# Year View
 # ----------------------------
 @app.get("/year", response_class=HTMLResponse)
 def year_view(request: Request, year: int = 2025):
