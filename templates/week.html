@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyFourDayWeekUI(FOUR_DAY_WEEK);
 
     /* ---------- Farben ---------- */
-    const RESERVED_RED = new Set(["urlaub","krank","arzt","xxx"]);
+    const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx"]);
     const normalize = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
     function colorFor(text){
