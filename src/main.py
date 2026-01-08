@@ -229,8 +229,52 @@ async def klein_set(
         conn.close()
 
 # --- API: Zelle im Wochenplan setzen (mit Standort-Fallback) -------------------
-@app.post("/api/week/set-cell")
 
+@app.post("/api/week/set-cell")
+async def set_cell(
+    request: Request,
+    data: dict = Body(...),
+    standort_q: str | None = Query(None, alias="standort"),
+):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        year = int(data.get("year"))
+        kw = int(data.get("kw"))
+        # resolve_standort: falls du diese Helper-Funktion hast, benutze sie; sonst fallback:
+        standort = resolve_standort(request, data.get("standort"), standort_q) if 'resolve_standort' in globals() else (data.get("standort") or standort_q or "engelbrechts")
+        row = int(data.get("row"))
+        day = int(data.get("day"))
+        val = data.get("value") or ""
+
+        cur.execute(
+            "SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
+            (year, kw, standort),
+        )
+        plan = cur.fetchone()
+        if not plan:
+            return {"ok": False, "error": "Plan not found"}
+
+        # Freitag blockieren nur, wenn four_day_week aktiv ist
+        if plan["four_day_week"] and is_friday(day):
+            return {"ok": True, "skipped": True}
+
+        cur.execute(
+            """
+            INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
+            VALUES(?,?,?,?)
+            ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
+            """,
+            (plan["id"], row, day, val),
+        )
+        conn.commit()
+        return {"ok": True}
+    except Exception:
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+    finally:
+        conn.close()
+
+# --- API: 4-Tage-Woche toggeln -------------------------------------------------
 @app.post("/api/week/set-four-day")
 async def set_four_day(data: dict = Body(...)):
     """
@@ -251,7 +295,6 @@ async def set_four_day(data: dict = Body(...)):
         )
         row = cur.fetchone()
         if not row:
-            # Falls kein Plan → anlegen (wie in week()) und dann setzen
             cur.execute(
                 "INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)",
                 (year, kw, standort, 5, value),
@@ -269,6 +312,7 @@ async def set_four_day(data: dict = Body(...)):
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
+
 ``
 
 async def set_cell(
