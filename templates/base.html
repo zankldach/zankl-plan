@@ -1,103 +1,58 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8">
   <title>{% block title %}Zankl Plan{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- CSS über feste Pfade -->
-  /static/style.v2.css
-  <link rel="stylesheet" href="/static/style.css"onen für Week/Mitarbeiter etc.) -->
-  /static/app.js</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="stylesheet" href="/static/style.v2.css">
+  <script src="/static/app.js" defer></script>
 
   <style>
-    :root { --blue: #003a8f; --bg: #f4f6f8; }
-    html, body { height: 100%; }
-    body { font-family: Arial, sans-serif; margin:0; background: var(--bg); color:#0f172a; }
-
-    header.site {
-      background: var(--blue); color: #fff; padding: 10px 20px;
-      display:flex; justify-content: space-between; align-items: center; position: relative;
+    /* FIX für verschwundene Menüleiste */
+    body {
+      margin: 0;
+      padding-top: 56px; /* Platz für Header */
+      overflow-x: hidden;
     }
 
-    /* Navbar */
-    nav.site {
-      background: #003a8f;
-      padding: 6px 20px;
-      color: white;
+    header.app-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: #0b4dbb;
+      color: #fff;
       display: flex;
-      gap: 16px;
       align-items: center;
-      z-index: 5;
-      position: relative;
+      padding: 0 16px;
+      z-index: 10000;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
-    nav.site a {
-      color: white;
-      text-decoration: none;
+
+    header.app-header .brand {
       font-weight: 600;
-      padding: 6px 10px;
-      border-radius: 6px;
-    }
-    nav.site a:hover { background: rgba(255,255,255,0.14); }
-    nav.site a.is-active { background: rgba(255,255,255,0.22); }
-
-    #settingsGear {
-      position:absolute; right:20px; top:50%; transform:translateY(-50%);
-      cursor:pointer; font-size:20px;
+      font-size: 16px;
     }
 
-    main { padding: 20px; }
-
-    /* Tabellen Defaults */
-    table { width:100%; border-collapse: collapse; background: #fff; }
-    th, td { border:1px solid #ddd; padding:6px; text-align:center; }
-    th { background:#eef2f6; }
-    td input { width:100%; height:100%; padding:6px; box-sizing:border-box; border:none; background:transparent; text-align:center; font-size:14px; }
+    main.app-content {
+      padding: 16px;
+    }
   </style>
 
   {% block head %}{% endblock %}
 </head>
-
 <body>
 
-  <!-- Kopfbereich -->
-  <header class="site" role="banner" aria-label="Kopfbereich">
-    <strong>Zankl Plan</strong>
-    <div id="settingsGear" title="Einstellungen" role="button" tabindex="0" aria-label="Einstellungen öffnen">⚙️</div>
-  </header>
+<header class="app-header">
+  <div class="brand">Zankl Plan</div>
+</header>
 
-  <!-- Menüleiste (Partial) -->
-  {% include "_navbar.html" %}
+<main class="app-content">
+  {% block content %}{% endblock %}
+</main>
 
-  <!-- Hauptinhalt -->
-  <main role="main">
-    {% block content %}{% endblock %}
-  </main>
-
-  <script>
-    // Zahnrad → Einstellungen
-    function openSettings() { window.location.href = '/settings/employees'; }
-    const gear = document.getElementById('settingsGear');
-    if (gear) {
-      gear.addEventListener('click', openSettings);
-      gear.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSettings(); }
-      });
-    }
-
-    // Aktiven Menüpunkt markieren (Pfad-basiert, Query ignoriert)
-    (function markActiveNav(){
-      const currentPath = window.location.pathname;
-      document.querySelectorAll('nav.site a').forEach(a => {
-        const aPath = new URL(a.href, window.location.origin).pathname;
-        if (currentPath === aPath || currentPath.startsWith(aPath)) {
-          a.classList.add('is-active');
-        }
-      });
-    })();
-  </script>
-
-  {% block scripts %}{% endblock %}
 </body>
 </html>
