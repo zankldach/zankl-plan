@@ -15,32 +15,13 @@ nav.site { display: flex !important; visibility: visible !important; opacity: 1 
 }
 
 
+
 /* Sidebar Kleinbaustellen */
 #wk-smalljobs, #sj-list { max-height: 60vh; overflow-y: auto; }
 .sj-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.sj-handle {
-  cursor: grab;
-  color: #0b5ea7;
-  user-select: none;
-  font-weight: 700;
-}
+.sj-handle { cursor: grab; color: #0b5ea7; user-select: none; font-weight: 700; }
 .sj-handle:active { cursor: grabbing; }
-.sj-input {
-  flex: 1;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 8px;
-  border: 1px solid #bbb;
-  border-radius: 4px;
-}
+.sj-input { flex: 1; padding: 6px 8px; border: 1px solid #bbb; border-radius: 4px; }
 
-/* Drop-Indikator im Raster */
-.drop-hover {
-  outline: 2px dashed #0b5ea7;
-  outline-offset: -2px;
-  background: #eaf4ff;
-}
-
-/* Klick-Sicherheit */
-input, select, textarea, button { pointer-events: auto !important; }
-main, .wk-grid, table, .wk-sidebar { position: relative !important; z-index: 10 !important; }
+/* Zielzellen-Indikator beim Drop */
+.drop-hover { outline: 2px dashed #0b5ea7; outline-offset: -2px; background: #eaf4ff; }
