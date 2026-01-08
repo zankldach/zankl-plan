@@ -390,19 +390,58 @@
     });
   }
 
-  // Navigation
-  function navigate(newStandort, newKw, newYear) {
-    const params = new URLSearchParams(location.search);
-    params.set('standort', newStandort ?? state.standort);
-    params.set('kw',      String(newKw   ?? state.kw));
-    params.set('year',    String(newYear ?? state.year));
-    location.href = '/week?' + params.toString();
-  }
-  if (ui.standort) ui.standort.addEventListener('change', e => navigate(e.target.value, null, null));
-  if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
-  if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
+ 
+// --- Navigation: Standort / KW / Jahr ---
+// 1) Helfer: aktuelle Small-Job-Liste lesen & normalisieren
+function readSmallJobList(container) {
+  const cont = container || document.querySelector('#sj-list') || document.querySelector('.wk-sidebar');
+  if (!cont) return [];
+  const inputs = Array.from(cont.querySelectorAll('.sj-input'));
+  const items  = inputs.map(i => (i.value || '').trim());
+  const filled = items.filter(t => t.length > 0);
+  // genau eine leere unten
+  filled.push('');
+  return filled;
+}
 
-  // Debug
-  window.__zankl_dbg = { ...state };
-  console.log('[app.js] state', window.__zankl_dbg);
-})();
+// 2) Vor Navigation speichern
+async function saveSmallJobsBeforeNavigate() {
+  try {
+    const items = readSmallJobList(); // aus DOM holen
+    const payload = { standort: state.standort, items };
+    const res = await fetch('/api/klein/save-list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true // erlaubt Background-Commit
+    });
+    const data = await res.json().catch(() => ({ ok: false }));
+    if (!data.ok) console.warn('[navigate] Save-list fehlgeschlagen', data);
+  } catch (err) {
+    console.warn('[navigate] Save-list error', err);
+  }
+}
+
+// 3) Navigieren – erst speichern, dann Redirect
+async function navigate(newStandort, newKw, newYear) {
+  await saveSmallJobsBeforeNavigate(); // <- WICHTIG
+  const params = new URLSearchParams(location.search);
+  params.set('standort', newStandort ?? state.standort);
+  params.set('kw', String(newKw ?? state.kw));
+  params.set('year', String(newYear ?? state.year));
+  location.href = '/week?' + params.toString();
+}
+
+// 4) Events
+if (ui.standort) ui.standort.addEventListener('change', e => navigate(e.target.value, null, null));
+if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
+if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
+
+// 5) Zusätzlich beim Tab-/Fenster-Verlassen sicher speichern
+window.addEventListener('beforeunload', () => {
+  const items = readSmallJobList();
+  // sendBeacon als Fallback – kein await
+  try {
+    navigator.sendBeacon('/api/klein/save-list', JSON.stringify({ standort: state.standort, items }));
+  } catch (_) {}
+});
