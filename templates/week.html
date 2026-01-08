@@ -234,12 +234,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const fourChk = document.getElementById('fourDayChk');
 function applyFourDayWeekUI(flag){
   document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
-    td.classList.toggle('disabled-day', flag);
+    const inp = td.querySelector('input.cell');
 
-    const hint = td.querySelector('.hint');
-    if (hint) hint.textContent = flag ? "gesperrt" : "";
+    if(flag){
+      // Freitag sperren
+      td.classList.add('disabled-day');
+      if(inp) inp.disabled = true;
+      const hint = td.querySelector('.hint');
+      if (hint) hint.textContent = "gesperrt";
+    } else {
+      // Freitag freigeben
+      td.classList.remove('disabled-day');
+      if(inp) inp.disabled = false;
+      const hint = td.querySelector('.hint');
+      if (hint) hint.textContent = "";
+      if(inp) inp.style.background = ''; // wieder wie normale Zellen
+      if(inp) inp.style.color = ''; // normale Schriftfarbe
+    }
   });
 }
+
 
     async function setFourDayWeek(flag){
       const payload = { year: YEAR, kw: KW, standort: (document.getElementById('locationSelect').value || CURRENT_LOC), four_day_week: !!flag };
