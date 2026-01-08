@@ -200,36 +200,8 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     finally:
         conn.close()
 
-# --- API: Kleinbaustellen setzen (mit Standort-Fallback) -----------------------
-@app.post("/api/klein/set")
-async def klein_set(
-    request: Request,
-    data: dict = Body(...),
-    standort_q: str | None = Query(None, alias="standort"),
-):
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        standort = resolve_standort(request, data.get("standort"), standort_q)
-        row_index = int(data.get("row_index"))
-        text = data.get("text") or ""
-        cur.execute(
-            """
-            INSERT INTO global_small_jobs(standort,row_index,text)
-            VALUES(?,?,?)
-            ON CONFLICT(standort,row_index) DO UPDATE SET text=excluded.text
-            """,
-            (standort, row_index, text),
-        )
-        conn.commit()
-        return {"ok": True, "standort": standort, "row_index": row_index}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-    finally:
-        conn.close()
 
 # --- API: Zelle im Wochenplan setzen (mit Standort-Fallback) -------------------
-
 @app.post("/api/week/set-cell")
 async def set_cell(
     request: Request,
@@ -241,8 +213,7 @@ async def set_cell(
     try:
         year = int(data.get("year"))
         kw = int(data.get("kw"))
-        # resolve_standort: falls du diese Helper-Funktion hast, benutze sie; sonst fallback:
-        standort = resolve_standort(request, data.get("standort"), standort_q) if 'resolve_standort' in globals() else (data.get("standort") or standort_q or "engelbrechts")
+        standort = resolve_standort(request, data.get("standort"), standort_q)
         row = int(data.get("row"))
         day = int(data.get("day"))
         val = data.get("value") or ""
@@ -255,7 +226,7 @@ async def set_cell(
         if not plan:
             return {"ok": False, "error": "Plan not found"}
 
-        # Freitag blockieren nur, wenn four_day_week aktiv ist
+        # Freitag nur blockieren, wenn four_day_week gesetzt ist
         if plan["four_day_week"] and is_friday(day):
             return {"ok": True, "skipped": True}
 
@@ -268,7 +239,7 @@ async def set_cell(
             (plan["id"], row, day, val),
         )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, "standort": standort}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
@@ -308,49 +279,6 @@ async def set_four_day(data: dict = Body(...)):
             conn.commit()
 
         return {"ok": True, "four_day_week": bool(value)}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-    finally:
-        conn.close()
-
-``
-
-async def set_cell(
-    request: Request,
-    data: dict = Body(...),
-    standort_q: str | None = Query(None, alias="standort"),
-):
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        year = int(data.get("year"))
-        kw = int(data.get("kw"))
-        standort = resolve_standort(request, data.get("standort"), standort_q)
-        row = int(data.get("row"))
-        day = int(data.get("day"))
-        val = data.get("value") or ""
-
-        cur.execute(
-            "SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
-            (year, kw, standort),
-        )
-        plan = cur.fetchone()
-        if not plan:
-            return {"ok": False, "error": "Plan not found"}
-        if plan["four_day_week"] and is_friday(day):
-            # Bei 4-Tage-Woche Freitag überspringen (kein Fehler)
-            return {"ok": True, "skipped": True}
-
-        cur.execute(
-            """
-            INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
-            VALUES(?,?,?,?)
-            ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-            """,
-            (plan["id"], row, day, val),
-        )
-        conn.commit()
-        return {"ok": True, "standort": standort}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
