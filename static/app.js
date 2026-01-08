@@ -1,5 +1,5 @@
 
-// static/app.js — Austausch 2026-01-08 (Small Jobs: inkrementell + persistent)
+// static/app.js — Austausch 2026-01-08 (Small Jobs fix + DnD + Persistenz)
 (function () {
   'use strict';
   console.log('[app.js] boot ✔');
@@ -64,7 +64,7 @@
     sjContainer: qs('#sj-list') || qs('#wk-smalljobs') || qs('.wk-sidebar'),
   };
 
-  // Eingaben zwangsweise freischalten
+  // Eingaben freischalten
   qsa('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
   qsa('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
 
@@ -162,57 +162,73 @@
     });
   });
 
-  // Kleinbaustellen – inkrementeller Manager
-  const SJ_MAX = 200;
+  // Kleinbaustellen – inkrementell + persistent
   const cont = ui.sjContainer || qs('#sj-list') || qs('.wk-sidebar');
   if (cont) {
-    // Ensure existing inputs are editable & classified
+    // vorhandene Inputs sicher editierbar
     qsa('input, textarea', cont).forEach((inp, idx) => {
       inp.removeAttribute('disabled');
       inp.removeAttribute('readonly');
       inp.style.pointerEvents = 'auto';
       inp.classList.add('sj-input');
       if (!inp.dataset.rowIndex) inp.dataset.rowIndex = String(idx);
-      if (!inp.placeholder) inp.placeholder = ''; // kein sichtbarer Platzhaltertext
+      // kein sichtbarer Platzhaltertext
+      if (inp.placeholder) inp.placeholder = '';
     });
 
-    // Helper: aktuelle Liste lesen
+    const SJ_MAX = 200;
     function readList() {
       return qsa('.sj-input', cont).map(i => (i.value || '').trim());
     }
-    // Helper: Liste normalisieren (gefüllte oben, ein leeres unten)
     function normalize(items) {
       const filled = items.filter(t => t.length > 0);
       const out = filled.slice(0, SJ_MAX);
-      out.push('');
+      out.push(''); // genau eine leere unten
       return out;
     }
-    // Append: wenn alle gefüllt → unten ein leeres Feld hinzufügen (ohne Neuaufbau)
-    function appendEmptyIfFull() {
-      const inputs = qsa('.sj-input', cont);
-      const allFilled = inputs.length > 0 && inputs.every(i => (i.value || '').trim().length > 0);
-      if (allFilled) {
-        const row = document.createElement('div');
-        row.className = 'sj-row';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'sj-input';
-        input.dataset.rowIndex = String(inputs.length);
-        input.value = '';
-        input.placeholder = '';
-        row.appendChild(input);
-        (qs('#sj-list', cont) || cont).appendChild(row);
-        input.focus();
-      }
+
+    // Speichern (debounced) – bei Eingabe, damit Wechsel die Daten nicht verliert
+    let sjSaveTimer = null;
+    function scheduleSaveDebounced() {
+      if (sjSaveTimer) clearTimeout(sjSaveTimer);
+      const items = readList();
+      sjSaveTimer = setTimeout(() => {
+        postJSON('/api/klein/save-list', {
+          standort: state.standort,
+          items: normalize(items)
+        }).then(res => {
+          if (!res.ok) console.warn('[klein/save-list] fehlgeschlagen', res);
+        });
+      }, 250);
     }
-    // Compress: bei Leeren/Löschen → gefüllte nach oben, ein leeres unten (DOM neu erstellt)
-    function compressAndRender() {
-      const normalized = normalize(readList());
+
+    // Beim Eingeben nur speichern (debounced) – KEIN Neuaufbau, KEIN Focus-Verlust
+    cont.addEventListener('input', (e) => {
+      const el = e.target;
+      if (!el.classList.contains('sj-input')) return;
+      scheduleSaveDebounced();
+    });
+
+    // Bei Enter / Blur / Change: Liste komprimieren + **danach** speichern
+    function compressAndRenderKeepFocus() {
+      const items = normalize(readList());
       const listEl = qs('#sj-list', cont) || cont;
+
+      // Fokus & Caret merken
+      const active = document.activeElement;
+      let focusIdx = -1, caretS = null, caretE = null;
+      const currInputs = qsa('.sj-input', listEl);
+      if (active && active.classList.contains('sj-input')) {
+        focusIdx = currInputs.indexOf(active);
+        try { caretS = active.selectionStart; caretE = active.selectionEnd; } catch (_) {}
+      }
+
+      // Neu aufbauen
       listEl.innerHTML = '';
-      normalized.forEach((text, idx) => {
+      items.forEach((text, idx) => {
         const row = document.createElement('div');
         row.className = 'sj-row';
+        row.setAttribute('draggable', 'true');          // ← DnD
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'sj-input';
@@ -222,53 +238,127 @@
         row.appendChild(input);
         listEl.appendChild(row);
       });
+
+      // Fokus wiederherstellen (sofern sinnvoll)
+      const newInputs = qsa('.sj-input', listEl);
+      const target = newInputs[focusIdx] || newInputs[newInputs.length - 1];
+      if (target) {
+        target.focus();
+        if (caretS != null) {
+          try { target.setSelectionRange(caretS, caretE ?? caretS); } catch (_) {}
+        }
+      }
     }
 
-    // Speichern (debounced) der ganzen Liste
-    let saveTimer = null;
-    function scheduleSave() {
-      if (saveTimer) clearTimeout(saveTimer);
-      const items = readList();
-      saveTimer = setTimeout(() => {
-        postJSON('/api/klein/save-list', {
-          standort: state.standort,
-          items: normalize(items)
-        }).then(res => {
-          if (!res.ok) console.warn('[klein/save-list] fehlgeschlagen', res);
-        });
-      }, 200);
-    }
-
-    // Events: Eingabe → ggf. leeres anhängen; Change/Blur/Enter → komprimieren + speichern
-    cont.addEventListener('input', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      appendEmptyIfFull();
-    });
-    cont.addEventListener('change', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      compressAndRender();
-      scheduleSave();
-    });
     cont.addEventListener('keydown', (e) => {
       const el = e.target;
       if (!el.classList.contains('sj-input')) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        compressAndRender();
-        scheduleSave();
+        compressAndRenderKeepFocus();
+        scheduleSaveDebounced();
       }
+    });
+    cont.addEventListener('change', (e) => {
+      const el = e.target;
+      if (!el.classList.contains('sj-input')) return;
+      compressAndRenderKeepFocus();
+      scheduleSaveDebounced();
     });
     cont.addEventListener('blur', (e) => {
       const el = e.target;
       if (!el.classList.contains('sj-input')) return;
-      compressAndRender();
-      scheduleSave();
+      compressAndRenderKeepFocus();
+      scheduleSaveDebounced();
     }, true);
+
+    // Vor dem Verlassen der Seite sicher speichern
+    window.addEventListener('beforeunload', () => {
+      const items = normalize(readList());
+      navigator.sendBeacon?.('/api/klein/save-list', JSON.stringify({ standort: state.standort, items }));
+    });
+
+    // --------------- Drag & Drop ---------------
+    // Sidebar-Zeilen: draggable + Text mitgeben
+    cont.addEventListener('dragstart', (e) => {
+      const row = e.target.closest('.sj-row');
+      const inp = row?.querySelector('.sj-input');
+      if (!inp) return;
+      const text = (inp.value || '').trim();
+      if (!text) { e.preventDefault(); return; }
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', text);
+    });
+
+    // Ziel: Wochenzellen (TD / .wk-cell) droppable machen
+    function attachDropTargets() {
+      // Tabellenzellen (ohne Labelspalte)
+      qsa('tbody tr').forEach(tr => {
+        const cells = Array.from(tr.children);
+        cells.forEach((td, idx) => {
+          if (idx === 0) return; // Labelspalte überspringen
+          td.addEventListener('dragover', ev => { ev.preventDefault(); td.classList.add('drop-hover'); });
+          td.addEventListener('dragleave', () => td.classList.remove('drop-hover'));
+          td.addEventListener('drop', ev => {
+            ev.preventDefault(); td.classList.remove('drop-hover');
+            const text = ev.dataTransfer.getData('text/plain');
+            if (!text) return;
+            const input = td.querySelector('input, textarea');
+            if (input) {
+              input.value = text;
+              // Row/Day bestimmen und speichern
+              const trEl = td.closest('tr');
+              const cells2 = Array.from(trEl.children);
+              const dayIdx = cells2.indexOf(td) - 1;      // 0=Label
+              const rows = Array.from(trEl.parentElement.children);
+              const rowIdx = rows.indexOf(trEl);
+              postJSON('/api/week/set-cell', {
+                year: state.year, kw: state.kw, standort: state.standort,
+                row: rowIdx, day: dayIdx, value: text
+              }).then(res => {
+                if (!res.ok && !res.skipped) console.warn('[DnD set-cell] fehlgeschlagen', res);
+              });
+            }
+          });
+        });
+      });
+
+      // Grid (.wk-cell) – 0=Label, 1..5=Mo..Fr
+      qsa('.wk-grid').forEach(grid => {
+        const cells = qsa('.wk-cell', grid);
+        const cols = 6;
+        cells.forEach((cell, idx) => {
+          const c = idx % cols;
+          if (c === 0) return; // Labelspalte überspringen
+          cell.addEventListener('dragover', ev => { ev.preventDefault(); cell.classList.add('drop-hover'); });
+          cell.addEventListener('dragleave', () => cell.classList.remove('drop-hover'));
+          cell.addEventListener('drop', ev => {
+            ev.preventDefault(); cell.classList.remove('drop-hover');
+            const text = ev.dataTransfer.getData('text/plain');
+            if (!text) return;
+            const input = cell.querySelector('input, textarea');
+            if (input) {
+              input.value = text;
+              const all = qsa('.wk-cell', grid);
+              const idx2 = all.indexOf(cell);
+              const rowIdx = Math.floor(idx2 / cols);
+              const dayIdx = (idx2 % cols) - 1;
+              postJSON('/api/week/set-cell', {
+                year: state.year, kw: state.kw, standort: state.standort,
+                row: rowIdx, day: dayIdx, value: text
+              }).then(res => {
+                if (!res.ok && !res.skipped) console.warn('[DnD set-cell] fehlgeschlagen', res);
+              });
+            }
+          });
+        });
+      });
+    }
+    // beim Laden einmal aktivieren
+    attachDropTargets();
   }
 
-  // 4‑Tage‑Toggle (API + UI)
+  // 4‑Tage‑Toggle
   async function setFourDay(value) {
     const res = await postJSON('/api/week/set-four-day', {
       standort: state.standort, kw: state.kw, year: state.year, value: !!value
@@ -298,7 +388,6 @@
   if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
   if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
 
-  // Debug
   window.__zankl_dbg = { ...state };
   console.log('[app.js] state', window.__zankl_dbg);
 })();
