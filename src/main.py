@@ -230,6 +230,47 @@ async def klein_set(
 
 # --- API: Zelle im Wochenplan setzen (mit Standort-Fallback) -------------------
 @app.post("/api/week/set-cell")
+
+@app.post("/api/week/set-four-day")
+async def set_four_day(data: dict = Body(...)):
+    """
+    Setzt four_day_week (0/1) für den aktuellen Plan (year, kw, standort).
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        year = int(data.get("year"))
+        kw = int(data.get("kw"))
+        standort = data.get("standort") or "engelbrechts"
+        value = 1 if bool(data.get("value")) else 0
+
+        # Sicherstellen, dass der Plan existiert
+        cur.execute(
+            "SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?",
+            (year, kw, standort),
+        )
+        row = cur.fetchone()
+        if not row:
+            # Falls kein Plan → anlegen (wie in week()) und dann setzen
+            cur.execute(
+                "INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)",
+                (year, kw, standort, 5, value),
+            )
+            conn.commit()
+        else:
+            cur.execute(
+                "UPDATE week_plans SET four_day_week=? WHERE year=? AND kw=? AND standort=?",
+                (value, year, kw, standort),
+            )
+            conn.commit()
+
+        return {"ok": True, "four_day_week": bool(value)}
+    except Exception:
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+    finally:
+        conn.close()
+``
+
 async def set_cell(
     request: Request,
     data: dict = Body(...),
