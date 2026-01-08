@@ -184,19 +184,28 @@ td.disabled-day input.cell {
   </div>
 
   <!-- Kleinbaustellen -->
-  <aside class="side">
-    <header>Kleinbaustellen</header>
-    <div class="list" id="smallJobsList">
-      {% for sj in small_jobs %}
-        <div class="row" data-row="{{ sj.row_index }}">
-          <input class="job" type="text" draggable="true"
-                 value="{{ sj.text }}"
-                 data-row="{{ sj.row_index }}">
-        </div>
-      {% endfor %}
-    </div>
-  </aside>
-</div>
+ 
+<aside class="wk-sidebar" id="wk-smalljobs">
+  <h3>Kleinbaustellen</h3>
+  <div id="sj-list">
+    {% for s in small_jobs %}
+      <div class="sj-row">
+        <input type="text"
+               class="sj-input"
+               data-row-index="{{ loop.index0 }}"
+               value="{{ s.text or '' }}"
+               placeholder="Kleinbaustelle…">
+      </div>
+    {% endfor %}
+    {% if (small_jobs|length) == 0 %}
+      <div class="sj-row">
+        <input type="text" class="sj-input" data-row-index="0" value="" placeholder="Kleinbaustelle…">
+      </div>
+    {% endif %}
+  </div>
+</aside>
+``
+
 {% endblock %}
 
 {% block scripts %}
