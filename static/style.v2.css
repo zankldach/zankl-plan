@@ -13,3 +13,15 @@ nav.site { display: flex !important; visibility: visible !important; opacity: 1 
   color: #555 !important;
   pointer-events: none !important; /* keine Eingabe möglich */
 }
+
+/* Sidebar Kleinbaustellen */
+#wk-smalljobs, #sj-list { max-height: 60vh; overflow-y: auto; }
+.sj-row { margin-bottom: 6px; }
+.sj-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+``
