@@ -1,10 +1,12 @@
 
-// static/app.js — Austausch 2026-01-08 (Kleinbaustellen fix)
+// static/app.js — Austausch 2026-01-08 (Kleinbaustellen: inkrementelles Editieren)
 (function () {
   'use strict';
   console.log('[app.js] boot ✔');
 
-  // ------------------ Helpers ------------------
+  // =========================
+  // Helpers
+  // =========================
   const qs  = (sel, root = document) => root.querySelector(sel);
   const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -30,7 +32,9 @@
     }
   }
 
-  // ------------------ State ------------------
+  // =========================
+  // State (URL + DOM)
+  // =========================
   const state = {
     standort: getParam('standort', 'engelbrechts'),
     kw: toInt(getParam('kw', '1'), 1),
@@ -38,20 +42,13 @@
     fourDay: false, // init unten
   };
 
-  // ------------------ UI-Elemente (tolerant) ------------------
+  // =========================
+  // UI-Elemente (tolerant)
+  // =========================
   const ui = {
-    standort:
-      qs('#wk-standort') ||
-      qs('#standortSelect') ||
-      qs('select[name="standort"]'),
-    kw:
-      qs('#wk-kw') ||
-      qs('#kwSelect') ||
-      qs('input[name="kw"], select[name="kw"]'),
-    year:
-      qs('#wk-year') ||
-      qs('#yearSelect') ||
-      qs('input[name="year"], select[name="year"]'),
+    standort: qs('#wk-standort') || qs('#standortSelect') || qs('select[name="standort"]'),
+    kw:       qs('#wk-kw')       || qs('#kwSelect')       || qs('input[name="kw"], select[name="kw"]'),
+    year:     qs('#wk-year')     || qs('#yearSelect')     || qs('input[name="year"], select[name="year"]'),
     fourDayToggle: (function findFourDayToggle(){
       return (
         qs('#fourDayToggle') ||
@@ -71,15 +68,30 @@
         })()
       );
     })(),
-    // Sidebar-Container: best effort
     sjContainer: qs('#sj-list') || qs('#wk-smalljobs') || qs('.wk-sidebar'),
   };
 
-  // ------------------ Eingaben freischalten (Safety) ------------------
+  // =========================
+  // Eingaben zwangsweise freischalten
+  // =========================
   qsa('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
   qsa('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
+  // Sidebar Inputs klassifizieren
+  function ensureSidebarEditable() {
+    const cont = ui.sjContainer || document;
+    const inputs = qsa('.wk-sidebar input, .wk-sidebar textarea, #sj-list input, #sj-list textarea, #wk-smalljobs input, #wk-smalljobs textarea', cont);
+    inputs.forEach((inp, idx) => {
+      inp.removeAttribute('disabled');
+      inp.removeAttribute('readonly');
+      inp.style.pointerEvents = 'auto';
+      inp.classList.add('sj-input');
+      if (!inp.dataset.rowIndex) inp.dataset.rowIndex = String(idx);
+    });
+  }
 
-  // ------------------ Freitag sperren/entsperren ------------------
+  // =========================
+  // 4‑Tage‑Woche (Freitag sperren/entsperren)
+  // =========================
   function applyFridayDisabled(disabled) {
     // Tabellenkopf + Zeilen
     qsa('table').forEach(tbl => {
@@ -140,7 +152,9 @@
   }
   applyFridayDisabled(state.fourDay);
 
-  // ------------------ Zellen speichern (Wochenraster) ------------------
+  // =========================
+  // Zellen speichern (Wochenraster)
+  // =========================
   function findRowDayFromDOM(el) {
     const r = el.dataset?.row, d = el.dataset?.day;
     if (r != null && d != null) {
@@ -162,7 +176,7 @@
       const cols = 6;
       const rIdx = Math.floor(idx / cols);
       const cIdx = idx % cols;
-      const dayIdx = cIdx - 1; // 0=Label → Mo=0..Fr=4
+      const dayIdx = cIdx - 1; // 0=Label → Mo..Fr
       if (dayIdx >= 0) return { rowIdx: rIdx, dayIdx };
     }
     return { rowIdx: null, dayIdx: null };
@@ -171,7 +185,7 @@
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (!(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
-    if (el.closest('.wk-sidebar')) return; // Sidebar hat eigenen Flow
+    if (el.classList.contains('sj-input') || el.closest('.wk-sidebar')) return; // Sidebar separater Flow
     const { rowIdx, dayIdx } = findRowDayFromDOM(el);
     if (rowIdx == null || dayIdx == null) return;
     if (state.fourDay && dayIdx === 4) return;
@@ -179,156 +193,4 @@
       year: state.year, kw: state.kw, standort: state.standort,
       row: rowIdx, day: dayIdx, value: el.value || ''
     }).then(res => {
-      if (!res.ok && !res.skipped) console.warn('[set-cell] speichern fehlgeschlagen', res);
-    });
-  });
-
-  // ------------------ Kleinbaustellen Manager ------------------
-  // Ziel: Felder immer editierbar; gefüllte nach oben; 1 leeres unten; Scroll bei vielen.
-
-  // 1) Sidebar-Felder zwangsweise aktivieren + klassifizieren
-  function ensureSidebarEditable() {
-    const container = ui.sjContainer || document;
-    const inputs = qsa('.wk-sidebar input, .wk-sidebar textarea, #sj-list input, #sj-list textarea, #wk-smalljobs input, #wk-smalljobs textarea', container);
-    inputs.forEach((inp, idx) => {
-      // entsperren
-      inp.removeAttribute('disabled');
-      inp.removeAttribute('readonly');
-      inp.style.pointerEvents = 'auto';
-      // klassifizieren
-      if (!inp.classList.contains('sj-input')) inp.classList.add('sj-input');
-      if (!inp.dataset.rowIndex) inp.dataset.rowIndex = String(idx);
-    });
-  }
-  ensureSidebarEditable();
-
-  // 2) Liste lesen/normalisieren/rendern/speichern
-  const SJ_MAX = 200;
-  let sjSaveTimer = null;
-
-  function readSmallJobsFromDOM() {
-    const container = ui.sjContainer || document;
-    const inputs = qsa('.sj-input', container);
-    return inputs.map(i => (i.value || '').trim());
-  }
-  function normalizeSmallJobs(items) {
-    const filled = items.filter(t => t.length > 0);
-    const out = filled.slice(0, SJ_MAX);
-    out.push(''); // 1 leeres unten
-    return out;
-  }
-  function renderSmallJobs(items, keepFocus) {
-    const cont = ui.sjContainer || qs('#sj-list') || qs('.wk-sidebar');
-    if (!cont) return;
-
-    // Inneres List-Element (id= sj-list) sicherstellen
-    let list = qs('#sj-list', cont);
-    if (!list) {
-      list = document.createElement('div');
-      list.id = 'sj-list';
-      cont.appendChild(list);
-    }
-
-    // Fokus merken
-    let focusIdx = -1, caret = null;
-    if (keepFocus && document.activeElement && document.activeElement.classList.contains('sj-input')) {
-      const curr = document.activeElement;
-      const itemsDOM = qsa('.sj-input', list);
-      focusIdx = itemsDOM.indexOf(curr);
-      try { caret = { s: curr.selectionStart, e: curr.selectionEnd }; } catch (_) {}
-    }
-
-    list.innerHTML = '';
-    items.forEach((text, idx) => {
-      const row = document.createElement('div');
-      row.className = 'sj-row';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'sj-input';
-      input.dataset.rowIndex = String(idx);
-      input.value = text;
-      input.placeholder = 'Kleinbaustelle…';
-      row.appendChild(input);
-      list.appendChild(row);
-    });
-
-    // Fokus wiederherstellen
-    if (keepFocus && focusIdx >= 0) {
-      const newInputs = qsa('.sj-input', list);
-      const target = newInputs[focusIdx] || newInputs[newInputs.length - 1];
-      if (target) {
-        target.focus();
-        if (caret && typeof caret.s === 'number') {
-          try { target.setSelectionRange(caret.s, caret.e ?? caret.s); } catch (_) {}
-        }
-      }
-    }
-  }
-  function scheduleSaveSmallJobs(items) {
-    if (sjSaveTimer) clearTimeout(sjSaveTimer);
-    sjSaveTimer = setTimeout(() => {
-      postJSON('/api/klein/save-list', { standort: state.standort, items })
-        .then(res => { if (!res.ok) console.warn('[klein/save-list] fehlgeschlagen', res); });
-    }, 200);
-  }
-  function recomputeSmallJobsAndRender(fromDOM = true) {
-    const current = fromDOM ? readSmallJobsFromDOM() : (window.__smallJobs || []);
-    const normalized = normalizeSmallJobs(current);
-    renderSmallJobs(normalized, true);
-    scheduleSaveSmallJobs(normalized);
-  }
-
-  // Initialer Durchlauf
-  recomputeSmallJobsAndRender(true);
-
-  // Live-Events der Sidebar
-  document.addEventListener('input', (e) => {
-    const el = e.target;
-    if (!el.classList.contains('sj-input')) return;
-    recomputeSmallJobsAndRender(true);
-  });
-  document.addEventListener('change', (e) => {
-    const el = e.target;
-    if (!el.classList.contains('sj-input')) return;
-    recomputeSmallJobsAndRender(true);
-  });
-  document.addEventListener('keydown', (e) => {
-    const el = e.target;
-    if (!el.classList.contains('sj-input')) return;
-    if (e.key === 'Enter') { e.preventDefault(); recomputeSmallJobsAndRender(true); }
-  });
-
-  // ------------------ 4‑Tage‑Toggle (API + UI) ------------------
-  async function setFourDay(value) {
-    const res = await postJSON('/api/week/set-four-day', {
-      standort: state.standort, kw: state.kw, year: state.year, value: !!value
-    });
-    if (!res.ok) { console.warn('[set-four-day] fehlgeschlagen', res); return false; }
-    state.fourDay = !!res.four_day_week;
-    applyFridayDisabled(state.fourDay);
-    return true;
-  }
-  if (ui.fourDayToggle) {
-    ui.fourDayToggle.addEventListener('change', async (e) => {
-      const desired = !!e.target.checked;
-      const ok = await setFourDay(desired);
-      if (!ok) e.target.checked = !desired;
-    });
-  }
-
-  // ------------------ Navigation ------------------
-  function navigate(newStandort, newKw, newYear) {
-    const params = new URLSearchParams(location.search);
-    params.set('standort', newStandort ?? state.standort);
-    params.set('kw', String(newKw ?? state.kw));
-    params.set('year', String(newYear ?? state.year));
-    location.href = '/week?' + params.toString();
-  }
-  if (ui.standort) ui.standort.addEventListener('change', e => navigate(e.target.value, null, null));
-  if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
-  if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
-
-  // Debug
-  window.__zankl_dbg = { ...state };
-  console.log('[app.js] state', window.__zankl_dbg);
-})();
+      if (!res.ok && !res.skipped
