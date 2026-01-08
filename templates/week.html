@@ -262,11 +262,13 @@ function applyFourDayWeekUI(flag){
         if (!res.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', await res.text());
       }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
     }
-    fourChk.addEventListener('change', async ()=>{
-      const flag = fourChk.checked;
-      applyFourDayWeekUI(flag);
-      await setFourDayWeek(flag);
-    });
+fourChk.addEventListener('change', async ()=>{
+  const flag = fourChk.checked;
+  applyFourDayWeekUI(flag);  // UI sofort anpassen
+  applyColors();             // Farben erneut prüfen
+  await setFourDayWeek(flag); // Backend speichern
+});
+
     applyFourDayWeekUI(FOUR_DAY_WEEK);
 
     /* ---------- Farben ---------- */
