@@ -1,6 +1,21 @@
 
 {% extends "base.html" %}
-{% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{
+{% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
+
+{% block head %}
+<style>
+  /* Layout: Wochenplan links, Kleinbaustellen rechts */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 12px;
+    align-items: start;
+  }
+  /* … dein weiterer Kopf-CSS … */
+</style>
+{% endblock %}
+
+{% block content %}
 
 <style>
   /* Layout: Wochenplan links, Kleinbaustellen rechts */
@@ -88,9 +103,6 @@
   .side .row input.job:focus { outline: 2px solid #7db3ff; }
   .job.selected { outline: 2px solid #94a3b8; background: #f1f5f9; } /* neutrale Markierung */
 </style>
-{% endblock %}
-
-{% block content %}
 <header class="page">
   <strong style="font-size:18px;">Zankl Dach – Wochenplanung</strong>
 </header>
