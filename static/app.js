@@ -1,5 +1,5 @@
 
-// static/app.js — Austausch 2026-01-08 (Small Jobs fix + DnD + Persistenz)
+// static/app.js — Austausch 2026-01-08 (Focus-Fix + Persistenz + DnD-Handle)
 (function () {
   'use strict';
   console.log('[app.js] boot ✔');
@@ -33,9 +33,9 @@
   // State
   const state = {
     standort: getParam('standort', 'engelbrechts'),
-    kw: toInt(getParam('kw', '1'), 1),
-    year: toInt(getParam('year', '2025'), 2025),
-    fourDay: false, // unten ermittelt
+    kw:       toInt(getParam('kw', '1'), 1),
+    year:     toInt(getParam('year', '2025'), 2025),
+    fourDay:  false, // unten ermittelt
   };
 
   // UI (tolerant)
@@ -64,7 +64,7 @@
     sjContainer: qs('#sj-list') || qs('#wk-smalljobs') || qs('.wk-sidebar'),
   };
 
-  // Eingaben freischalten
+  // Eingaben zwangsweise freischalten
   qsa('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
   qsa('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
 
@@ -162,7 +162,7 @@
     });
   });
 
-  // Kleinbaustellen – inkrementell + persistent
+  // ---------- Kleinbaustellen: inkrementell + persistent + kein Focus-Trap ----------
   const cont = ui.sjContainer || qs('#sj-list') || qs('.wk-sidebar');
   if (cont) {
     // vorhandene Inputs sicher editierbar
@@ -172,11 +172,11 @@
       inp.style.pointerEvents = 'auto';
       inp.classList.add('sj-input');
       if (!inp.dataset.rowIndex) inp.dataset.rowIndex = String(idx);
-      // kein sichtbarer Platzhaltertext
-      if (inp.placeholder) inp.placeholder = '';
+      if (inp.placeholder) inp.placeholder = ''; // keine sichtbaren Placeholder
     });
 
     const SJ_MAX = 200;
+
     function readList() {
       return qsa('.sj-input', cont).map(i => (i.value || '').trim());
     }
@@ -187,7 +187,7 @@
       return out;
     }
 
-    // Speichern (debounced) – bei Eingabe, damit Wechsel die Daten nicht verliert
+    // Persistenz beim Tippen (debounced) – kein Neuaufbau → kein Focus-Verlust
     let sjSaveTimer = null;
     function scheduleSaveDebounced() {
       if (sjSaveTimer) clearTimeout(sjSaveTimer);
@@ -202,33 +202,44 @@
       }, 250);
     }
 
-    // Beim Eingeben nur speichern (debounced) – KEIN Neuaufbau, KEIN Focus-Verlust
     cont.addEventListener('input', (e) => {
       const el = e.target;
       if (!el.classList.contains('sj-input')) return;
       scheduleSaveDebounced();
     });
 
-    // Bei Enter / Blur / Change: Liste komprimieren + **danach** speichern
-    function compressAndRenderKeepFocus() {
+    // Geplanter nächster Fokus (für Click-Wechsel)
+    let pendingFocusIndex = null;
+    cont.addEventListener('pointerdown', (e) => {
+      const targetInput = e.target.closest('.sj-input');
+      if (targetInput) {
+        pendingFocusIndex = parseInt(targetInput.dataset.rowIndex || '0', 10);
+      }
+    });
+    cont.addEventListener('focusin', (e) => {
+      const targetInput = e.target.closest('.sj-input');
+      if (targetInput) {
+        pendingFocusIndex = parseInt(targetInput.dataset.rowIndex || '0', 10);
+      }
+    });
+
+    // Zusammenrücken nur auf ENTER (nicht auf blur/change)
+    function compressAndRenderRespectNextFocus() {
       const items = normalize(readList());
       const listEl = qs('#sj-list', cont) || cont;
-
-      // Fokus & Caret merken
-      const active = document.activeElement;
-      let focusIdx = -1, caretS = null, caretE = null;
-      const currInputs = qsa('.sj-input', listEl);
-      if (active && active.classList.contains('sj-input')) {
-        focusIdx = currInputs.indexOf(active);
-        try { caretS = active.selectionStart; caretE = active.selectionEnd; } catch (_) {}
-      }
 
       // Neu aufbauen
       listEl.innerHTML = '';
       items.forEach((text, idx) => {
-        const row = document.createElement('div');
+        const row  = document.createElement('div');
         row.className = 'sj-row';
-        row.setAttribute('draggable', 'true');          // ← DnD
+        // Drag-Handle
+        const handle = document.createElement('span');
+        handle.className = 'sj-handle';
+        handle.textContent = '⋮⋮';
+        handle.title = 'Ziehen zum Einfügen ins Wochenplan';
+        row.appendChild(handle);
+        // Input
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'sj-input';
@@ -236,18 +247,23 @@
         input.value = text;
         input.placeholder = '';
         row.appendChild(input);
+
         listEl.appendChild(row);
       });
 
-      // Fokus wiederherstellen (sofern sinnvoll)
-      const newInputs = qsa('.sj-input', listEl);
-      const target = newInputs[focusIdx] || newInputs[newInputs.length - 1];
-      if (target) {
-        target.focus();
-        if (caretS != null) {
-          try { target.setSelectionRange(caretS, caretE ?? caretS); } catch (_) {}
+      // Nächsten Fokus respektieren
+      if (pendingFocusIndex != null) {
+        const target = listEl.querySelector(`.sj-input[data-row-index="${pendingFocusIndex}"]`)
+                      || listEl.querySelector('.sj-input:last-of-type');
+        if (target) {
+          target.focus();
         }
       }
+      // Reset
+      pendingFocusIndex = null;
+
+      // Drag aktivieren (nur am Handle)
+      enableSidebarDnD();
     }
 
     cont.addEventListener('keydown', (e) => {
@@ -255,22 +271,10 @@
       if (!el.classList.contains('sj-input')) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        compressAndRenderKeepFocus();
+        compressAndRenderRespectNextFocus();
         scheduleSaveDebounced();
       }
     });
-    cont.addEventListener('change', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      compressAndRenderKeepFocus();
-      scheduleSaveDebounced();
-    });
-    cont.addEventListener('blur', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      compressAndRenderKeepFocus();
-      scheduleSaveDebounced();
-    }, true);
 
     // Vor dem Verlassen der Seite sicher speichern
     window.addEventListener('beforeunload', () => {
@@ -278,19 +282,28 @@
       navigator.sendBeacon?.('/api/klein/save-list', JSON.stringify({ standort: state.standort, items }));
     });
 
-    // --------------- Drag & Drop ---------------
-    // Sidebar-Zeilen: draggable + Text mitgeben
-    cont.addEventListener('dragstart', (e) => {
-      const row = e.target.closest('.sj-row');
-      const inp = row?.querySelector('.sj-input');
-      if (!inp) return;
-      const text = (inp.value || '').trim();
-      if (!text) { e.preventDefault(); return; }
-      e.dataTransfer.effectAllowed = 'copy';
-      e.dataTransfer.setData('text/plain', text);
-    });
+    // ---------- Drag & Drop mit Handle ----------
+    function enableSidebarDnD() {
+      // DragStart vom Handle: Text aus der zugehörigen Zeile übertragen
+      qsa('.sj-row', cont).forEach(row => {
+        const handle = row.querySelector('.sj-handle');
+        const inp    = row.querySelector('.sj-input');
+        if (!handle || !inp) return;
 
-    // Ziel: Wochenzellen (TD / .wk-cell) droppable machen
+        handle.setAttribute('draggable', 'true');
+
+        handle.addEventListener('dragstart', (e) => {
+          const text = (inp.value || '').trim();
+          if (!text) { e.preventDefault(); return; }
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('text/plain', text);
+        });
+      });
+
+      // Ziel: Wochenzellen (TD / .wk-cell) droppable machen
+      attachDropTargets();
+    }
+
     function attachDropTargets() {
       // Tabellenzellen (ohne Labelspalte)
       qsa('tbody tr').forEach(tr => {
@@ -354,8 +367,9 @@
         });
       });
     }
-    // beim Laden einmal aktivieren
-    attachDropTargets();
+
+    // Beim ersten Laden die Drop-Ziele aktivieren
+    enableSidebarDnD();
   }
 
   // 4‑Tage‑Toggle
@@ -380,14 +394,15 @@
   function navigate(newStandort, newKw, newYear) {
     const params = new URLSearchParams(location.search);
     params.set('standort', newStandort ?? state.standort);
-    params.set('kw', String(newKw ?? state.kw));
-    params.set('year', String(newYear ?? state.year));
+    params.set('kw',      String(newKw   ?? state.kw));
+    params.set('year',    String(newYear ?? state.year));
     location.href = '/week?' + params.toString();
   }
   if (ui.standort) ui.standort.addEventListener('change', e => navigate(e.target.value, null, null));
   if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
   if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
 
+  // Debug
   window.__zankl_dbg = { ...state };
   console.log('[app.js] state', window.__zankl_dbg);
 })();
