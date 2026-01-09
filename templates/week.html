@@ -384,27 +384,59 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(e){ console.warn('Netz-/Serverfehler (klein):', e); }
     }
 
-    function bindJobInput(input){
-      input.addEventListener('dragstart',e=>{
-        e.dataTransfer.setData('text/plain',JSON.stringify({source:'klein',value:input.value}));
-        e.dataTransfer.dropEffect='copy';
-        input.classList.add('dragging');
-      });
-      input.addEventListener('dragend',()=> input.classList.remove('dragging'));
 
-      input.addEventListener('dblclick',()=>{
-        document.querySelectorAll('.job').forEach(el=>el.classList.remove('selected'));
-        input.classList.add('selected');
-      });
+function bindJobInput(input){
+  const rowDiv = input.closest('.row');
+  let handle = rowDiv.querySelector('.drag-handle');
+  if (!handle) {
+    handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮⋮';
+    handle.title = 'Ziehen in Wochenzelle';
+    handle.setAttribute('draggable', 'true');
+    rowDiv.insertBefore(handle, input);
+  }
 
-      input.addEventListener('keydown',async ev=>{
-        if (ev.key === 'Delete'){
-          ev.preventDefault();
-          input.value = "";
-          input.classList.remove('selected');
-          await saveSmallJob(input.dataset.row, "");
-          ensureTrailingEmptyJob();
-        }
+  // NUR der Handle ist draggable (Input NICHT)
+  // (Falls irgendwo zuvor inp.setAttribute('draggable','true') gesetzt wurde: bitte entfernen!)
+  handle.addEventListener('dragstart', e => {
+    const value = (input.value || '').trim();
+    if (!value) { e.preventDefault(); return; }
+    e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
+    e.dataTransfer.dropEffect = 'copy';
+    input.classList.add('dragging');
+  });
+  handle.addEventListener('dragend', () => input.classList.remove('dragging'));
+
+  // Auswahlstil per Doppelklick (optional)
+  input.addEventListener('dblclick', () => {
+    document.querySelectorAll('.job').forEach(el => el.classList.remove('selected'));
+    input.classList.add('selected');
+  });
+
+  // Löschen mit Entf
+  input.addEventListener('keydown', async ev => {
+    if (ev.key === 'Delete'){
+      ev.preventDefault();
+      input.value = '';
+      input.classList.remove('selected');
+      await saveSmallJob(input.dataset.row, '');
+      ensureTrailingEmptyJob();
+    }
+  });
+
+  // Beim Tippen: unten immer eine leere Zeile sicherstellen
+  input.addEventListener('input', () => {
+    ensureTrailingEmptyJob();
+  });
+
+  // Speichern beim Verlassen des Feldes
+  input.addEventListener('blur', async () => {
+    await saveSmallJob(input.dataset.row, input.value);
+    ensureTrailingEmptyJob();
+  });
+}
+
       });
 
       input.addEventListener('input', ()=> {
