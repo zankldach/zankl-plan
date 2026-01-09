@@ -1,4 +1,4 @@
-// static/app.js — STABIL 2026-01-08
+// static/app.js — FINAL STABIL 2026-01-08
 (function () {
   'use strict';
   console.log('[app.js] boot ✔');
@@ -43,7 +43,7 @@
       if (/fr/i.test(el.textContent||'')){
         el.classList.toggle('fri-disabled',disabled);
         const i=el.querySelector('input,textarea');
-        if(i){i.disabled=disabled;i.readOnly=disabled;}
+        if(i){ i.disabled=disabled; i.readOnly=disabled; }
       }
     });
   }
@@ -91,8 +91,11 @@
     if(day<0 || (state.fourDay && day===4))return;
 
     postJSON('/api/week/set-cell',{
-      standort:state.standort,kw:state.kw,year:state.year,
-      row,day,value:el.value||''
+      standort:state.standort,
+      kw:state.kw,
+      year:state.year,
+      row,day,
+      value:String(el.value||'')
     });
   });
 
@@ -101,35 +104,41 @@
   if(!cont)return;
 
   const SJ_MAX=200;
+  let smallJobState = [];
 
-  function read(){
-    return qsa('.sj-input',cont).map(i=>i.value.trim());
-  }
-  function normalize(list){
-    const f=list.filter(t=>t);
-    f.slice(0,SJ_MAX);
-    f.push('');
-    return f;
+  function normalizeState(){
+    smallJobState = smallJobState
+      .map(t => (t||'').trim())
+      .filter(t => t.length > 0)
+      .slice(0, SJ_MAX);
+    smallJobState.push('');
   }
 
-  function render(list){
+  function render(){
     cont.innerHTML='';
-    list.forEach((t,i)=>{
-      const r=document.createElement('div');
-      r.className='sj-row';
+    smallJobState.forEach((text,idx)=>{
+      const row=document.createElement('div');
+      row.className='sj-row';
 
-      const h=document.createElement('span');
-      h.className='sj-handle';
-      h.textContent='⋮⋮';
-      h.draggable=true;
+      const handle=document.createElement('span');
+      handle.className='sj-handle';
+      handle.textContent='⋮⋮';
+      handle.draggable=true;
 
       const inp=document.createElement('input');
       inp.className='sj-input';
-      inp.value=t;
-      inp.dataset.idx=i;
+      inp.value=text;
+      inp.dataset.idx=idx;
 
-      r.append(h,inp);
-      cont.appendChild(r);
+      inp.addEventListener('input',()=>{
+        smallJobState[idx]=inp.value;
+        normalizeState();
+        render();
+        scheduleSave();
+      });
+
+      row.append(handle,inp);
+      cont.appendChild(row);
     });
     enableDnD();
   }
@@ -140,36 +149,24 @@
     saveTimer=setTimeout(()=>{
       postJSON('/api/klein/save-list',{
         standort:state.standort,
-        items:normalize(read())
+        items:smallJobState
       });
     },300);
   }
 
-  cont.addEventListener('input',e=>{
-    if(e.target.classList.contains('sj-input')){
-      const n=normalize(read());
-      if(n.length!==qsa('.sj-input',cont).length){
-        render(n);
-      }
-      scheduleSave();
-    }
-  });
-
-  cont.addEventListener('keydown',e=>{
-    if(e.key==='Enter'){
-      e.preventDefault();
-      render(normalize(read()));
-      scheduleSave();
-    }
-  });
+  // Initial State aus DOM übernehmen
+  smallJobState = qsa('.sj-input',cont).map(i=>i.value||'');
+  normalizeState();
+  render();
 
   /* ---------------- Drag & Drop ---------------- */
   function enableDnD(){
     qsa('.sj-handle',cont).forEach(h=>{
       h.addEventListener('dragstart',e=>{
         const t=h.nextSibling.value.trim();
-        if(!t){e.preventDefault();return;}
+        if(!t){ e.preventDefault(); return; }
         e.dataTransfer.setData('text/plain',t);
+        e.dataTransfer.effectAllowed='copy';
       });
     });
 
@@ -177,23 +174,47 @@
       cell.addEventListener('dragover',e=>e.preventDefault());
       cell.addEventListener('drop',e=>{
         e.preventDefault();
-        const text=e.dataTransfer.getData('text/plain');
-        const i=cell.querySelector('input,textarea');
-        if(i){
-          i.value=text;
-          i.dispatchEvent(new Event('input',{bubbles:true}));
+        const text = String(e.dataTransfer.getData('text/plain')||'');
+        if(!text) return;
+
+        const inp=cell.querySelector('input,textarea');
+        if(!inp) return;
+
+        inp.value=text;
+
+        // Zielposition bestimmen
+        const tr=cell.closest('tr');
+        let row,day;
+
+        if(tr){
+          row=[...tr.parentElement.children].indexOf(tr);
+          day=[...tr.children].indexOf(cell)-1;
+        }else{
+          const grid=cell.closest('.wk-grid');
+          const cells=qsa('.wk-cell',grid);
+          const idx=cells.indexOf(cell);
+          row=Math.floor(idx/6);
+          day=(idx%6)-1;
         }
+
+        if(day<0 || (state.fourDay && day===4)) return;
+
+        postJSON('/api/week/set-cell',{
+          standort:state.standort,
+          kw:state.kw,
+          year:state.year,
+          row,day,
+          value:text
+        });
       });
     });
   }
-
-  enableDnD();
 
   /* ---------------- Navigation ---------------- */
   async function navigate(params){
     await postJSON('/api/klein/save-list',{
       standort:state.standort,
-      items:normalize(read())
+      items:smallJobState
     });
     location.href='/week?'+new URLSearchParams(params).toString();
   }
