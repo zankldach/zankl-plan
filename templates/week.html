@@ -22,7 +22,7 @@
 
   /* Wochenplan Tabelle */
   .plan-wrap { margin-top: 0; }
-  table.planner, table.week-grid, #weekTable {
+  #weekTable {
     width: 100%;
     border-collapse: separate; border-spacing: 0; table-layout: fixed;
     background: #fff; border: 1px solid #d9dee5; border-radius: 8px; overflow: hidden;
@@ -169,8 +169,6 @@
     </div>
   </div>
 </div>
-
-<!-- Kein static/app.js hier, wir nutzen den Inline-Code unten -->
 {% endblock %}
 
 {% block scripts %}
@@ -607,4 +605,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
-``
