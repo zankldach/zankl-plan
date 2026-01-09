@@ -1,447 +1,379 @@
 
-// static/app.js — Austausch 2026-01-08 (Focus-Fix + Persistenz + DnD-Handle)
+<!-- Pfad: static/app.js -->
+<script>
+/**
+ * Zankl Plan – Frontend Logik (Kleinbaustellen + Drag&Drop + Save Hooks)
+ * Austauschdatei Stand: 08.01.2026
+ *
+ * Features:
+ * - Kleinbaustellen: Debounced Save beim Tippen + synchrones Save vor Navigation (keepalive/sendBeacon)
+ * - Immer eine freie Zeile unten (auto-append)
+ * - Entfernt Vorbesetzung "Kleinbaustelle..."
+ * - Drag & Drop: von Kleinbaustellen in Wochenzellen (Grid) inkl. sofortigem Speichern
+ *
+ * Hinweise zur DOM-Struktur (flexible Fallbacks):
+ * - Container der Kleinbaustellenliste: #klein-list ODER [data-section="klein"] ODER .kleinbaustellen
+ * - Inputs in der Kleinliste: <input> oder <textarea> (egal); wir nehmen alles innerhalb des Containers
+ * - Wochenzellen: Elemente mit data-row-index und data-day-index (empfohlen), andernfalls Fallback über Name-Muster
+ * - Standort/KW/Jahr: aus Selects (#standort, #kw, #year) oder URL-Query
+ */
+
 (function () {
-  'use strict';
-  console.log('[app.js] boot ✔');
-
-  // Helpers
-  const qs  = (sel, root = document) => root.querySelector(sel);
-  const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-  function getParam(name, def) {
-    const v = new URLSearchParams(location.search).get(name);
-    return v !== null ? v : def;
+  // ---------------------------
+  // Hilfsfunktionen / Kontext
+  // ---------------------------
+  function qs(selector) {
+    return document.querySelector(selector);
   }
-  function toInt(v, def) {
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) ? n : def;
-  }
-  async function postJSON(url, data) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return await res.json();
-    } catch (e) {
-      console.error('POST fail', url, e);
-      return { ok: false, error: String(e) };
-    }
+  function qsa(selector) {
+    return Array.from(document.querySelectorAll(selector));
   }
 
-  // State
-  const state = {
-    standort: getParam('standort', 'engelbrechts'),
-    kw:       toInt(getParam('kw', '1'), 1),
-    year:     toInt(getParam('year', '2025'), 2025),
-    fourDay:  false, // unten ermittelt
-  };
+  function getCtx() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const standort =
+      (qs('#standort') && qs('#standort').value) ||
+      (qs('select[name="standort"]') && qs('select[name="standort"]').value) ||
+      urlParams.get('standort') ||
+      '';
+    const kw =
+      parseInt(
+        (qs('#kw') && qs('#kw').value) ||
+          (qs('select[name="kw"]') && qs('select[name="kw"]').value) ||
+          urlParams.get('kw') ||
+          '0',
+        10
+      ) || 0;
+    const year =
+      parseInt(
+        (qs('#year') && qs('#year').value) ||
+          (qs('select[name="year"]') && qs('select[name="year"]').value) ||
+          urlParams.get('year') ||
+          (new Date()).getFullYear().toString(),
+        10
+      ) || (new Date()).getFullYear();
 
-  // UI (tolerant)
-  const ui = {
-    standort: qs('#wk-standort') || qs('#standortSelect') || qs('select[name="standort"]'),
-    kw:       qs('#wk-kw')       || qs('#kwSelect')       || qs('input[name="kw"], select[name="kw"]'),
-    year:     qs('#wk-year')     || qs('#yearSelect')     || qs('input[name="year"], select[name="year"]'),
-    fourDayToggle: (function findFourDayToggle(){
-      return (
-        qs('#fourDayToggle') ||
-        qs('#four_day_week') ||
-        qs('input[type="checkbox"][name="four_day_week"]') ||
-        (function () {
-          for (const chk of qsa('input[type="checkbox"]')) {
-            const labFor = chk.id ? qs(`label[for="${chk.id}"]`) : null;
-            const text =
-              (labFor?.textContent || '') +
-              (chk.closest('label')?.textContent || '') +
-              (chk.parentElement?.textContent || '');
-            if (/4.?tage/i.test(text)) return chk;
-          }
-          return null;
-        })()
-      );
-    })(),
-    sjContainer: qs('#sj-list') || qs('#wk-smalljobs') || qs('.wk-sidebar'),
-  };
+    return { standort, kw, year };
+  }
 
-  // Eingaben zwangsweise freischalten
-  qsa('input[disabled], select[disabled], textarea[disabled]').forEach(el => el.removeAttribute('disabled'));
-  qsa('input[readonly], textarea[readonly]').forEach(el => el.removeAttribute('readonly'));
+  // ---------------------------
+  // Kleinbaustellen – DOM Hooks
+  // ---------------------------
+  const kleinListEl =
+    qs('#klein-list') ||
+    qs('[data-section="klein"]') ||
+    qs('.kleinbaustellen');
 
-  // 4‑Tage‑Woche: Freitag sperren/entsperren
-  function applyFridayDisabled(disabled) {
-    qsa('table').forEach(tbl => {
-      const headerRow = qs('thead tr', tbl) || tbl.rows?.[0] || null;
-      if (headerRow) {
-        const headers = Array.from(headerRow.children);
-        let friIdx = headers.findIndex(th => /freitag/i.test(th.textContent || ''));
-        if (friIdx < 0 && headers.length >= 6) friIdx = headers.length - 1;
-        if (friIdx >= 0 && headers[friIdx]) {
-          headers[friIdx].classList.toggle('is-disabled', disabled);
-          headers[friIdx].classList.toggle('fri-disabled', disabled);
-        }
-        qsa('tbody tr', tbl).forEach(tr => {
-          const tds = Array.from(tr.children);
-          const td = tds[friIdx < 0 ? tds.length - 1 : friIdx];
-          if (!td) return;
-          td.classList.toggle('is-disabled', disabled);
-          td.classList.toggle('fri-disabled', disabled);
-          const input = td.querySelector('input, textarea');
-          if (input) {
-            input.disabled = !!disabled;
-            input.readOnly = !!disabled;
-            if (disabled) input.blur();
-          }
-        });
+  function kleinInputs() {
+    if (!kleinListEl) return [];
+    // Alle Eingabefelder innerhalb der Kleinbaustellen-Liste
+    return Array.from(kleinListEl.querySelectorAll('input, textarea'));
+  }
+
+  // Entferne Vorbesetzung "Kleinbaustelle..."
+  function clearDefaultKleinTexts() {
+    kleinInputs().forEach((inp) => {
+      const v = (inp.value || '').trim();
+      if (/^kleinbaustelle/i.test(v)) {
+        inp.value = '';
       }
     });
-    qsa('.wk-grid').forEach(grid => {
-      const cells = qsa('.wk-cell', grid);
-      const cols = 6; // 0=Label, 1..5=Mo..Fr
-      cells.forEach((cell, idx) => {
-        const c = idx % cols;
-        if (c === 5) {
-          cell.classList.toggle('is-disabled', disabled);
-          cell.classList.toggle('fri-disabled', disabled);
-          const input = cell.querySelector('input, textarea');
-          if (input) {
-            input.disabled = !!disabled;
-            input.readOnly = !!disabled;
-            if (disabled) input.blur();
-          }
+  }
+
+  // Normalisierung: Nur gefüllte oben; immer EINE leere unten (DOM)
+  function ensureTrailingEmptyRow() {
+    if (!kleinListEl) return;
+    const inputs = kleinInputs();
+    const nonEmpty = inputs.filter((i) => (i.value || '').trim() !== '');
+    const last = inputs[inputs.length - 1];
+
+    // Falls es keine Inputs gibt (Template leer o.ä.), lege eins an
+    if (inputs.length === 0) {
+      appendKleinRow('');
+      return;
+    }
+
+    // Wenn der letzte nicht leer ist, hänge eine freie Zeile an
+    if (last && (last.value || '').trim() !== '') {
+      appendKleinRow('');
+    }
+
+    // Optional: Entferne überzählige leere Zeilen (lasse nur eine leere am Ende)
+    const empties = inputs.filter((i) => (i.value || '').trim() === '');
+    if (empties.length > 1) {
+      // Behalte nur die letzte leere; entferne die anderen
+      empties.slice(0, empties.length - 1).forEach((i) => {
+        // Nur entfernen, wenn kein Placeholder-Row aus Template
+        if (i.parentElement && kleinListEl.contains(i.parentElement)) {
+          i.parentElement.remove();
+        } else {
+          i.remove();
         }
       });
-    });
+    }
   }
-  if (ui.fourDayToggle) {
-    state.fourDay = !!ui.fourDayToggle.checked;
-  } else if (typeof window.__fourDay !== 'undefined') {
-    state.fourDay = !!window.__fourDay;
-  }
-  applyFridayDisabled(state.fourDay);
 
-  // Week-Zellen speichern
-  function findRowDayFromDOM(el) {
-    const r = el.dataset?.row, d = el.dataset?.day;
-    if (r != null && d != null) {
-      const rowIdx = parseInt(r, 10), dayIdx = parseInt(d, 10);
-      if (Number.isFinite(rowIdx) && Number.isFinite(dayIdx)) return { rowIdx, dayIdx };
-    }
-    const td = el.closest('td'); const tr = td?.closest('tr');
-    if (tr && td) {
-      const cells = Array.from(tr.children);
-      const dayIdx = cells.indexOf(td) - 1; // 1. Spalte Label
-      const rows = Array.from(tr.parentElement.children);
-      const rowIdx = rows.indexOf(tr);
-      if (dayIdx >= 0) return { rowIdx, dayIdx };
-    }
-    const cell = el.closest('.wk-cell'); const grid = cell?.closest('.wk-grid');
-    if (grid && cell) {
-      const all = qsa('.wk-cell', grid);
-      const idx = all.indexOf(cell);
-      const cols = 6;
-      const rIdx = Math.floor(idx / cols);
-      const cIdx = idx % cols;
-      const dayIdx = cIdx - 1; // 0=Label → Mo..Fr
-      if (dayIdx >= 0) return { rowIdx: rIdx, dayIdx };
-    }
-    return { rowIdx: null, dayIdx: null };
-  }
-  document.addEventListener('input', (e) => {
-    const el = e.target;
-    if (!(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
-    if (el.classList.contains('sj-input') || el.closest('.wk-sidebar')) return; // Sidebar separat
-    const { rowIdx, dayIdx } = findRowDayFromDOM(el);
-    if (rowIdx == null || dayIdx == null) return;
-    if (state.fourDay && dayIdx === 4) return;
-    postJSON('/api/week/set-cell', {
-      year: state.year, kw: state.kw, standort: state.standort,
-      row: rowIdx, day: dayIdx, value: el.value || ''
-    }).then(res => {
-      if (!res.ok && !res.skipped) console.warn('[set-cell] speichern fehlgeschlagen', res);
+  // Eine neue Zeile in der Kleinliste anhängen (neutraler Stil)
+  function appendKleinRow(initialText = '') {
+    const row = document.createElement('div');
+    row.className = 'klein-row'; // optional, falls CSS vorhanden
+
+    // Drag-Handle (einfacher Text, funktioniert ohne CSS)
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮⋮';
+    handle.title = 'Ziehen zum Einfügen in Wochenraster';
+    handle.style.cursor = 'grab';
+    handle.draggable = true;
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'klein-input form-control'; // form-control für Bootstrap-artigen Stil
+    inp.placeholder = ''; // kein Vordruck
+    inp.value = initialText;
+
+    // Events
+    inp.addEventListener('input', () => {
+      scheduleSaveSmallJobs();
+      ensureTrailingEmptyRow();
     });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        // Enter: neue freie Zeile sicherstellen
+        ensureTrailingEmptyRow();
+        scheduleSaveSmallJobs();
+        e.preventDefault();
+      }
+    });
+    // Drag von der Zeile (Input oder Handle löst Drag aus)
+    [handle, inp].forEach((draggableEl) => {
+      draggableEl.addEventListener('dragstart', (ev) => {
+        const text = (inp.value || '').trim();
+        if (!text) {
+          ev.preventDefault();
+          return;
+        }
+        ev.dataTransfer.setData('text/plain', text);
+        // optional: kleiner visueller Marker
+        ev.dataTransfer.effectAllowed = 'copyMove';
+      });
+    });
+
+    row.appendChild(handle);
+    row.appendChild(inp);
+    kleinListEl.appendChild(row);
+  }
+
+  // ---------------------------
+  // Speichern der Kleinliste
+  // ---------------------------
+  let kleinSaveTimer = null;
+  let pendingBeacon = false;
+
+  function readKleinListNormalized() {
+    const inputs = kleinInputs();
+    const texts = inputs.map((i) => (i.value || '').trim());
+    // Filter: nur gefüllte behalten, eine leere unten
+    const filled = texts.filter((t) => t !== '');
+    // Normalisierte Liste: gefüllte oben; leere unten
+    return [...filled, ''];
+  }
+
+  async function saveSmallJobs({ keepalive = false } = {}) {
+    const ctx = getCtx();
+    if (!ctx.standort) {
+      // Ohne Standort keine Speicherung
+      return;
+    }
+    const normalized = readKleinListNormalized();
+    const payload = {
+      standort: ctx.standort,
+      items: normalized.map((text, idx) => ({ row_index: idx, text })),
+    };
+
+    try {
+      if (keepalive && navigator.sendBeacon) {
+        // Fallback via sendBeacon (synchron bei Navigation)
+        const blob = new Blob([JSON.stringify(payload)], {
+          type: 'application/json',
+        });
+        pendingBeacon = navigator.sendBeacon('/api/klein/save-list', blob);
+      } else {
+        await fetch('/api/klein/save-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          keepalive: keepalive, // für Chrome beim beforeunload
+        });
+      }
+    } catch (e) {
+      // Fehler bewusst leise, um Navigation nicht zu blockieren
+      console.warn('Fehler beim Speichern der Kleinliste:', e);
+    }
+  }
+
+  function scheduleSaveSmallJobs() {
+    // Debounce 350ms
+    if (kleinSaveTimer) clearTimeout(kleinSaveTimer);
+    kleinSaveTimer = setTimeout(() => saveSmallJobs({ keepalive: false }), 350);
+  }
+
+  // Vor Navigation / Reload: synchron speichern
+  window.addEventListener('beforeunload', () => {
+    // Versuche, synchron zu senden
+    saveSmallJobs({ keepalive: true });
   });
 
-  // ---------- Kleinbaustellen: inkrementell + persistent + kein Focus-Trap ----------
-  const cont = ui.sjContainer || qs('#sj-list') || qs('.wk-sidebar');
-  if (cont) {
-    // vorhandene Inputs sicher editierbar
-    qsa('input, textarea', cont).forEach((inp, idx) => {
-      inp.removeAttribute('disabled');
-      inp.removeAttribute('readonly');
-      inp.style.pointerEvents = 'auto';
-      inp.classList.add('sj-input');
-      if (!inp.dataset.rowIndex) inp.dataset.rowIndex = String(idx);
-      if (inp.placeholder) inp.placeholder = ''; // keine sichtbaren Placeholder
-    });
-
-    const SJ_MAX = 200;
-
-    function readList() {
-      return qsa('.sj-input', cont).map(i => (i.value || '').trim());
-    }
-    function normalize(items) {
-      const filled = items.filter(t => t.length > 0);
-      const out = filled.slice(0, SJ_MAX);
-      out.push(''); // genau eine leere unten
-      return out;
-    }
-
-    // Persistenz beim Tippen (debounced) – kein Neuaufbau → kein Focus-Verlust
-    let sjSaveTimer = null;
-    function scheduleSaveDebounced() {
-      if (sjSaveTimer) clearTimeout(sjSaveTimer);
-      const items = readList();
-      sjSaveTimer = setTimeout(() => {
-        postJSON('/api/klein/save-list', {
-          standort: state.standort,
-          items: normalize(items)
-        }).then(res => {
-          if (!res.ok) console.warn('[klein/save-list] fehlgeschlagen', res);
-        });
-      }, 250);
-    }
-
-    cont.addEventListener('input', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      scheduleSaveDebounced();
-    });
-
-    // Geplanter nächster Fokus (für Click-Wechsel)
-    let pendingFocusIndex = null;
-    cont.addEventListener('pointerdown', (e) => {
-      const targetInput = e.target.closest('.sj-input');
-      if (targetInput) {
-        pendingFocusIndex = parseInt(targetInput.dataset.rowIndex || '0', 10);
-      }
-    });
-    cont.addEventListener('focusin', (e) => {
-      const targetInput = e.target.closest('.sj-input');
-      if (targetInput) {
-        pendingFocusIndex = parseInt(targetInput.dataset.rowIndex || '0', 10);
-      }
-    });
-
-    // Zusammenrücken nur auf ENTER (nicht auf blur/change)
-    function compressAndRenderRespectNextFocus() {
-      const items = normalize(readList());
-      const listEl = qs('#sj-list', cont) || cont;
-
-      // Neu aufbauen
-      listEl.innerHTML = '';
-      items.forEach((text, idx) => {
-        const row  = document.createElement('div');
-        row.className = 'sj-row';
-        // Drag-Handle
-        const handle = document.createElement('span');
-        handle.className = 'sj-handle';
-        handle.textContent = '⋮⋮';
-        handle.title = 'Ziehen zum Einfügen ins Wochenplan';
-        row.appendChild(handle);
-        // Input
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'sj-input';
-        input.dataset.rowIndex = String(idx);
-        input.value = text;
-        input.placeholder = '';
-        row.appendChild(input);
-
-        listEl.appendChild(row);
+  // Zusätzlich: Wenn Standort/KW/Jahr geändert wird, sofort save + dann Navigation
+  ['#standort', '#kw', '#year', 'select[name="standort"]', 'select[name="kw"]', 'select[name="year"]'].forEach((sel) => {
+    const el = qs(sel);
+    if (el) {
+      el.addEventListener('change', () => {
+        // sofort speichern (keepalive), Navigation kann durch Template erfolgen
+        saveSmallJobs({ keepalive: true });
       });
+    }
+  });
 
-      // Nächsten Fokus respektieren
-      if (pendingFocusIndex != null) {
-        const target = listEl.querySelector(`.sj-input[data-row-index="${pendingFocusIndex}"]`)
-                      || listEl.querySelector('.sj-input:last-of-type');
-        if (target) {
-          target.focus();
+  // ---------------------------
+  // Drag & Drop in Wochenzellen
+  // ---------------------------
+  function weekCells() {
+    // Bevorzugt mit data-Attributen; Fallback: typische Raster-Selektoren
+    const withData = qsa('[data-day-index][data-row-index]');
+    if (withData.length > 0) return withData;
+
+    const gridInputs = qsa('.week-grid textarea, .week-grid input, table.week-grid textarea, table.week-grid input');
+    return gridInputs.length > 0 ? gridInputs : qsa('textarea.week-cell, input.week-cell');
+  }
+
+  function parseRowDayFromEl(el) {
+    // Erst data-Attribute probieren
+    const row = parseInt(el.dataset.rowIndex || el.getAttribute('data-row-index') || '', 10);
+    const day = parseInt(el.dataset.dayIndex || el.getAttribute('data-day-index') || '', 10);
+    if (!Number.isNaN(row) && !Number.isNaN(day)) {
+      return { rowIndex: row, dayIndex: day };
+    }
+    // Fallback über name="cell[rX][dY]" o.ä.
+    const name = el.getAttribute('name') || '';
+    const matchR = name.match(/r(\d+)/i);
+    const matchD = name.match(/d(\d+)/i);
+    const r = matchR ? parseInt(matchR[1], 10) : NaN;
+    const d = matchD ? parseInt(matchD[1], 10) : NaN;
+    if (!Number.isNaN(r) && !Number.isNaN(d)) {
+      return { rowIndex: r, dayIndex: d };
+    }
+    // Not found
+    return { rowIndex: null, dayIndex: null };
+  }
+
+  async function saveWeekCell(el, text) {
+    const ctx = getCtx();
+    const { rowIndex, dayIndex } = parseRowDayFromEl(el);
+    if (rowIndex == null || dayIndex == null) return;
+
+    const payload = {
+      standort: ctx.standort,
+      year: ctx.year,
+      kw: ctx.kw,
+      row_index: rowIndex,
+      day_index: dayIndex,
+      text: text,
+    };
+    try {
+      const res = await fetch('/api/week/set-cell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      // Server kann {ok:true, skipped:true} liefern (bei 4-Tage-Woche für Freitag)
+      // Bei skipped machen wir nichts weiter.
+    } catch (e) {
+      console.warn('Fehler beim Speichern der Wochenzelle:', e);
+    }
+  }
+
+  function initWeekDropTargets() {
+    weekCells().forEach((cellEl) => {
+      // Drop aktivieren
+      cellEl.addEventListener('dragover', (ev) => {
+        ev.preventDefault(); // nötig damit drop funktioniert
+        ev.dataTransfer.dropEffect = 'copy';
+      });
+      cellEl.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        const text = ev.dataTransfer.getData('text/plain');
+        if (!text) return;
+
+        // Zelle befüllen (Input/textarea)
+        if ('value' in cellEl) {
+          cellEl.value = text;
+        } else {
+          cellEl.textContent = text;
         }
-      }
-      // Reset
-      pendingFocusIndex = null;
+        // Sofort speichern
+        saveWeekCell(cellEl, text);
+      });
 
-      // Drag aktivieren (nur am Handle)
-      enableSidebarDnD();
-    }
-
-    cont.addEventListener('keydown', (e) => {
-      const el = e.target;
-      if (!el.classList.contains('sj-input')) return;
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        compressAndRenderRespectNextFocus();
-        scheduleSaveDebounced();
+      // Optional: Direkte Eingabe in Zellen auch sofort speichern (Komfort)
+      if ('addEventListener' in cellEl) {
+        cellEl.addEventListener('input', () => {
+          const val = 'value' in cellEl ? cellEl.value : (cellEl.textContent || '');
+          // Debounce leichte Eingaben in Zellen
+          if (cellEl.__cellTimer) clearTimeout(cellEl.__cellTimer);
+          cellEl.__cellTimer = setTimeout(() => saveWeekCell(cellEl, val), 300);
+        });
       }
     });
+  }
 
-    // Vor dem Verlassen der Seite sicher speichern
-    window.addEventListener('beforeunload', () => {
-      const items = normalize(readList());
-      navigator.sendBeacon?.('/api/klein/save-list', JSON.stringify({ standort: state.standort, items }));
+  // ---------------------------
+  // Initialisierung
+  // ---------------------------
+  function initKleinList() {
+    if (!kleinListEl) return;
+
+    clearDefaultKleinTexts();
+    ensureTrailingEmptyRow();
+
+    // Events an existierenden Inputs
+    kleinInputs().forEach((inp) => {
+      inp.addEventListener('input', () => {
+        scheduleSaveSmallJobs();
+        ensureTrailingEmptyRow();
+      });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          ensureTrailingEmptyRow();
+          scheduleSaveSmallJobs();
+          e.preventDefault();
+        }
+      });
+      // Input selbst als Drag-Quelle
+      inp.draggable = true;
+      inp.addEventListener('dragstart', (ev) => {
+        const text = (inp.value || '').trim();
+        if (!text) {
+          ev.preventDefault();
+          return;
+        }
+        ev.dataTransfer.setData('text/plain', text);
+        ev.dataTransfer.effectAllowed = 'copyMove';
+      });
     });
 
-    // ---------- Drag & Drop mit Handle ----------
-    function enableSidebarDnD() {
-      // DragStart vom Handle: Text aus der zugehörigen Zeile übertragen
-      qsa('.sj-row', cont).forEach(row => {
-        const handle = row.querySelector('.sj-handle');
-        const inp    = row.querySelector('.sj-input');
-        if (!handle || !inp) return;
-
-        handle.setAttribute('draggable', 'true');
-
-        handle.addEventListener('dragstart', (e) => {
-          const text = (inp.value || '').trim();
-          if (!text) { e.preventDefault(); return; }
-          e.dataTransfer.effectAllowed = 'copy';
-          e.dataTransfer.setData('text/plain', text);
-        });
-      });
-
-      // Ziel: Wochenzellen (TD / .wk-cell) droppable machen
-      attachDropTargets();
-    }
-
-    function attachDropTargets() {
-      // Tabellenzellen (ohne Labelspalte)
-      qsa('tbody tr').forEach(tr => {
-        const cells = Array.from(tr.children);
-        cells.forEach((td, idx) => {
-          if (idx === 0) return; // Labelspalte überspringen
-          td.addEventListener('dragover', ev => { ev.preventDefault(); td.classList.add('drop-hover'); });
-          td.addEventListener('dragleave', () => td.classList.remove('drop-hover'));
-          td.addEventListener('drop', ev => {
-            ev.preventDefault(); td.classList.remove('drop-hover');
-            const text = ev.dataTransfer.getData('text/plain');
-            if (!text) return;
-            const input = td.querySelector('input, textarea');
-            if (input) {
-              input.value = text;
-              // Row/Day bestimmen und speichern
-              const trEl = td.closest('tr');
-              const cells2 = Array.from(trEl.children);
-              const dayIdx = cells2.indexOf(td) - 1;      // 0=Label
-              const rows = Array.from(trEl.parentElement.children);
-              const rowIdx = rows.indexOf(trEl);
-              postJSON('/api/week/set-cell', {
-                year: state.year, kw: state.kw, standort: state.standort,
-                row: rowIdx, day: dayIdx, value: text
-              }).then(res => {
-                if (!res.ok && !res.skipped) console.warn('[DnD set-cell] fehlgeschlagen', res);
-              });
-            }
-          });
-        });
-      });
-
-      // Grid (.wk-cell) – 0=Label, 1..5=Mo..Fr
-      qsa('.wk-grid').forEach(grid => {
-        const cells = qsa('.wk-cell', grid);
-        const cols = 6;
-        cells.forEach((cell, idx) => {
-          const c = idx % cols;
-          if (c === 0) return; // Labelspalte überspringen
-          cell.addEventListener('dragover', ev => { ev.preventDefault(); cell.classList.add('drop-hover'); });
-          cell.addEventListener('dragleave', () => cell.classList.remove('drop-hover'));
-          cell.addEventListener('drop', ev => {
-            ev.preventDefault(); cell.classList.remove('drop-hover');
-            const text = ev.dataTransfer.getData('text/plain');
-            if (!text) return;
-            const input = cell.querySelector('input, textarea');
-            if (input) {
-              input.value = text;
-              const all = qsa('.wk-cell', grid);
-              const idx2 = all.indexOf(cell);
-              const rowIdx = Math.floor(idx2 / cols);
-              const dayIdx = (idx2 % cols) - 1;
-              postJSON('/api/week/set-cell', {
-                year: state.year, kw: state.kw, standort: state.standort,
-                row: rowIdx, day: dayIdx, value: text
-              }).then(res => {
-                if (!res.ok && !res.skipped) console.warn('[DnD set-cell] fehlgeschlagen', res);
-              });
-            }
-          });
-        });
+    // Optional: Button "Alles speichern" (falls vorhanden)
+    const saveAllBtn = qs('#save-all-klein') || qs('[data-action="save-klein"]');
+    if (saveAllBtn) {
+      saveAllBtn.addEventListener('click', () => {
+        saveSmallJobs();
       });
     }
-
-    // Beim ersten Laden die Drop-Ziele aktivieren
-    enableSidebarDnD();
   }
 
-  // 4‑Tage‑Toggle
-  async function setFourDay(value) {
-    const res = await postJSON('/api/week/set-four-day', {
-      standort: state.standort, kw: state.kw, year: state.year, value: !!value
-    });
-    if (!res.ok) { console.warn('[set-four-day] fehlgeschlagen', res); return false; }
-    state.fourDay = !!res.four_day_week;
-    applyFridayDisabled(state.fourDay);
-    return true;
-  }
-  if (ui.fourDayToggle) {
-    ui.fourDayToggle.addEventListener('change', async (e) => {
-      const desired = !!e.target.checked;
-      const ok = await setFourDay(desired);
-      if (!ok) e.target.checked = !desired;
-    });
-  }
-
- 
-// --- Navigation: Standort / KW / Jahr ---
-// 1) Helfer: aktuelle Small-Job-Liste lesen & normalisieren
-function readSmallJobList(container) {
-  const cont = container || document.querySelector('#sj-list') || document.querySelector('.wk-sidebar');
-  if (!cont) return [];
-  const inputs = Array.from(cont.querySelectorAll('.sj-input'));
-  const items  = inputs.map(i => (i.value || '').trim());
-  const filled = items.filter(t => t.length > 0);
-  // genau eine leere unten
-  filled.push('');
-  return filled;
-}
-
-// 2) Vor Navigation speichern
-async function saveSmallJobsBeforeNavigate() {
-  try {
-    const items = readSmallJobList(); // aus DOM holen
-    const payload = { standort: state.standort, items };
-    const res = await fetch('/api/klein/save-list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: true // erlaubt Background-Commit
-    });
-    const data = await res.json().catch(() => ({ ok: false }));
-    if (!data.ok) console.warn('[navigate] Save-list fehlgeschlagen', data);
-  } catch (err) {
-    console.warn('[navigate] Save-list error', err);
-  }
-}
-
-// 3) Navigieren – erst speichern, dann Redirect
-async function navigate(newStandort, newKw, newYear) {
-  await saveSmallJobsBeforeNavigate(); // <- WICHTIG
-  const params = new URLSearchParams(location.search);
-  params.set('standort', newStandort ?? state.standort);
-  params.set('kw', String(newKw ?? state.kw));
-  params.set('year', String(newYear ?? state.year));
-  location.href = '/week?' + params.toString();
-}
-
-// 4) Events
-if (ui.standort) ui.standort.addEventListener('change', e => navigate(e.target.value, null, null));
-if (ui.kw)       ui.kw.addEventListener('change',     e => navigate(null, toInt(e.target.value, state.kw), null));
-if (ui.year)     ui.year.addEventListener('change',   e => navigate(null, null, toInt(e.target.value, state.year)));
-
-// 5) Zusätzlich beim Tab-/Fenster-Verlassen sicher speichern
-window.addEventListener('beforeunload', () => {
-  const items = readSmallJobList();
-  // sendBeacon als Fallback – kein await
-  try {
-    navigator.sendBeacon('/api/klein/save-list', JSON.stringify({ standort: state.standort, items }));
-  } catch (_) {}
-});
+  document.addEventListener('DOMContentLoaded', () => {
+    initKleinList();
+    initWeekDropTargets();
+  });
+})();
+</script>
