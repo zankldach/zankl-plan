@@ -5,7 +5,7 @@
 {% block content %}
 <h1>Einstellungen · Mitarbeiter</h1>
 
-<!-- Standortwahl (falls du sie im Menü steuerst, kannst du diesen Block rausnehmen) -->
+<!-- Standortwahl (GET) -->
 /settings/employees
   <label>Standort:
     {% set s = standort|default('engelbrechts') %}
@@ -23,10 +23,10 @@
 {% endif %}
 
 <!-- HAUPTFORMULAR: POST auf /settings/employees -->
-/settings/employees
+<form id="empForm" method="post"ort als Hidden immer mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
 
-  <!-- Hidden Felder, die JS beim Submit befüllt -->
+  <!-- Hidden-Felder, die das JS beim Submit befüllt -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
@@ -77,7 +77,7 @@
   const toDelete = new Set();
   const newNames = [];
 
-  // Neuen Mitarbeiter zur Tabelle hinzufügen (lokal, bis Submit)
+  // Neuen Mitarbeiter lokal zur Tabelle hinzufügen (bis Submit)
   addBtn.addEventListener('click', function(){
     const n = (newInput.value || '').trim();
     if (!n) return;
@@ -99,7 +99,7 @@
     });
   });
 
-  // Bestehenden Mitarbeiter zum Löschen markieren
+  // Bestehenden Mitarbeiter löschen (markieren)
   empBody.querySelectorAll('.btn-del').forEach(btn => {
     btn.addEventListener('click', function(){
       const id = this.getAttribute('data-id');
@@ -109,7 +109,7 @@
     });
   });
 
-  // Beim Submit: die Hidden-Felder befüllen
+  // Beim Submit Hidden-Felder befüllen (Updates/Deletes/Neuanlagen)
   empForm.addEventListener('submit', function(){
     const ids = [];
     const names = [];
@@ -123,14 +123,10 @@
       const nameText = (nameIn ? nameIn.value : (nameNew ? nameNew.value : '')).trim();
 
       if (idText && idText !== 'neu') {
-        // existierende Mitarbeiter (Update)
         ids.push(idText);
         names.push(nameText);
       } else if (!idText || idText === 'neu') {
-        // neue Mitarbeiter: werden separat über new_names gesendet
-        if (nameText) {
-          if (!newNames.includes(nameText)) newNames.push(nameText);
-        }
+        if (nameText && !newNames.includes(nameText)) newNames.push(nameText);
       }
     });
 
