@@ -324,59 +324,19 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
         conn.close()
 
 
+
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
-    """
-    Robuster Save:
-    - Standort aus Hidden/Query/Referer.
-    - Updates/Deletes aus Hidden-Feldern, Fallback aus benannten Inputs.
-    - Inserts aus Hidden 'new_names' ODER aus benannten Inputs 'emp_name_new[]'.
-    -> Keine Pydantic-Validierung in der Signatur => keine 422 mehr.
-    """
     form = await request.form()
 
-    # Standort robust ermitteln
+    # Standort robust
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
 
     conn = get_conn(); cur = conn.cursor()
     try:
-        # ---- Deletes ----
-        delete_ids = (form.get("delete_ids") or "").strip()
-        if delete_ids:
-            for sid in [x for x in delete_ids.split(",") if x.strip()]:
-                try:
-                    cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), st))
-                except Exception:
-                    pass
-
-        # ---- Updates ----
-        ids   = (form.get("ids") or "").strip()
-        names = (form.get("names") or "").strip()
-        if ids and names:
-            ids_list   = [x.strip() for x in ids.split(",")]
-            names_list = [x.strip() for x in names.split(",")]
-            for i, n in zip(ids_list, names_list):
-                if i and n:
-                    cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), st))
-        else:
-            # Fallback: name="emp_name_existing_<ID>"
-            for key, val in form.items():
-                if key.startswith("emp_name_existing_"):
-                    try:
-                        emp_id = int(key.split("_")[-1])
-                        name_val = (val or "").strip()
-                        cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (name_val, emp_id, st))
-                    except Exception:
-                        pass
-
-        # ---- Inserts ----
+        # Inserts: emp_name_new[] (mehrere)
         new_list = []
-        # Hidden: new_names
-        hidden_new = (form.get("new_names") or "").strip()
-        if hidden_new:
-            new_list.extend([x.strip() for x in hidden_new.split(",") if x.strip()])
-        # Fallback: mehrfaches name="emp_name_new[]"
         for key, val in form.multi_items():
             if key == "emp_name_new[]":
                 t = (val or "").strip()
@@ -388,19 +348,16 @@ async def settings_employees_save(request: Request):
 
         conn.commit()
 
-        # Reload mit Daten
+        # Reload
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
         employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees, "saved": True},
-        )
-
+        return templates.TemplateResponse("settings_employees.html",
+            {"request": request, "standort": st, "employees": employees, "saved": True})
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-
     finally:
         conn.close()
+
 
 
 # ---- Jahresseite ----
