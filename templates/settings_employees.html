@@ -6,9 +6,7 @@
 <h1>Einstellungen · Mitarbeiter</h1>
 
 <!-- Standortwahl (GET) -->
-/settings/employees
-  <label>Standort:
-    {% set s = standort|default('engelbrechts') %}
+<form id="standortForm" method="get" action="/settings/employees" style="margin-bottom:10
     <select name="standort" onchange="document.getElementById('standortForm').submit()">
       <option value="engelbrechts" {{ 'selected' if s == 'engelbrechts' else '' }}>Engelbrechts</option>
       <option value="gross-gerungs" {{ 'selected' if s == 'gross-gerungs' else '' }}>Groß Gerungs</option>
@@ -23,11 +21,11 @@
 {% endif %}
 
 <!-- HAUPTFORMULAR (POST) -->
-/settings/employees
+<formings/employees
   <!-- Standort versteckt mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
 
-  <!-- Hidden-Felder (für optionales Löschen/Update; Backend hat Fallback und funktioniert auch ohne diese) -->
+  <!-- Hidden-Felder für optionales Löschen/Update (Backend kann auch ohne diese Felder speichern) -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
@@ -61,7 +59,7 @@
     </tbody>
   </table>
 
-  <!-- Neue Mitarbeiter – dynamisch & ohne Limit -->
+  <!-- Neue Mitarbeiter: dynamisch & ohne Limit -->
   <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
     <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
 
@@ -92,7 +90,6 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // --- Selektoren ---
   const empForm  = document.getElementById('empForm');
   const empBody  = document.getElementById('empTableBody');
   const addBtn   = document.getElementById('addBtn');
@@ -101,10 +98,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const namesFld = document.getElementById('namesField');
   const delFld   = document.getElementById('deleteIdsField');
 
-  // Sanity-Check
   if (!empForm || !newWrap) return;
 
-  // ---- Utilities: neue Zeile bauen ----
   function createNewRow(value = "") {
     const row = document.createElement('div');
     row.className = 'new-row';
@@ -126,7 +121,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (value) inp.value = value;
 
     rmv.addEventListener('click', function () {
-      // Nicht die letzte UND nicht die einzige Zeile entfernen
       const rows = newWrap.querySelectorAll('.new-row');
       if (rows.length > 1) {
         row.remove();
@@ -134,13 +128,10 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-    // Beim Tippen: trailing empty sicherstellen
     inp.addEventListener('input', ensureTrailingEmpty);
-
     return row;
   }
 
-  // ---- Immer eine leere Zeile am Ende sicherstellen ----
   function ensureTrailingEmpty() {
     const inputs = Array.from(newWrap.querySelectorAll('input[name="emp_name_new[]"]'));
     const hasEmptyAtEnd = inputs.length > 0 && (inputs[inputs.length - 1].value.trim() === '');
@@ -152,7 +143,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // Initial sicherstellen
   ensureTrailingEmpty();
 
-  // "Weiteres Feld" klickt: sofort neue leere Zeile am Ende
   if (addBtn) {
     addBtn.addEventListener('click', function () {
       newWrap.appendChild(createNewRow(""));
@@ -161,7 +151,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Löschen bestehender Mitarbeiter (IDs ins Hidden-Feld)
   if (empBody) {
     empBody.querySelectorAll('.btn-del').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -177,7 +166,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Optional: Hidden-Felder für Updates setzen (Backend hat Fallback; dies ist Komfort)
   empForm.addEventListener('submit', function () {
     const ids = [];
     const names = [];
