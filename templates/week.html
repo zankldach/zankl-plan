@@ -4,7 +4,7 @@
 
 {% block head %}
 <style>
-  /* ===== Layout: Wochenplan links, Kleinbaustellen rechts ===== */
+  /* ===== Layout ===== */
   .layout {
     display: grid;
     grid-template-columns: 1fr 320px;
@@ -53,7 +53,7 @@
   td.disabled-day input.cell { color: #64748b; }
   td .hint { position:absolute; top:4px; left:4px; font-size:10px; color:#64748b; }
 
-  /* ===== Kleinbaustellen Panel ===== */
+  /* ===== Kleinbaustellen ===== */
   .side { background: #fff; border: 1px solid #d9dee5; border-radius: 8px; box-shadow: 0 3px 12px rgba(0,0,0,0.06); }
   .side header {
     background: #0b57d0; color: #fff; padding: 8px 12px; font-weight: 700;
@@ -81,6 +81,7 @@
 <div class="toolbar">
   <div class="group">
     <label for="locationSelect">Standort:</label>
+    <!-- akzeptiert #locationSelect ODER #standort ODER select[name="standort"] -->
     <select id="locationSelect">
       {% for s in standorte %}
         {% set s_val = (s|string) %}
@@ -92,8 +93,10 @@
   <div class="group">
     <button id="prevWeekBtn">←</button>
     <label for="kwSelect">KW:</label>
+    <!-- akzeptiert #kwSelect ODER #kw ODER select[name="kw"] -->
     <select id="kwSelect"></select>
     <label for="yearSelect">Jahr:</label>
+    <!-- akzeptiert #yearSelect ODER #year ODER select[name="year"] -->
     <select id="yearSelect"></select>
     <button id="nextWeekBtn">→</button>
     <button id="goBtn">Öffnen</button>
@@ -204,42 +207,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const CURLOC = "{{ (standort|string) }}";
     const MAX_WEEKS = 53;
     const FOUR_DAY = !!({{ 1 if four_day_week else 0 }});
-
-    // ---- Plan-Key (für lokalen Freitag-Cache) ----
     const PLAN_KEY = (loc, kw, year) => `${loc}|${kw}|${year}`;
     const planKey = PLAN_KEY(CURLOC, KW, YEAR);
 
-    // ---- Selects füllen ----
+    // ---- Selektoren robust abrufen ----
+    const locSel  = document.getElementById('locationSelect') || document.getElementById('standort') || document.querySelector('select[name="standort"]');
+    const kwSel   = document.getElementById('kwSelect')       || document.getElementById('kw')       || document.querySelector('select[name="kw"]');
+    const yearSel = document.getElementById('yearSelect')      || document.getElementById('year')     || document.querySelector('select[name="year"]');
+
+    // ---- Selects füllen, falls leer ----
     function initSelectors(){
-      const kwSel = document.getElementById('kwSelect');
-      const yearSel = document.getElementById('yearSelect');
-      kwSel.innerHTML = "";
-      for (let w=1; w<=MAX_WEEKS; w++){
-        const opt = document.createElement('option');
-        opt.value = w; opt.textContent = w;
-        if (w === KW) opt.selected = true;
-        kwSel.appendChild(opt);
+      if (kwSel && kwSel.options && kwSel.options.length === 0) {
+        for (let w=1; w<=MAX_WEEKS; w++){
+          const opt = document.createElement('option');
+          opt.value = w; opt.textContent = w;
+          if (w === KW) opt.selected = true;
+          kwSel.appendChild(opt);
+        }
       }
-      yearSel.innerHTML = "";
-      [YEAR-1, YEAR, YEAR+1].forEach(y=>{
-        const opt = document.createElement('option');
-        opt.value = y; opt.textContent = y;
-        if (y === YEAR) opt.selected = true;
-        yearSel.appendChild(opt);
-      });
+      if (yearSel && yearSel.options && yearSel.options.length === 0) {
+        [YEAR-1, YEAR, YEAR+1].forEach(y=>{
+          const opt = document.createElement('option');
+          opt.value = y; opt.textContent = y;
+          if (y === YEAR) opt.selected = true;
+          yearSel.appendChild(opt);
+        });
+      }
     }
     initSelectors();
 
-    // ---- 4-Tage-Woche ----
+    // ---- 4-Tage-Woche (UI + Cache Freitag) ----
     const fourChk = document.getElementById('fourDayChk');
     function restoreFridayFromCache() {
       const cacheRaw = localStorage.getItem(`fridayCache:${planKey}`);
       if (!cacheRaw) return;
       const cache = JSON.parse(cacheRaw);
       document.querySelectorAll('#weekTable td[data-day="4"] input.cell').forEach((inp, idx) => {
-        if (!inp.value && cache && typeof cache[idx] === 'string') {
-          inp.value = cache[idx];
-        }
+        if (!inp.value && cache && typeof cache[idx] === 'string') { inp.value = cache[idx]; }
       });
     }
     function cacheFridayTexts() {
@@ -252,41 +256,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if(flag){
           td.classList.add('disabled-day');
           if(inp) inp.disabled = true;
-          const hint = td.querySelector('.hint');
-          if (hint) hint.textContent = "gesperrt";
+          const hint = td.querySelector('.hint'); if (hint) hint.textContent = "gesperrt";
         } else {
           td.classList.remove('disabled-day');
           if(inp) inp.disabled = false;
-          const hint = td.querySelector('.hint');
-          if (hint) hint.textContent = "";
+          const hint = td.querySelector('.hint'); if (hint) hint.textContent = "";
           if(inp){ inp.style.background=''; inp.style.color=''; }
         }
       });
-      // Nach UI-Umschaltung: Freitagstexte nie löschen; bei 4-Tage ggf. aus Cache sichtbar machen
       if (flag) restoreFridayFromCache();
     }
     async function setFourDayWeek(flag){
-      const payload = {
-        year: YEAR, kw: KW, standort: (document.getElementById('locationSelect').value || CURLOC),
-        four_day_week: !!flag
-      };
+      const payload = { year: YEAR, kw: KW, standort: (locSel?.value || CURLOC), four_day_week: !!flag };
       try{
-        const res = await fetch('/api/week/options', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-        });
+        const res = await fetch('/api/week/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         if (!res.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', await res.text());
       }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
     }
     fourChk.addEventListener('change', async ()=>{
       const flag = fourChk.checked;
-      // Vor Umschaltung: aktuelle Freitag-Werte cachen
       cacheFridayTexts();
       applyFourDayWeekUI(flag);
       applyColors();
       await setFourDayWeek(flag);
     });
     applyFourDayWeekUI(FOUR_DAY);
-    // Bei erstem Laden: falls 4-Tage aktiv und Backend Freitag leer liefert, aus Cache sichtbar machen
     if (FOUR_DAY) restoreFridayFromCache();
 
     // ---- Farben ----
@@ -296,9 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function colorFor(text){
       const n = norm(text);
       if(!n) return null;
-      if (RESERVED_RED.has(n)) {
-        return { bg: "hsla(0, 85%, 75%, 0.65)", border: "hsl(0, 85%, 45%)" };
-      }
+      if (RESERVED_RED.has(n)) return { bg: "hsla(0, 85%, 75%, 0.65)", border: "hsl(0, 85%, 45%)" };
       let h = hashCode(n) % 360;
       const isRedish = (h <= 20) || (h >= 340);
       if (isRedish) h = (h + 40) % 360;
@@ -308,30 +300,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyColors(){
       document.querySelectorAll('#weekTable input.cell').forEach(inp=>{
         const c = colorFor(inp.value);
-        if(c){
-          inp.style.background=c.bg;
-          inp.style.border=`1px solid ${c.border}`;
-          inp.style.borderRadius='6px';
-        } else {
-          inp.style.background='transparent';
-          inp.style.border='none';
-        }
+        if(c){ inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
+        else { inp.style.background='transparent'; inp.style.border='none'; }
       });
     }
 
     // ---- Speichern Wochenzellen ----
     async function saveCell(row, day, value){
-      // Vor jedem Speichern: Freitag-Cache aktualisieren (damit er beim Reload sichtbar bleibt)
       if (Number(day) === 4) cacheFridayTexts();
-      if (fourChk.checked && Number(day) === 4) return true; // Backend skippt bei 4-Tage
+      if (fourChk.checked && Number(day) === 4) return true;
       try{
         const res = await fetch('/api/week/set-cell',{
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             row:Number(row), day:Number(day), value:value ?? "",
-            kw: parseInt(document.getElementById('kwSelect').value || '{{ kw }}',10),
-            year: parseInt(document.getElementById('yearSelect').value || '{{ year }}',10),
-            standort: (document.getElementById('locationSelect').value || CURLOC)
+            kw:   parseInt(kwSel?.value   ?? '{{ kw }}', 10),
+            year: parseInt(yearSel?.value ?? '{{ year }}', 10),
+            standort: (locSel?.value || CURLOC)
           })
         });
         if (!res.ok) { console.warn('Save HTTP-Fehler:', res.status); return false; }
@@ -341,16 +326,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
     async function saveBatch(updates){
-      // Cache Freitag mit, auch wenn Backend skippt
       cacheFridayTexts();
       if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
       try{
         const res = await fetch('/api/week/batch',{
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            year: parseInt(document.getElementById('yearSelect').value || '{{ year }}',10),
-            kw:   parseInt(document.getElementById('kwSelect').value  || '{{ kw }}',10),
-            standort: (document.getElementById('locationSelect').value || CURLOC),
+            year: parseInt(yearSel?.value ?? '{{ year }}', 10),
+            kw:   parseInt(kwSel?.value   ?? '{{ kw }}', 10),
+            standort: (locSel?.value || CURLOC),
             updates
           })
         });
@@ -369,12 +353,23 @@ document.addEventListener('DOMContentLoaded', () => {
       alert(ok ? 'Alle Zellen gespeichert.' : 'Speichern fehlgeschlagen.');
     };
 
-    // ---- Kleinbaustellen (global je Standort) ----
+    // ---- Kleinbaustellen (Strings, robust speichern) ----
     const kleinList = document.getElementById('kleinList');
+
+    // Dict-Strings (z. B. "{'row_index': 2, 'text': ''}") entfernen
+    function cleanupWeirdDictValues(){
+      document.querySelectorAll('#kleinList input.job').forEach(inp=>{
+        const v = (inp.value || '').trim();
+        const vv = v.replace(/"/g,"'");
+        if (/^\s*\{.*row_index.*text.*\}\s*$/.test(vv)) { inp.value = ''; }
+      });
+    }
+
     function renumberJobs(){
       const list = kleinList.querySelectorAll('input.job');
       list.forEach((inp, idx)=> inp.dataset.row = String(idx));
     }
+
     function ensureTrailingEmptyJob(){
       const list = kleinList.querySelectorAll('input.job');
       const last = list[list.length-1];
@@ -390,18 +385,68 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       renumberJobs();
     }
+
+    // Persistenz: bevorzugt save-list; Fallbacks
+    async function persistSmallJobs({sync=false} = {}){
+      const standort = (locSel?.value || CURLOC);
+      const inputs = Array.from(document.querySelectorAll('#kleinList input.job'));
+      const itemsStrings = inputs.map(i => (i.value || '').trim());
+
+      const payloadStrings = JSON.stringify({ standort, items: itemsStrings });
+      const payloadObjects = JSON.stringify({ standort, items: itemsStrings.map((t,i)=>({row_index:i, text:t})) });
+
+      try{
+        // 1) /api/klein/save-list (Strings)
+        if (sync && navigator.sendBeacon){
+          const blob = new Blob([payloadStrings], {type:'application/json'});
+          navigator.sendBeacon('/api/klein/save-list', blob);
+          return true;
+        } else {
+          const r1 = await fetch('/api/klein/save-list', { method:'POST', headers:{'Content-Type':'application/json'}, body: payloadStrings, keepalive: sync });
+          if (r1.ok) return true;
+        }
+        // 2) /api/klein/save-list (Objekte)
+        if (sync && navigator.sendBeacon){
+          const blob2 = new Blob([payloadObjects], {type:'application/json'});
+          navigator.sendBeacon('/api/klein/save-list', blob2);
+          return true;
+        } else {
+          const r2 = await fetch('/api/klein/save-list', { method:'POST', headers:{'Content-Type':'application/json'}, body: payloadObjects, keepalive: sync });
+          if (r2.ok) return true;
+        }
+      } catch(e){
+        // ignoriere – wir probieren Fallback unten
+      }
+
+      // 3) Fallback: pro Feld /api/klein/set
+      try {
+        await Promise.all(itemsStrings.map((t,i)=>
+          fetch('/api/klein/set', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ standort, row_index:i, text:t }),
+            keepalive: sync
+          }).catch(()=>{})
+        ));
+        return true;
+      } catch(e) {
+        console.warn('persistSmallJobs Fallback fehlgeschlagen:', e);
+      }
+      return false;
+    }
+
     async function saveSmallJob(row_index, text){
       try{
         const res = await fetch('/api/klein/set',{
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            standort:(document.getElementById('locationSelect').value || CURLOC),
+            standort:(locSel?.value || CURLOC),
             row_index:Number(row_index), text:text ?? ""
           })
         });
         if (!res.ok) console.warn('Klein HTTP-Fehler:', res.status, await res.text());
       }catch(e){ console.warn('Netz-/Serverfehler (klein):', e); }
     }
+
     function bindJobInput(input){
       const rowDiv = input.closest('.row');
       let handle = rowDiv.querySelector('.drag-handle');
@@ -423,12 +468,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       handle.addEventListener('dragend', () => input.classList.remove('dragging'));
 
-      // Doppelklick = optischer Fokus
       input.addEventListener('dblclick', () => {
         document.querySelectorAll('.job').forEach(el => el.classList.remove('selected'));
         input.classList.add('selected');
       });
-      // Entf = löschen + speichern
+
       input.addEventListener('keydown', async ev => {
         if (ev.key === 'Delete'){
           ev.preventDefault();
@@ -438,41 +482,24 @@ document.addEventListener('DOMContentLoaded', () => {
           ensureTrailingEmptyJob();
         }
       });
-      // Tippen: freie Zeile unten nachführen
+
       input.addEventListener('input', () => { ensureTrailingEmptyJob(); });
-      // Blur: speichern
+
       input.addEventListener('blur', async () => {
         await saveSmallJob(input.dataset.row, input.value);
         ensureTrailingEmptyJob();
       });
     }
+
+    // Initial
     document.querySelectorAll('.job').forEach(bindJobInput);
+    cleanupWeirdDictValues();
     ensureTrailingEmptyJob();
 
-    // Vor Navigation / Reload: alle Kleinbaustellen synchron sichern
-    window.addEventListener('beforeunload', () => {
-      const items = Array.from(document.querySelectorAll('#kleinList input.job'))
-        .map((inp, idx) => ({ row_index: idx, text: (inp.value || '').trim() }));
-      const payload = {
-        standort:(document.getElementById('locationSelect').value || CURLOC),
-        items
-      };
-      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      // Versuch: /api/klein/save-list (falls vorhanden)
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/klein/save-list', blob);
-      }
-      // Fallback: einzelne Zellen via fetch keepalive
-      items.forEach(it => {
-        fetch('/api/klein/set', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ standort: payload.standort, row_index: it.row_index, text: it.text }),
-          keepalive: true
-        }).catch(()=>{});
-      });
-    });
+    // Vor Navigation / Reload: Kleinbaustellen synchron sichern
+    window.addEventListener('beforeunload', () => { persistSmallJobs({sync:true}); });
 
-    // ---- DnD im Wochenraster ----
+    // ---- DnD im Wochenraster (unverändert) ----
     let dragData=null;
     function attachDnD(){
       const cells = document.querySelectorAll('#weekTable td');
@@ -549,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
     }
+    attachDnD();
 
     // ---- Bereich-Füllen (Shift + Maus) ----
     function getCellInput(row, day) { return document.querySelector(`#weekTable input.cell[data-row="${row}"][data-day="${day}"]`); }
@@ -562,16 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
-    function startFill(row, day, value) {
-      fillState.active = true; fillState.row = row; fillState.startDay = day; fillState.lastDay = day;
-      fillState.value = value ?? ""; paintRange(row, day, day, true);
-    }
-    function updateFill(day) {
-      if (!fillState.active) return;
-      paintRange(fillState.row, fillState.startDay, fillState.lastDay, false);
-      fillState.lastDay = day;
-      paintRange(fillState.row, fillState.startDay, fillState.lastDay, true);
-    }
+    function startFill(row, day, value) { fillState.active = true; fillState.row = row; fillState.startDay = day; fillState.lastDay = day; fillState.value = value ?? ""; paintRange(row, day, day, true); }
+    function updateFill(day) { if (!fillState.active) return; paintRange(fillState.row, fillState.startDay, fillState.lastDay, false); fillState.lastDay = day; paintRange(fillState.row, fillState.startDay, fillState.lastDay, true); }
     async function endFill() {
       if (!fillState.active) return;
       const row = fillState.row;
@@ -608,42 +628,47 @@ document.addEventListener('DOMContentLoaded', () => {
       document.addEventListener('mouseup', () => { if (fillState.active) endFill(); });
       document.addEventListener('mouseleave', () => { if (fillState.active) endFill(); });
     }
+    attachPaintFill();
 
-    // ---- Navigation ----
+    // ---- Navigation (Auto-Open bei Änderungen) ----
     function navigate(standort, kw, year){
       const url = `/week?standort=${encodeURIComponent(standort)}&kw=${kw}&year=${year}`;
       window.location.href = url;
     }
-    document.getElementById('locationSelect').onchange = ()=>{
-      const loc = document.getElementById('locationSelect').value || CURLOC;
-      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
-      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
-      navigate(loc, kw, yr);
-    };
-    document.getElementById('prevWeekBtn').onclick = ()=>{
-      const loc = document.getElementById('locationSelect').value || CURLOC;
-      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
-      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
-      const p   = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
-      navigate(loc, p.kw, p.year);
-    };
-    document.getElementById('nextWeekBtn').onclick = ()=>{
-      const loc = document.getElementById('locationSelect').value || CURLOC;
-      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
-      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
-      const n   = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
-      navigate(loc, n.kw, n.year);
-    };
-    document.getElementById('goBtn').onclick = ()=>{
-      const loc = document.getElementById('locationSelect').value || CURLOC;
-      const kw  = parseInt(document.getElementById('kwSelect').value, 10);
-      const yr  = parseInt(document.getElementById('yearSelect').value, 10);
-      navigate(loc, kw, yr);
+    const onSelectNavigate = () => {
+      // Vor Navigation: Kleinbaustellen synchron sichern
+      persistSmallJobs({sync:true});
+      const loc = (locSel?.value || CURLOC);
+      const kw  = parseInt(kwSel?.value   ?? '{{ kw }}',   10);
+      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
+      setTimeout(()=>navigate(loc, kw, yr), 50); // kurzer Tick für keepalive/beacon
     };
 
-    // ---- Init ----
-    attachDnD();
-    attachPaintFill();
+    // Auto-Open bei Änderungen auf allen bekannten IDs/Names
+    [locSel, kwSel, yearSel].filter(Boolean).forEach(el => {
+      el.addEventListener('change', onSelectNavigate);
+    });
+
+    // Pfeile behalten ihr Verhalten
+    document.getElementById('prevWeekBtn').onclick = () => {
+      persistSmallJobs({sync:true});
+      const loc = (locSel?.value || CURLOC);
+      const kw  = parseInt(kwSel?.value   ?? '{{ kw }}',   10);
+      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
+      const p   = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
+      setTimeout(()=>navigate(loc, p.kw, p.year), 10);
+    };
+    document.getElementById('nextWeekBtn').onclick = () => {
+      persistSmallJobs({sync:true});
+      const loc = (locSel?.value || CURLOC);
+      const kw  = parseInt(kwSel?.value   ?? '{{ kw }}',   10);
+      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
+      const n   = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
+      setTimeout(()=>navigate(loc, n.kw, n.year), 10);
+    };
+    document.getElementById('goBtn').onclick = onSelectNavigate;
+
+    // ---- Farben initial ----
     applyColors();
 
   } catch (err) {
