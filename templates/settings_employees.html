@@ -6,7 +6,7 @@
 <h1>Einstellungen · Mitarbeiter</h1>
 
 <!-- Standortwahl (GET) -->
-<formings/employees
+/settings/employees
   <label>Standort:
     {% set s = standort|default('engelbrechts') %}
     <select name="standort" onchange="document.getElementById('standortForm').submit()">
@@ -17,39 +17,63 @@
 </form>
 
 {% if saved %}
-  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">Gespeichert.</div>
+  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">
+    Gespeichert.
+  </div>
 {% endif %}
 
 <!-- HAUPTFORMULAR (POST) -->
 /settings/employees
+  <!-- Standort versteckt mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
+
+  <!-- Hidden-Felder (werden optional per JS gefüllt; Backend hat Fallback und funktioniert auch ohne JS) -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
   <input type="hidden" name="delete_ids" id="deleteIdsField" />
 
+  <!-- Bestehende Mitarbeiter -->
   <table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
     <thead>
-      <tr><th style="width:80px; text-align:left;">ID</th><th style="text-align:left;">Name</th><th style="width:120px; text-align:left;">Aktionen</th></tr>
+      <tr>
+        <th style="width:80px; text-align:left;">ID</th>
+        <th style="text-align:left;">Name</th>
+        <th style="width:120px; text-align:left;">Aktionen</th>
+      </tr>
     </thead>
     <tbody id="empTableBody">
       {% for e in employees|default([]) %}
         <tr data-id="{{ e.id }}">
           <td>{{ e.id }}</td>
-          <td><input type="text" name="emp_name_existing_{{ e.id }}" value="{{ e.name }}" class="emp-name" style="width:100%;"></td>
-          <td><button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button></td>
+          <td>
+            <input type="text"
+                   name="emp_name_existing_{{ e.id }}"
+                   value="{{ e.name }}"
+                   class="emp-name"
+                   style="width:100%;">
+          </td>
+          <td>
+            <button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button>
+          </td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <!-- Schnellanlage – funktioniert OHNE JS -->
+  <!-- Neue Mitarbeiter: Grundfeld + Container für zusätzliche Felder -->
   <div style="display:flex; gap:8px; align-items:center; padding:8px 0;">
     <label for="newNameInputBase" style="white-space:nowrap;">Neuer Mitarbeiter:</label>
-    <input type="text" id="newNameInputBase" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;"/>
-    <!-- optional weitere Felder per JS -->
+    <!-- Grundfeld, funktioniert OHNE JS -->
+    <input type="text" id="newNameInputBase"
+           name="emp_name_new[]"
+           placeholder="Name eingeben"
+           style="flex:1; min-width:220px;">
     <button type="button" id="addBtn">Weiteres Feld</button>
   </div>
+
+  <!-- Hier werden zusätzliche Felder eingesetzt -->
+  <div id="newInputs" style="display:flex; flex-direction:column; gap:6px;"></div>
 
   <div style="margin-top:10px;">
     <button type="submit" id="saveBtn">Speichern</button>
@@ -59,31 +83,40 @@
 
 {% block scripts %}
 <script>
-(function(){
-  const empForm   = document.getElementById('empForm');
-  const empBody   = document.getElementById('empTableBody');
-  const idsField  = document.getElementById('idsField');
-  const namesFld  = document.getElementById('namesField');
-  const delFld    = document.getElementById('deleteIdsField');
-  const addBtn    = document.getElementById('addBtn');
+document.addEventListener('DOMContentLoaded', function () {
+  // --- Selektoren ---
+  const empForm  = document.getElementById('empForm');
+  const empBody  = document.getElementById('empTableBody');
+  const addBtn   = document.getElementById('addBtn');
+  const newWrap  = document.getElementById('newInputs');
+  const idsField = document.getElementById('idsField');
+  const namesFld = document.getElementById('namesField');
+  const delFld   = document.getElementById('deleteIdsField');
 
-  // OPTIONALE Komfortfunktion: weitere "emp_name_new[]" Felder hinzufügen
-  addBtn.addEventListener('click', function(){
+  // Sicherheits-Check: Falls etwas nicht gefunden wird, brechen wir freundlich ab (kein Fehler im Browser).
+  if (!empForm || !addBtn || !newWrap || !empBody || !idsField || !namesFld || !delFld) {
+    console.warn('Einstellungen · Mitarbeiter: fehlendes Element im DOM.');
+    return;
+  }
+
+  // --- "Weiteres Feld" klick: zusätzliches Eingabefeld sichtbar erzeugen ---
+  addBtn.addEventListener('click', function () {
     const row = document.createElement('div');
     row.style.display = 'flex';
     row.style.gap = '8px';
     row.style.alignItems = 'center';
-    row.style.padding = '4px 0';
+
+    // Neues Input mit dem richtigen 'name' (wird zuverlässig vom Browser gesendet)
     row.innerHTML = `
       <span style="min-width:130px;">Neuer Mitarbeiter:</span>
-      <input type="text" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;"/>
+      <input type="text" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;">
     `;
-    empForm.insertBefore(row, document.getElementById('saveBtn').parentElement);
+    newWrap.appendChild(row);
   });
 
-  // Löschen bestehender Mitarbeiter: IDs ins Hidden-Feld sammeln
-  empBody.querySelectorAll('.btn-del').forEach(btn => {
-    btn.addEventListener('click', function(){
+  // --- Löschen: IDs ins Hidden-Feld sammeln ---
+  empBody.querySelectorAll('.btn-del').forEach(function (btn) {
+    btn.addEventListener('click', function () {
       const id = this.getAttribute('data-id');
       const tr = this.closest('tr');
       if (id && tr) {
@@ -95,10 +128,11 @@
     });
   });
 
-  // Hidden-Felder für Updates (optional; Backend hat Fallback)
-  empForm.addEventListener('submit', function(){
-    const ids = [], names = [];
-    empBody.querySelectorAll('tr').forEach(tr => {
+  // --- Optional: Hidden-Felder für Updates füllen (Backend hat Fallback, daher nur Komfort) ---
+  empForm.addEventListener('submit', function () {
+    const ids = [];
+    const names = [];
+    empBody.querySelectorAll('tr').forEach(function (tr) {
       const idCell = tr.querySelector('td:first-child');
       const input  = tr.querySelector('input.emp-name');
       const idText = idCell ? idCell.textContent.trim() : '';
@@ -107,8 +141,8 @@
     });
     idsField.value = ids.join(',');
     namesFld.value = names.join(',');
-    // Neue Namen werden über "emp_name_new[]" gesendet (Fallback im Backend), daher hier kein Zwang für new_names.
+    // Neue Namen kommen über "emp_name_new[]" direkt im Form (keine JS-abhängigkeit nötig).
   });
-})();
+});
 </script>
 {% endblock %}
