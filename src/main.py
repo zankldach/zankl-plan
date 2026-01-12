@@ -333,30 +333,30 @@ async def settings_employees_save(request: Request):
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
 
+    # Neue: emp_name_new[]
+    new_list = []
+    for key, val in form.multi_items():
+      if key == "emp_name_new[]":
+        t = (val or "").strip()
+        if t:
+          new_list.append(t)
+
     conn = get_conn(); cur = conn.cursor()
     try:
-        # Inserts: emp_name_new[] (mehrere)
-        new_list = []
-        for key, val in form.multi_items():
-            if key == "emp_name_new[]":
-                t = (val or "").strip()
-                if t:
-                    new_list.append(t)
+      for n in new_list:
+        cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+      conn.commit()
 
-        for n in new_list:
-            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
-
-        conn.commit()
-
-        # Reload
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse("settings_employees.html",
-            {"request": request, "standort": st, "employees": employees, "saved": True})
+      cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+      employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+      return templates.TemplateResponse("settings_employees.html",
+        {"request": request, "standort": st, "employees": employees, "saved": True})
     except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+      return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
-        conn.close()
+      conn.close()
+
+
 
 
 
