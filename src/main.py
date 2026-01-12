@@ -1,7 +1,7 @@
 
 # src/main.py
 from fastapi import FastAPI, Request, Body, Form, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -67,7 +67,6 @@ def init_db():
     )
     """)
 
-    # Kleinbaustellen je Standort (globale Liste rechts)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS global_small_jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,33 +83,82 @@ init_db()
 
 # -------------------- Helpers --------------------
 def build_days(year: int, kw: int):
-    """Mo–Fr als Liste {label, date}."""
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
 
-def is_friday(day_index: int) -> bool: return day_index == 4
+def canon_standort(s: str | None) -> str:
+    """Wandelt beliebige Eingaben in feste Schlüssel um: 'engelbrechts' | 'gross-gerungs'."""
+    s = (s or "").strip()
+    s_low = " ".join(s.lower().split())
+    s_low = s_low.replace("ß", "ss").replace("_", "-")
+    aliases = {
+        "engelbrechts": "engelbrechts",
+        "eng": "engelbrechts",
+        "e": "engelbrechts",
+        "gross gerungs": "gross-gerungs",
+        "gross-gerungs": "gross-gerungs",
+        "grossgerungs": "gross-gerungs",
+        "groß gerungs": "gross-gerungs",
+        "groß-gerungs": "gross-gerungs",
+        "großgerungs": "gross-gerungs",
+        "gg": "gross-gerungs",
+    }
+    return aliases.get(s_low, s_low)
 
 def resolve_standort(request: Request, body_standort: str | None, query_standort: str | None) -> str:
-    """
-    Standort robust ermitteln:
-    1) Body (JSON/Form)
-    2) Query-Param des aktuellen Calls
-    3) Referer-URL (/week?standort=gross-gerungs)
-    4) Fallback: 'engelbrechts'
-    """
-    if body_standort and body_standort.strip(): return body_standort.strip()
-    if query_standort and query_standort.strip(): return query_standort.strip()
+    """Standort robust ermitteln (Body -> Query -> Referer -> 'engelbrechts') und kanonisieren."""
+    if body_standort and body_standort.strip():
+        return canon_standort(body_standort)
+    if query_standort and query_standort.strip():
+        return canon_standort(query_standort)
     ref = request.headers.get("referer") or request.headers.get("Referer")
     if ref:
         try:
             qs = parse_qs(urlparse(ref).query)
-            ref_st = (qs.get("standort") or [""])[0].strip()
-            if ref_st: return ref_st
+            ref_st = (qs.get("standort") or [""])[0]
+            if ref_st.strip():
+                return canon_standort(ref_st)
         except Exception:
             pass
     return "engelbrechts"
+
+# -------------------- Admin: vorhandene DB-Einträge normalisieren --------------------
+@app.get("/admin/normalize-standorte")
+def admin_normalize():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        # employees
+        cur.execute("SELECT id, standort FROM employees")
+        rows = cur.fetchall()
+        for r in rows:
+            st_new = canon_standort(r["standort"])
+            if st_new != (r["standort"] or ""):
+                cur.execute("UPDATE employees SET standort=? WHERE id=?", (st_new, r["id"]))
+
+        # week_plans
+        cur.execute("SELECT id, standort FROM week_plans")
+        rows = cur.fetchall()
+        for r in rows:
+            st_new = canon_standort(r["standort"])
+            if st_new != (r["standort"] or ""):
+                cur.execute("UPDATE week_plans SET standort=? WHERE id=?", (st_new, r["id"]))
+
+        # global_small_jobs
+        cur.execute("SELECT id, standort FROM global_small_jobs")
+        rows = cur.fetchall()
+        for r in rows:
+            st_new = canon_standort(r["standort"])
+            if st_new != (r["standort"] or ""):
+                cur.execute("UPDATE global_small_jobs SET standort=? WHERE id=?", (st_new, r["id"]))
+
+        conn.commit()
+        return {"ok": True}
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
 
 # -------------------- Routes --------------------
 @app.get("/health")
@@ -118,6 +166,7 @@ def health(): return {"status": "ok"}
 
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
+    standort = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
         # Plan holen/erstellen
@@ -142,7 +191,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             if 0 <= r["row_index"] < rows and 0 <= r["day_index"] < 5:
                 grid[r["row_index"]][r["day_index"]]["text"] = r["text"] or ""
 
-        # Kleinbaustellen (rechts)
+        # Kleinbaustellen
         cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (standort,))
         sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in sj], default=-1)
@@ -169,7 +218,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     finally:
         conn.close()
 
-# ---- Zelle setzen (einzeln) ----
+# ---- Zelle setzen ----
 @app.post("/api/week/set-cell")
 async def set_cell(
     request: Request,
@@ -186,9 +235,7 @@ async def set_cell(
         cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
         if not plan: return {"ok": False, "error": "Plan not found"}
-
-        # Freitag blockieren nur wenn 4-Tage-Woche aktiv
-        if plan["four_day_week"] and is_friday(day):
+        if plan["four_day_week"] and day == 4:  # Freitag blockiert
             return {"ok": True, "skipped": True}
 
         cur.execute("""
@@ -203,13 +250,13 @@ async def set_cell(
     finally:
         conn.close()
 
-# ---- Batch speichern (Alle Zellen) ----
+# ---- Batch speichern ----
 @app.post("/api/week/batch")
 async def save_batch(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
     try:
         year = int(data.get("year")); kw = int(data.get("kw"))
-        standort = data.get("standort") or "engelbrechts"
+        standort = canon_standort(data.get("standort") or "engelbrechts")
         updates = data.get("updates") or []
 
         cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
@@ -218,7 +265,7 @@ async def save_batch(data: dict = Body(...)):
 
         for u in updates:
             row = int(u.get("row")); day = int(u.get("day"))
-            if plan["four_day_week"] and is_friday(day):  # Freitag ausgelassen
+            if plan["four_day_week"] and day == 4:  # Freitag ausgelassen
                 continue
             val = u.get("value") or ""
             cur.execute("""
@@ -234,16 +281,15 @@ async def save_batch(data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- 4-Tage-Woche setzen (offiziell + Alias für Frontend) ----
+# ---- 4-Tage-Woche ----
 @app.post("/api/week/set-four-day")
 async def set_four_day(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
     try:
         year = int(data.get("year")); kw = int(data.get("kw"))
-        standort = data.get("standort") or "engelbrechts"
+        standort = canon_standort(data.get("standort") or "engelbrechts")
         value = 1 if bool(data.get("four_day_week") or data.get("value")) else 0
 
-        # sicherstellen
         cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         row = cur.fetchone()
         if not row:
@@ -257,12 +303,11 @@ async def set_four_day(data: dict = Body(...)):
     finally:
         conn.close()
 
-# Alias: altes Frontend ruft /api/week/options -> leite intern um
 @app.post("/api/week/options")
 async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
-# ---- Kleinbaustellen speichern (Einzeln) ----
+# ---- Kleinbaustellen ----
 @app.post("/api/klein/set")
 async def klein_set(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -270,8 +315,6 @@ async def klein_set(request: Request, data: dict = Body(...)):
         standort = resolve_standort(request, data.get("standort"), None)
         idx = int(data.get("row_index"))
         text = (data.get("text") or "").strip()
-
-        # Leere Zeilen bleiben als "" erhalten (damit Reihenfolge stabil ist)
         cur.execute("""
             INSERT INTO global_small_jobs(standort,row_index,text)
             VALUES(?,?,?)
@@ -284,30 +327,21 @@ async def klein_set(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- Kleinbaustellen speichern (Liste) ----
 @app.post("/api/klein/save-list")
 async def klein_save_list(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
     try:
         standort = resolve_standort(request, data.get("standort"), None)
-
-        # Eingänge erlauben: {"items": ["a", "b", ""]} ODER {"items": [{"row_index":0,"text":"a"}, ...]}
         items = data.get("items") or []
-        normalized = []
         if items and isinstance(items[0], dict):
-            # sortieren nach row_index & in Strings wandeln
             items = sorted(items, key=lambda x: int(x.get("row_index", 0)))
             normalized = [ (int(x.get("row_index", i)), (x.get("text") or "").strip()) for i, x in enumerate(items) ]
         else:
             normalized = [ (i, (str(x) if x is not None else "").strip()) for i, x in enumerate(items) ]
 
-        # Bestehende Liste des Standorts löschen & neu schreiben (kompakt, aber Reihenfolge bewahren)
         cur.execute("DELETE FROM global_small_jobs WHERE standort=?", (standort,))
         for idx, text in normalized:
-            cur.execute("""
-                INSERT INTO global_small_jobs(standort,row_index,text)
-                VALUES(?,?,?)
-            """, (standort, idx, text))
+            cur.execute("INSERT INTO global_small_jobs(standort,row_index,text) VALUES(?,?,?)", (standort, idx, text))
         conn.commit()
         return {"ok": True, "count": len(normalized)}
     except Exception:
@@ -315,9 +349,10 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- Einstellungen: Mitarbeiter (unverändert) ----
+# ---- Einstellungen: Mitarbeiter ----
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
+    standort = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
@@ -331,32 +366,42 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(
     request: Request,
-    standort: str = Form(...),
+    standort: str | None = Form(None),
     ids: str = Form(""),
     names: str = Form(""),
     new_names: str = Form(""),
     delete_ids: str = Form(""),
 ):
+    # standort robust ermitteln (kein 422 mehr, falls hidden fehlt)
+    st_query = request.query_params.get("standort")
+    st = resolve_standort(request, standort, st_query)
+
     conn = get_conn(); cur = conn.cursor()
     try:
+        # Delete
         if delete_ids.strip():
             for sid in [x for x in delete_ids.split(",") if x.strip()]:
-                try: cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), standort))
+                try: cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), st))
                 except Exception: pass
 
+        # Update
         ids_list   = [x.strip() for x in ids.split(",")]   if ids   else []
         names_list = [x.strip() for x in names.split(",")] if names else []
         for i, n in zip(ids_list, names_list):
-            if i and n: cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), standort))
+            if i and n:
+                cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), st))
 
+        # Insert
         if new_names.strip():
             for n in [x.strip() for x in new_names.split(",") if x.strip()]:
-                cur.execute("INSERT OR IGNORE INTO employees(name, standort) VALUES(?, ?)", (n, standort))
+                cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
 
         conn.commit()
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+
+        # zurück zur Seite (gleicher Standort)
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
         employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse("settings_employees.html", {"request": request, "standort": standort, "employees": employees, "saved": True})
+        return templates.TemplateResponse("settings_employees.html", {"request": request, "standort": st, "employees": employees, "saved": True})
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
@@ -369,3 +414,4 @@ def year_page(request: Request, year: int = 2025):
         return templates.TemplateResponse("year.html", {"request": request, "year": year})
     except Exception:
         return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
+``
