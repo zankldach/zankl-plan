@@ -5,7 +5,8 @@
 {% block content %}
 <h1>Einstellungen · Mitarbeiter</h1>
 
-/settings/employees
+<!-- Standortwahl (GET) -->
+<formings/employees
   <label>Standort:
     {% set s = standort|default('engelbrechts') %}
     <select name="standort" onchange="document.getElementById('standortForm').submit()">
@@ -19,6 +20,7 @@
   <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">Gespeichert.</div>
 {% endif %}
 
+<!-- HAUPTFORMULAR (POST) -->
 /settings/employees
   <input type="hidden" name="standort" value="{{ standort }}" />
   <input type="hidden" name="ids" id="idsField" />
@@ -41,10 +43,12 @@
     </tbody>
   </table>
 
-  <div class="form-inline" style="display:flex; gap:8px; align-items:center; padding:8px 0;">
-    <label for="newNameInput" style="white-space:nowrap;">Neuer Mitarbeiter:</label>
-    <input type="text" id="newNameInput" placeholder="Name eingeben" style="flex:1; min-width:200px;"/>
-    <button type="button" id="addBtn">Hinzufügen</button>
+  <!-- Schnellanlage (OHNE JS obligatorisch funktionsfähig) -->
+  <div style="display:flex; gap:8px; align-items:center; padding:8px 0;">
+    <label for="newNameInputBase" style="white-space:nowrap;">Neuer Mitarbeiter:</label>
+    <input type="text" id="newNameInputBase" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;"/>
+    <!-- optional weitere Felder per JS -->
+    <button type="button" id="addBtn">Weiteres Feld</button>
   </div>
 
   <div style="margin-top:10px;">
@@ -56,64 +60,58 @@
 {% block scripts %}
 <script>
 (function(){
-  const empForm     = document.getElementById('empForm');
-  const empBody     = document.getElementById('empTableBody');
-  const idsField    = document.getElementById('idsField');
-  const namesField  = document.getElementById('namesField');
-  const newNamesFld = document.getElementById('newNamesField');
-  const delField    = document.getElementById('deleteIdsField');
-  const newInput    = document.getElementById('newNameInput');
-  const addBtn      = document.getElementById('addBtn');
+  const empForm   = document.getElementById('empForm');
+  const empBody   = document.getElementById('empTableBody');
+  const idsField  = document.getElementById('idsField');
+  const namesFld  = document.getElementById('namesField');
+  const newNames  = document.getElementById('newNamesField');
+  const delFld    = document.getElementById('deleteIdsField');
+  const addBtn    = document.getElementById('addBtn');
 
-  const toDelete = new Set();
-  const newNames = [];
-
+  // Komfort: Weitere "emp_name_new[]" Felder hinzufügen (optional)
   addBtn.addEventListener('click', function(){
-    const n = (newInput.value || '').trim();
-    if (!n) { newInput.focus(); return; }
-    newNames.push(n);
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>neu</td>
-      <td><input type="text" name="emp_name_new[]" value="${n}" class="emp-name-new" style="width:100%;"></td>
-      <td><button type="button" class="btn-del-new">Entfernen</button></td>
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.style.padding = '4px 0';
+    row.innerHTML = `
+      <span style="min-width:130px;">Neuer Mitarbeiter:</span>
+      <input type="text" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;"/>
     `;
-    empBody.appendChild(tr);
-    newInput.value = ''; newInput.focus();
-
-    tr.querySelector('.btn-del-new').addEventListener('click', function(){
-      const idx = newNames.indexOf(n);
-      if (idx >= 0) newNames.splice(idx, 1);
-      tr.remove();
-    });
+    empForm.insertBefore(row, document.getElementById('saveBtn').parentElement);
   });
 
+  // Löschen bestehender Mitarbeiter (Hidden-Feld füllen)
   empBody.querySelectorAll('.btn-del').forEach(btn => {
     btn.addEventListener('click', function(){
       const id = this.getAttribute('data-id');
-      if (id) toDelete.add(id);
       const tr = this.closest('tr');
-      if (tr) tr.remove();
+      if (id && tr) {
+        const current = delFld.value ? delFld.value.split(',').filter(Boolean) : [];
+        current.push(id);
+        delFld.value = current.join(',');
+        tr.remove();
+      }
     });
   });
 
-  // Hidden-Felder (JS-Variante; Backend hat zusätzlich Fallback)
+  // Hidden-Felder für Updates/Neuanlage (JS-Variante; Backend hat Fallback)
   empForm.addEventListener('submit', function(){
     const ids = [], names = [];
+
     empBody.querySelectorAll('tr').forEach(tr => {
-      const idCell  = tr.querySelector('td:first-child');
-      const nameIn  = tr.querySelector('input.emp-name');
-      const nameNew = tr.querySelector('input.emp-name-new');
-      const idText   = idCell ? idCell.textContent.trim() : '';
-      const nameText = (nameIn ? nameIn.value : (nameNew ? nameNew.value : '')).trim();
+      const idCell = tr.querySelector('td:first-child');
+      const input  = tr.querySelector('input.emp-name');
+      const idText = idCell ? idCell.textContent.trim() : '';
+      const nameText = input ? input.value.trim() : '';
       if (idText && idText !== 'neu') { ids.push(idText); names.push(nameText); }
-      else if (!idText || idText === 'neu') { if (nameText && !newNames.includes(nameText)) newNames.push(nameText); }
     });
-    idsField.value     = ids.join(',');
-    namesField.value   = names.join(',');
-    newNamesFld.value  = newNames.join(',');
-    delField.value     = Array.from(toDelete).join(',');
+
+    idsField.value = ids.join(',');
+    namesFld.value = names.join(',');
+    // newNames bleibt leer; Inserts kommen entweder über Hidden new_names (hier nicht nötig)
+    // oder über die benannten Inputs name="emp_name_new[]" (Fallback im Backend).
   });
 })();
 </script>
