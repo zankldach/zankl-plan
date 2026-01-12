@@ -6,7 +6,7 @@
 <h1>Einstellungen · Mitarbeiter</h1>
 
 <!-- Standortwahl (GET) -->
-<formings/employees
+/settings/employees
   <label>Standort:
     {% set s = standort|default('engelbrechts') %}
     <select name="standort" onchange="document.getElementById('standortForm').submit()">
@@ -17,7 +17,9 @@
 </form>
 
 {% if saved %}
-  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">Gespeichert.</div>
+  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">
+    Gespeichert.
+  </div>
 {% endif %}
 
 <!-- HAUPTFORMULAR (POST) -->
@@ -25,7 +27,7 @@
   <!-- Standort versteckt mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
 
-  <!-- Hidden-Felder für optionales Löschen/Update (werden aktuell nicht benötigt, können bleiben) -->
+  <!-- Hidden-Felder (für optionales Löschen/Update; Backend hat Fallback und funktioniert auch ohne diese) -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
@@ -52,31 +54,32 @@
                    style="width:100%;">
           </td>
           <td>
-            <!-- optional: später Löschen aktivieren -->
-            <!-- <button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button> -->
+            <button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button>
           </td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <!-- Neue Mitarbeiter – 8 Felder OHNE JS -->
+  <!-- Neue Mitarbeiter – dynamisch & ohne Limit -->
   <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
     <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
 
     <p style="margin:0 0 8px 0; color:#64748b;">
-      Trage die Namen in die Felder ein. Leere Felder werden ignoriert.
+      Trage die Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
     </p>
 
-    <div style="display:grid; grid-template-columns: 180px 1fr; gap:8px; align-items:center;">
-      {% for i in range(8) %}
-        <label for="emp_new_{{ i }}" style="color:#334155;">Neuer Mitarbeiter {{ i+1 }}:</label>
-        <input type="text"
-               id="emp_new_{{ i }}"
-               name="emp_name_new[]"
-               placeholder="Name eingeben"
+    <div id="newInputs" style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Start: eine leere Zeile -->
+      <div class="new-row" style="display:grid; grid-template-columns: 180px 1fr; gap:8px; align-items:center;">
+        <label>Neuer Mitarbeiter:</label>
+        <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
                style="width:100%; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
-      {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:8px;">
+      <button type="button" id="addBtn">Weiteres Feld</button>
     </div>
   </fieldset>
 
@@ -87,6 +90,110 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Kein JavaScript notwendig -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // --- Selektoren ---
+  const empForm  = document.getElementById('empForm');
+  const empBody  = document.getElementById('empTableBody');
+  const addBtn   = document.getElementById('addBtn');
+  const newWrap  = document.getElementById('newInputs');
+  const idsField = document.getElementById('idsField');
+  const namesFld = document.getElementById('namesField');
+  const delFld   = document.getElementById('deleteIdsField');
+
+  // Sanity-Check
+  if (!empForm || !newWrap) return;
+
+  // ---- Utilities: neue Zeile bauen ----
+  function createNewRow(value = "") {
+    const row = document.createElement('div');
+    row.className = 'new-row';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '180px 1fr';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+
+    row.innerHTML = `
+      <label>Neuer Mitarbeiter:</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
+               style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+        <button type="button" class="btn-remove" title="Zeile entfernen">✕</button>
+      </div>
+    `;
+    const inp = row.querySelector('input[name="emp_name_new[]"]');
+    const rmv = row.querySelector('.btn-remove');
+    if (value) inp.value = value;
+
+    rmv.addEventListener('click', function () {
+      // Nicht die letzte UND nicht die einzige Zeile entfernen
+      const rows = newWrap.querySelectorAll('.new-row');
+      if (rows.length > 1) {
+        row.remove();
+        ensureTrailingEmpty();
+      }
+    });
+
+    // Beim Tippen: trailing empty sicherstellen
+    inp.addEventListener('input', ensureTrailingEmpty);
+
+    return row;
+  }
+
+  // ---- Immer eine leere Zeile am Ende sicherstellen ----
+  function ensureTrailingEmpty() {
+    const inputs = Array.from(newWrap.querySelectorAll('input[name="emp_name_new[]"]'));
+    const hasEmptyAtEnd = inputs.length > 0 && (inputs[inputs.length - 1].value.trim() === '');
+    if (!hasEmptyAtEnd) {
+      newWrap.appendChild(createNewRow(""));
+    }
+  }
+
+  // Initial sicherstellen
+  ensureTrailingEmpty();
+
+  // "Weiteres Feld" klickt: sofort neue leere Zeile am Ende
+  if (addBtn) {
+    addBtn.addEventListener('click', function () {
+      newWrap.appendChild(createNewRow(""));
+      const last = newWrap.querySelectorAll('input[name="emp_name_new[]"]');
+      if (last.length) last[last.length - 1].focus();
+    });
+  }
+
+  // Löschen bestehender Mitarbeiter (IDs ins Hidden-Feld)
+  if (empBody) {
+    empBody.querySelectorAll('.btn-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = this.getAttribute('data-id');
+        const tr = this.closest('tr');
+        if (id && tr) {
+          const current = delFld.value ? delFld.value.split(',').filter(Boolean) : [];
+          current.push(id);
+          delFld.value = current.join(',');
+          tr.remove();
+        }
+      });
+    });
+  }
+
+  // Optional: Hidden-Felder für Updates setzen (Backend hat Fallback; dies ist Komfort)
+  empForm.addEventListener('submit', function () {
+    const ids = [];
+    const names = [];
+    if (empBody) {
+      empBody.querySelectorAll('tr').forEach(function (tr) {
+        const idCell = tr.querySelector('td:first-child');
+        const input  = tr.querySelector('input.emp-name');
+        const idText = idCell ? idCell.textContent.trim() : '';
+        const nameText = input ? input.value.trim() : '';
+        if (idText && idText !== 'neu') { ids.push(idText); names.push(nameText); }
+      });
+    }
+    idsField.value = ids.join(',');
+    namesFld.value = names.join(',');
+    // Neue Namen kommen über emp_name_new[]; leere Felder ignoriert das Backend.
+  });
+});
+</script>
 {% endblock %}
-``
