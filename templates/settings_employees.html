@@ -23,7 +23,8 @@
 {% endif %}
 
 <!-- HAUPTFORMULAR: POST auf /settings/employees -->
-<form id="empForm" method="post"ort als Hidden immer mitsenden -->
+/settings/employees
+  <!-- Standort immer mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
 
   <!-- Hidden-Felder, die das JS beim Submit befüllt -->
@@ -51,8 +52,10 @@
     </tbody>
   </table>
 
-  <div class="form-inline" style="display:flex; gap:8px; align-items:center;">
-    <input type="text" id="newNameInput" placeholder="Neuer Mitarbeitername" style="flex:1;"/>
+  <!-- Deutlich sichtbare 'Neu anlegen'-Zeile -->
+  <div class="form-inline" style="display:flex; gap:8px; align-items:center; padding:8px 0;">
+    <label for="newNameInput" style="white-space:nowrap;">Neuer Mitarbeiter:</label>
+    <input type="text" id="newNameInput" placeholder="Name eingeben" style="flex:1; min-width:200px;"/>
     <button type="button" id="addBtn">Hinzufügen</button>
   </div>
 
@@ -77,65 +80,9 @@
   const toDelete = new Set();
   const newNames = [];
 
-  // Neuen Mitarbeiter lokal zur Tabelle hinzufügen (bis Submit)
+  // Neu anlegen (lokal in die Tabelle, bis Submit)
   addBtn.addEventListener('click', function(){
     const n = (newInput.value || '').trim();
-    if (!n) return;
+    if (!n) { newInput.focus(); return; }
     newNames.push(n);
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>neu</td>
-      <td><input type="text" value="${n}" class="emp-name-new" style="width:100%;"></td>
-      <td><button type="button" class="btn-del-new">Entfernen</button></td>
-    `;
-    empBody.appendChild(tr);
-    newInput.value = '';
-
-    tr.querySelector('.btn-del-new').addEventListener('click', function(){
-      const idx = newNames.indexOf(n);
-      if (idx >= 0) newNames.splice(idx, 1);
-      tr.remove();
-    });
-  });
-
-  // Bestehenden Mitarbeiter löschen (markieren)
-  empBody.querySelectorAll('.btn-del').forEach(btn => {
-    btn.addEventListener('click', function(){
-      const id = this.getAttribute('data-id');
-      if (id) toDelete.add(id);
-      const tr = this.closest('tr');
-      if (tr) tr.remove();
-    });
-  });
-
-  // Beim Submit Hidden-Felder befüllen (Updates/Deletes/Neuanlagen)
-  empForm.addEventListener('submit', function(){
-    const ids = [];
-    const names = [];
-
-    empBody.querySelectorAll('tr').forEach(tr => {
-      const idCell   = tr.querySelector('td:first-child');
-      const nameIn   = tr.querySelector('input.emp-name');
-      const nameNew  = tr.querySelector('input.emp-name-new');
-
-      const idText   = idCell ? idCell.textContent.trim() : '';
-      const nameText = (nameIn ? nameIn.value : (nameNew ? nameNew.value : '')).trim();
-
-      if (idText && idText !== 'neu') {
-        ids.push(idText);
-        names.push(nameText);
-      } else if (!idText || idText === 'neu') {
-        if (nameText && !newNames.includes(nameText)) newNames.push(nameText);
-      }
-    });
-
-    idsField.value     = ids.join(',');
-    namesField.value   = names.join(',');
-    newNamesFld.value  = newNames.join(',');
-    delField.value     = Array.from(toDelete).join(',');
-  });
-})();
-</script>
-{% endblock %}
 
