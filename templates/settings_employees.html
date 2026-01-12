@@ -6,7 +6,7 @@
 <h1>Einstellungen · Mitarbeiter</h1>
 
 <!-- Standortwahl (GET) -->
-<form id="standortForm" method="get" action="/settings/employees" style="margin-bottom:10
+<form id="standortForm" method="get" action="/settingsstandort|default('engelbrechts') %}
     <select name="standort" onchange="document.getElementById('standortForm').submit()">
       <option value="engelbrechts" {{ 'selected' if s == 'engelbrechts' else '' }}>Engelbrechts</option>
       <option value="gross-gerungs" {{ 'selected' if s == 'gross-gerungs' else '' }}>Groß Gerungs</option>
@@ -21,11 +21,11 @@
 {% endif %}
 
 <!-- HAUPTFORMULAR (POST) -->
-<formings/employees
+/settings/employees
   <!-- Standort versteckt mitsenden -->
   <input type="hidden" name="standort" value="{{ standort }}" />
 
-  <!-- Hidden-Felder für optionales Löschen/Update (Backend kann auch ohne diese Felder speichern) -->
+  <!-- Hidden-Felder für optionales Löschen/Update (Backend hat Fallback und funktioniert auch ohne diese Felder) -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
