@@ -23,15 +23,18 @@ app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="stat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("zankl-plan")
 
+
 # -------------------- DB Init --------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def column_exists(cur, table: str, column: str) -> bool:
     cur.execute(f"PRAGMA table_info({table})")
     return any(r[1] == column for r in cur.fetchall())
+
 
 def init_db():
     conn = get_conn()
@@ -84,7 +87,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 # -------------------- Helpers --------------------
 def build_days(year: int, kw: int):
@@ -94,9 +99,10 @@ def build_days(year: int, kw: int):
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
 
+
 def canon_standort(s: str | None) -> str:
     """
-    Wandelt beliebige Eingaben in feste Schlüssel um:
+    Kanonisiert Standort-Schlüssel auf:
     -> 'engelbrechts' | 'gross-gerungs'
     """
     s = (s or "").strip()
@@ -104,7 +110,6 @@ def canon_standort(s: str | None) -> str:
         return "engelbrechts"
     s_low = " ".join(s.lower().split())
     s_low = s_low.replace("ß", "ss").replace("_", "-")
-
     aliases = {
         "engelbrechts": "engelbrechts",
         "eng": "engelbrechts",
@@ -118,6 +123,7 @@ def canon_standort(s: str | None) -> str:
         "gg": "gross-gerungs",
     }
     return aliases.get(s_low, s_low)
+
 
 def resolve_standort(request: Request, body_standort: str | None, query_standort: str | None) -> str:
     """
@@ -137,6 +143,7 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
         except Exception:
             pass
     return "engelbrechts"
+
 
 # -------------------- Admin (optional) --------------------
 @app.get("/admin/normalize-standorte")
@@ -175,6 +182,7 @@ def admin_normalize():
     finally:
         conn.close()
 
+
 @app.get("/admin/debug")
 def admin_debug():
     """Schnelle Sichtprüfung der Mitarbeiter inkl. Standort."""
@@ -187,10 +195,12 @@ def admin_debug():
     finally:
         conn.close()
 
+
 # -------------------- Routes --------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 # ---- Wochenansicht ----
 @app.get("/week", response_class=HTMLResponse)
@@ -254,6 +264,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     finally:
         conn.close()
 
+
 # ---- Zelle setzen (einzeln) ----
 @app.post("/api/week/set-cell")
 async def set_cell(
@@ -292,6 +303,7 @@ async def set_cell(
     finally:
         conn.close()
 
+
 # ---- Batch speichern ----
 @app.post("/api/week/batch")
 async def save_batch(data: dict = Body(...)):
@@ -327,6 +339,7 @@ async def save_batch(data: dict = Body(...)):
     finally:
         conn.close()
 
+
 # ---- 4-Tage-Woche ----
 @app.post("/api/week/set-four-day")
 async def set_four_day(data: dict = Body(...)):
@@ -358,10 +371,12 @@ async def set_four_day(data: dict = Body(...)):
     finally:
         conn.close()
 
+
 # Alias für ältere Frontends (nutzen /api/week/options)
 @app.post("/api/week/options")
 async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
+
 
 # ---- Kleinbaustellen: einzeln ----
 @app.post("/api/klein/set")
@@ -384,6 +399,7 @@ async def klein_set(request: Request, data: dict = Body(...)):
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
+
 
 # ---- Kleinbaustellen: Liste ----
 @app.post("/api/klein/save-list")
@@ -411,6 +427,7 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
+
 # ---- Einstellungen: Mitarbeiter ----
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
@@ -429,6 +446,7 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
     finally:
         conn.close()
 
+
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(
     request: Request,
@@ -438,6 +456,13 @@ async def settings_employees_save(
     new_names: str = Form(""),
     delete_ids: str = Form(""),
 ):
+    """
+    Speichert Mitarbeiter-Änderungen robust:
+    - Standort wird aus Hidden-Feld, Query oder Referer ermittelt.
+    - Updates/Deletes aus Hidden-Feldern (ids/names/delete_ids).
+    - Inserts aus 'new_names' (kommagetrennt).
+      (Falls JS mal nicht lief und 'new_names' leer wäre, bleibt einfach ohne Insert – kein 422.)
+    """
     # Standort robust ermitteln (kein 422, falls Hidden fehlt)
     st_query = request.query_params.get("standort")
     st = resolve_standort(request, standort, st_query)
@@ -446,22 +471,22 @@ async def settings_employees_save(
     cur = conn.cursor()
     try:
         # Delete
-        if delete_ids.strip():
+        if delete_ids and delete_ids.strip():
             for sid in [x for x in delete_ids.split(",") if x.strip()]:
                 try:
                     cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), st))
                 except Exception:
                     pass
 
-        # Update
-        ids_list   = [x.strip() for x in ids.split(",")]   if ids   else []
+        # Update bestehende
+        ids_list   = [x.strip() for x in ids.split(",")]   if ids else []
         names_list = [x.strip() for x in names.split(",")] if names else []
         for i, n in zip(ids_list, names_list):
             if i and n:
                 cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), st))
 
-        # Insert
-        if new_names.strip():
+        # Insert neue
+        if new_names and new_names.strip():
             for n in [x.strip() for x in new_names.split(",") if x.strip()]:
                 cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
 
@@ -478,6 +503,7 @@ async def settings_employees_save(
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
+
 
 # ---- Jahresseite ----
 @app.get("/year", response_class=HTMLResponse)
