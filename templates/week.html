@@ -170,10 +170,16 @@
       <header>Kleinbaustellen</header>
       <div class="list" id="kleinList">
         {% set list = small_jobs or [] %}
-        {% for i in range(list|length) %}
+        {% for item in list %}
+          {% set txt = '' %}
+          {% if item is string %}
+            {% set txt = item %}
+          {% elif item.text is defined %}
+            {% set txt = item.text %}
+          {% endif %}
         <div class="row">
           <span class="drag-handle" title="Ziehen in Wochenzelle" draggable="true">⋮⋮</span>
-          <input type="text" class="job" data-row="{{ i }}" value="{{ list[i] or '' }}" placeholder="">
+          <input type="text" class="job" data-row="{{ loop.index0 }}" value="{{ txt }}" placeholder="">
         </div>
         {% endfor %}
         {% if (not list) or (list|length==0) %}
@@ -199,6 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_WEEKS = 53;
     const FOUR_DAY = !!({{ 1 if four_day_week else 0 }});
 
+    // ---- Plan-Key (für lokalen Freitag-Cache) ----
+    const PLAN_KEY = (loc, kw, year) => `${loc}|${kw}|${year}`;
+    const planKey = PLAN_KEY(CURLOC, KW, YEAR);
+
     // ---- Selects füllen ----
     function initSelectors(){
       const kwSel = document.getElementById('kwSelect');
@@ -222,6 +232,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- 4-Tage-Woche ----
     const fourChk = document.getElementById('fourDayChk');
+    function restoreFridayFromCache() {
+      const cacheRaw = localStorage.getItem(`fridayCache:${planKey}`);
+      if (!cacheRaw) return;
+      const cache = JSON.parse(cacheRaw);
+      document.querySelectorAll('#weekTable td[data-day="4"] input.cell').forEach((inp, idx) => {
+        if (!inp.value && cache && typeof cache[idx] === 'string') {
+          inp.value = cache[idx];
+        }
+      });
+    }
+    function cacheFridayTexts() {
+      const vals = Array.from(document.querySelectorAll('#weekTable td[data-day="4"] input.cell')).map(inp => inp.value || "");
+      localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
+    }
     function applyFourDayWeekUI(flag){
       document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
         const inp = td.querySelector('input.cell');
@@ -238,6 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if(inp){ inp.style.background=''; inp.style.color=''; }
         }
       });
+      // Nach UI-Umschaltung: Freitagstexte nie löschen; bei 4-Tage ggf. aus Cache sichtbar machen
+      if (flag) restoreFridayFromCache();
     }
     async function setFourDayWeek(flag){
       const payload = {
@@ -253,11 +279,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     fourChk.addEventListener('change', async ()=>{
       const flag = fourChk.checked;
+      // Vor Umschaltung: aktuelle Freitag-Werte cachen
+      cacheFridayTexts();
       applyFourDayWeekUI(flag);
       applyColors();
       await setFourDayWeek(flag);
     });
     applyFourDayWeekUI(FOUR_DAY);
+    // Bei erstem Laden: falls 4-Tage aktiv und Backend Freitag leer liefert, aus Cache sichtbar machen
+    if (FOUR_DAY) restoreFridayFromCache();
 
     // ---- Farben ----
     const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx"]);
@@ -291,7 +321,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Speichern Wochenzellen ----
     async function saveCell(row, day, value){
-      if (fourChk.checked && Number(day) === 4) return true;
+      // Vor jedem Speichern: Freitag-Cache aktualisieren (damit er beim Reload sichtbar bleibt)
+      if (Number(day) === 4) cacheFridayTexts();
+      if (fourChk.checked && Number(day) === 4) return true; // Backend skippt bei 4-Tage
       try{
         const res = await fetch('/api/week/set-cell',{
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -309,6 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
     async function saveBatch(updates){
+      // Cache Freitag mit, auch wenn Backend skippt
+      cacheFridayTexts();
       if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
       try{
         const res = await fetch('/api/week/batch',{
@@ -414,6 +448,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.querySelectorAll('.job').forEach(bindJobInput);
     ensureTrailingEmptyJob();
+
+    // Vor Navigation / Reload: alle Kleinbaustellen synchron sichern
+    window.addEventListener('beforeunload', () => {
+      const items = Array.from(document.querySelectorAll('#kleinList input.job'))
+        .map((inp, idx) => ({ row_index: idx, text: (inp.value || '').trim() }));
+      const payload = {
+        standort:(document.getElementById('locationSelect').value || CURLOC),
+        items
+      };
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      // Versuch: /api/klein/save-list (falls vorhanden)
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/klein/save-list', blob);
+      }
+      // Fallback: einzelne Zellen via fetch keepalive
+      items.forEach(it => {
+        fetch('/api/klein/set', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ standort: payload.standort, row_index: it.row_index, text: it.text }),
+          keepalive: true
+        }).catch(()=>{});
+      });
+    });
 
     // ---- DnD im Wochenraster ----
     let dragData=null;
