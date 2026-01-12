@@ -1,23 +1,4 @@
 
-from fastapi.responses import HTMLResponse
-
-@app.get("/settings/employees_plain", response_class=HTMLResponse)
-def employees_plain():
-    return HTMLResponse("""
-<!DOCTYPE html>
-<html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
-<body>
-  <h1>Plain · Mitarbeiter</h1>
-  /settings/employees
-    <input type="hidden" name="standort" value="gross-gerungs">
-    <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
-    <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
-    <button type="submit">Speichern</button>
-  </form>
-</body>
-</html>
-""".strip())
-
 # src/main.py
 from fastapi import FastAPI, Request, Body, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -168,6 +149,25 @@ def admin_debug():
 # -------------------- Routes --------------------
 @app.get("/health")
 def health(): return {"status": "ok"}
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/settings/employees_plain", response_class=HTMLResponse)
+def employees_plain():
+    return HTMLResponse("""
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
+<body>
+  <h1>Plain · Mitarbeiter</h1>
+  /settings/employees
+    <input type="hidden" name="standort" value="gross-gerungs">
+    <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
+    <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
+    <button type="submit">Speichern</button>
+  </form>
+</body>
+</html>
+""".strip())
 
 # ---- Wochenansicht ----
 @app.get("/week", response_class=HTMLResponse)
