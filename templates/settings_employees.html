@@ -5,41 +5,54 @@
 {% block content %}
 <h1>Einstellungen · Mitarbeiter</h1>
 
+<!-- Standortwahl (falls du sie im Menü steuerst, kannst du diesen Block rausnehmen) -->
 /settings/employees
   <label>Standort:
-    <select name="standort" onchange="this.form.submit()">
-      {% set s = standort|default('engelbrechts') %}
+    {% set s = standort|default('engelbrechts') %}
+    <select name="standort" onchange="document.getElementById('standortForm').submit()">
       <option value="engelbrechts" {{ 'selected' if s == 'engelbrechts' else '' }}>Engelbrechts</option>
       <option value="gross-gerungs" {{ 'selected' if s == 'gross-gerungs' else '' }}>Groß Gerungs</option>
     </select>
   </label>
 </form>
 
-{% if saved %}<div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">Gespeichert.</div>{% endif %}
+{% if saved %}
+  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">
+    Gespeichert.
+  </div>
+{% endif %}
 
-<form method="post" action="/settings/emn" name="standort" value="{{ standort }}" />
+<!-- HAUPTFORMULAR: POST auf /settings/employees -->
+/settings/employees
+  <input type="hidden" name="standort" value="{{ standort }}" />
+
+  <!-- Hidden Felder, die JS beim Submit befüllt -->
   <input type="hidden" name="ids" id="idsField" />
   <input type="hidden" name="names" id="namesField" />
   <input type="hidden" name="new_names" id="newNamesField" />
   <input type="hidden" name="delete_ids" id="deleteIdsField" />
 
-  <table class="table" style="margin-bottom:10px;">
+  <table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
     <thead>
-      <tr><th style="width:80px;">ID</th><th>Name</th><th style="width:120px;">Aktionen</th></tr>
+      <tr>
+        <th style="width:80px; text-align:left;">ID</th>
+        <th style="text-align:left;">Name</th>
+        <th style="width:120px; text-align:left;">Aktionen</th>
+      </tr>
     </thead>
     <tbody id="empTableBody">
       {% for e in employees|default([]) %}
-      <tr data-id="{{ e.id }}">
-        <td>{{ e.id }}</td>
-        <td><input type="text" value="{{ e.name }}" class="emp-name" style="width:100%;"></td>
-        <td><button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button></td>
-      </tr>
+        <tr data-id="{{ e.id }}">
+          <td>{{ e.id }}</td>
+          <td><input type="text" value="{{ e.name }}" class="emp-name" style="width:100%;"></td>
+          <td><button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button></td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <div class="form-inline">
-    <input type="text" id="newNameInput" placeholder="Neuer Mitarbeitername" />
+  <div class="form-inline" style="display:flex; gap:8px; align-items:center;">
+    <input type="text" id="newNameInput" placeholder="Neuer Mitarbeitername" style="flex:1;"/>
     <button type="button" id="addBtn">Hinzufügen</button>
   </div>
 
@@ -47,64 +60,84 @@
     <button type="submit" id="saveBtn">Speichern</button>
   </div>
 </form>
+{% endblock %}
 
+{% block scripts %}
 <script>
 (function(){
-  const empBody = document.getElementById('empTableBody');
-  const idsField = document.getElementById('idsField');
-  const namesField = document.getElementById('namesField');
-  const newNamesField = document.getElementById('newNamesField');
-  const delField = document.getElementById('deleteIdsField');
-
-  const newInput = document.getElementById('newNameInput');
-  const addBtn = document.getElementById('addBtn');
+  const empForm     = document.getElementById('empForm');
+  const empBody     = document.getElementById('empTableBody');
+  const idsField    = document.getElementById('idsField');
+  const namesField  = document.getElementById('namesField');
+  const newNamesFld = document.getElementById('newNamesField');
+  const delField    = document.getElementById('deleteIdsField');
+  const newInput    = document.getElementById('newNameInput');
+  const addBtn      = document.getElementById('addBtn');
 
   const toDelete = new Set();
   const newNames = [];
 
+  // Neuen Mitarbeiter zur Tabelle hinzufügen (lokal, bis Submit)
   addBtn.addEventListener('click', function(){
     const n = (newInput.value || '').trim();
     if (!n) return;
     newNames.push(n);
+
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>neu</td><td><input type="text" value="${n}" class="emp-name-new" style="width:100%;"></td><td><button type="button" class="btn-del-new">Entfernen</button></td>`;
+    tr.innerHTML = `
+      <td>neu</td>
+      <td><input type="text" value="${n}" class="emp-name-new" style="width:100%;"></td>
+      <td><button type="button" class="btn-del-new">Entfernen</button></td>
+    `;
     empBody.appendChild(tr);
     newInput.value = '';
+
     tr.querySelector('.btn-del-new').addEventListener('click', function(){
-      tr.remove();
       const idx = newNames.indexOf(n);
       if (idx >= 0) newNames.splice(idx, 1);
+      tr.remove();
     });
   });
 
+  // Bestehenden Mitarbeiter zum Löschen markieren
   empBody.querySelectorAll('.btn-del').forEach(btn => {
     btn.addEventListener('click', function(){
       const id = this.getAttribute('data-id');
-      toDelete.add(id);
+      if (id) toDelete.add(id);
       const tr = this.closest('tr');
       if (tr) tr.remove();
     });
   });
 
-  document.getElementById('empForm').addEventListener('submit', function(){
+  // Beim Submit: die Hidden-Felder befüllen
+  empForm.addEventListener('submit', function(){
     const ids = [];
     const names = [];
+
     empBody.querySelectorAll('tr').forEach(tr => {
-      const idCell = tr.querySelector('td:first-child');
-      const nameInput = tr.querySelector('input.emp-name');
-      if (idCell && nameInput) {
-        const idText = idCell.textContent.trim();
-        const nameText = (nameInput.value || '').trim();
-        if (idText && idText !== 'neu') {
-          ids.push(idText);
-          names.push(nameText);
+      const idCell   = tr.querySelector('td:first-child');
+      const nameIn   = tr.querySelector('input.emp-name');
+      const nameNew  = tr.querySelector('input.emp-name-new');
+
+      const idText   = idCell ? idCell.textContent.trim() : '';
+      const nameText = (nameIn ? nameIn.value : (nameNew ? nameNew.value : '')).trim();
+
+      if (idText && idText !== 'neu') {
+        // existierende Mitarbeiter (Update)
+        ids.push(idText);
+        names.push(nameText);
+      } else if (!idText || idText === 'neu') {
+        // neue Mitarbeiter: werden separat über new_names gesendet
+        if (nameText) {
+          if (!newNames.includes(nameText)) newNames.push(nameText);
         }
       }
     });
-    idsField.value = ids.join(',');
-    namesField.value = names.join(',');
-    newNamesField.value = newNames.join(',');
-    delField.value = Array.from(toDelete).join(',');
+
+    idsField.value     = ids.join(',');
+    namesField.value   = names.join(',');
+    newNamesFld.value  = newNames.join(',');
+    delField.value     = Array.from(toDelete).join(',');
   });
 })();
 </script>
