@@ -323,76 +323,85 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
     finally:
         conn.close()
 
+
 @app.post("/settings/employees", response_class=HTMLResponse)
-async def settings_employees_save(
-    request: Request,
-    standort: str | None = Form(None),
-    ids: str = Form(""),
-    names: str = Form(""),
-    new_names: str = Form(""),
-    delete_ids: str = Form(""),
-):
-    # Standort robust ermitteln
-    st_query = request.query_params.get("standort")
-    st = resolve_standort(request, standort, st_query)
-
-    # --- Fallback: Form-Felder direkt auslesen (falls JS die Hidden-Felder nicht befüllt hat) ---
+async def settings_employees_save(request: Request):
+    """
+    Robuster Save:
+    - Standort aus Hidden/Query/Referer.
+    - Updates/Deletes aus Hidden-Feldern, Fallback aus benannten Inputs.
+    - Inserts aus Hidden 'new_names' ODER aus benannten Inputs 'emp_name_new[]'.
+    -> Keine Pydantic-Validierung in der Signatur => keine 422 mehr.
+    """
     form = await request.form()
-    # Existierende Mitarbeiter-Inputs: name="emp_name_existing_<ID>"
-    upd_pairs = []
-    for key, val in form.items():
-        if key.startswith("emp_name_existing_"):
-            try:
-                emp_id = int(key.split("_")[-1])
-                upd_pairs.append((emp_id, (val or "").strip()))
-            except Exception:
-                pass
-    # Neue Mitarbeiter-Inputs: name="emp_name_new[]"
-    new_list_fallback = []
-    for key, val in form.items():
-        if key == "emp_name_new[]":
-            t = (val or "").strip()
-            if t: new_list_fallback.append(t)
 
-    # Hidden-Felder auswerten (haben Priorität, wenn gefüllt)
-    ids_list   = [x.strip() for x in ids.split(",")]   if ids else []
-    names_list = [x.strip() for x in names.split(",")] if names else []
-    new_names_list = [x.strip() for x in new_names.split(",") if x.strip()] if new_names else []
+    # Standort robust ermitteln
+    st = form.get("standort") or request.query_params.get("standort") or None
+    st = resolve_standort(request, st, request.query_params.get("standort"))
 
     conn = get_conn(); cur = conn.cursor()
     try:
-        # Delete
-        if delete_ids and delete_ids.strip():
+        # ---- Deletes ----
+        delete_ids = (form.get("delete_ids") or "").strip()
+        if delete_ids:
             for sid in [x for x in delete_ids.split(",") if x.strip()]:
-                try: cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), st))
-                except Exception: pass
+                try:
+                    cur.execute("DELETE FROM employees WHERE id=? AND standort=?", (int(sid.strip()), st))
+                except Exception:
+                    pass
 
-        # Update (Hidden) oder Fallback aus benannten Inputs
-        if ids_list and names_list:
+        # ---- Updates ----
+        ids   = (form.get("ids") or "").strip()
+        names = (form.get("names") or "").strip()
+        if ids and names:
+            ids_list   = [x.strip() for x in ids.split(",")]
+            names_list = [x.strip() for x in names.split(",")]
             for i, n in zip(ids_list, names_list):
-                if i and n: cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), st))
-        elif upd_pairs:
-            for emp_id, n in upd_pairs:
-                if n: cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, emp_id, st))
+                if i and n:
+                    cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (n, int(i), st))
+        else:
+            # Fallback: name="emp_name_existing_<ID>"
+            for key, val in form.items():
+                if key.startswith("emp_name_existing_"):
+                    try:
+                        emp_id = int(key.split("_")[-1])
+                        name_val = (val or "").strip()
+                        cur.execute("UPDATE employees SET name=? WHERE id=? AND standort=?", (name_val, emp_id, st))
+                    except Exception:
+                        pass
 
-        # Insert neue (Hidden) oder Fallback
-        if new_names_list:
-            for n in new_names_list:
-                cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
-        elif new_list_fallback:
-            for n in new_list_fallback:
-                cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+        # ---- Inserts ----
+        new_list = []
+        # Hidden: new_names
+        hidden_new = (form.get("new_names") or "").strip()
+        if hidden_new:
+            new_list.extend([x.strip() for x in hidden_new.split(",") if x.strip()])
+        # Fallback: mehrfaches name="emp_name_new[]"
+        for key, val in form.multi_items():
+            if key == "emp_name_new[]":
+                t = (val or "").strip()
+                if t:
+                    new_list.append(t)
+
+        for n in new_list:
+            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
 
         conn.commit()
 
-        # zurück zur Seite
+        # Reload mit Daten
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
         employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse("settings_employees.html", {"request": request, "standort": st, "employees": employees, "saved": True})
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees, "saved": True},
+        )
+
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+
     finally:
         conn.close()
+
 
 # ---- Jahresseite ----
 @app.get("/year", response_class=HTMLResponse)
