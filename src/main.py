@@ -487,4 +487,3 @@ def year_page(request: Request, year: int = 2025):
     except Exception:
         # Fallback: einfache Seite, falls Template fehlt
         return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
-
