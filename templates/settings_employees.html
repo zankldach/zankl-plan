@@ -43,7 +43,7 @@
     </tbody>
   </table>
 
-  <!-- Schnellanlage (OHNE JS obligatorisch funktionsfähig) -->
+  <!-- Schnellanlage – funktioniert OHNE JS -->
   <div style="display:flex; gap:8px; align-items:center; padding:8px 0;">
     <label for="newNameInputBase" style="white-space:nowrap;">Neuer Mitarbeiter:</label>
     <input type="text" id="newNameInputBase" name="emp_name_new[]" placeholder="Name eingeben" style="flex:1; min-width:220px;"/>
@@ -64,11 +64,10 @@
   const empBody   = document.getElementById('empTableBody');
   const idsField  = document.getElementById('idsField');
   const namesFld  = document.getElementById('namesField');
-  const newNames  = document.getElementById('newNamesField');
   const delFld    = document.getElementById('deleteIdsField');
   const addBtn    = document.getElementById('addBtn');
 
-  // Komfort: Weitere "emp_name_new[]" Felder hinzufügen (optional)
+  // OPTIONALE Komfortfunktion: weitere "emp_name_new[]" Felder hinzufügen
   addBtn.addEventListener('click', function(){
     const row = document.createElement('div');
     row.style.display = 'flex';
@@ -82,7 +81,7 @@
     empForm.insertBefore(row, document.getElementById('saveBtn').parentElement);
   });
 
-  // Löschen bestehender Mitarbeiter (Hidden-Feld füllen)
+  // Löschen bestehender Mitarbeiter: IDs ins Hidden-Feld sammeln
   empBody.querySelectorAll('.btn-del').forEach(btn => {
     btn.addEventListener('click', function(){
       const id = this.getAttribute('data-id');
@@ -96,10 +95,9 @@
     });
   });
 
-  // Hidden-Felder für Updates/Neuanlage (JS-Variante; Backend hat Fallback)
+  // Hidden-Felder für Updates (optional; Backend hat Fallback)
   empForm.addEventListener('submit', function(){
     const ids = [], names = [];
-
     empBody.querySelectorAll('tr').forEach(tr => {
       const idCell = tr.querySelector('td:first-child');
       const input  = tr.querySelector('input.emp-name');
@@ -107,13 +105,10 @@
       const nameText = input ? input.value.trim() : '';
       if (idText && idText !== 'neu') { ids.push(idText); names.push(nameText); }
     });
-
     idsField.value = ids.join(',');
     namesFld.value = names.join(',');
-    // newNames bleibt leer; Inserts kommen entweder über Hidden new_names (hier nicht nötig)
-    // oder über die benannten Inputs name="emp_name_new[]" (Fallback im Backend).
+    // Neue Namen werden über "emp_name_new[]" gesendet (Fallback im Backend), daher hier kein Zwang für new_names.
   });
 })();
 </script>
 {% endblock %}
-``
