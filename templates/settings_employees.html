@@ -86,3 +86,59 @@
     if (!n) { newInput.focus(); return; }
     newNames.push(n);
 
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>neu</td>
+      <td><input type="text" value="${n}" class="emp-name-new" style="width:100%;"></td>
+      <td><button type="button" class="btn-del-new">Entfernen</button></td>
+    `;
+    empBody.appendChild(tr);
+    newInput.value = '';
+    newInput.focus();
+
+    tr.querySelector('.btn-del-new').addEventListener('click', function(){
+      const idx = newNames.indexOf(n);
+      if (idx >= 0) newNames.splice(idx, 1);
+      tr.remove();
+    });
+  });
+
+  // Bestehenden Mitarbeiter zum Löschen markieren
+  empBody.querySelectorAll('.btn-del').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const id = this.getAttribute('data-id');
+      if (id) toDelete.add(id);
+      const tr = this.closest('tr');
+      if (tr) tr.remove();
+    });
+  });
+
+  // Beim Submit: Hidden-Felder befüllen
+  empForm.addEventListener('submit', function(){
+    const ids = [];
+    const names = [];
+
+    empBody.querySelectorAll('tr').forEach(tr => {
+      const idCell   = tr.querySelector('td:first-child');
+      const nameIn   = tr.querySelector('input.emp-name');
+      const nameNew  = tr.querySelector('input.emp-name-new');
+
+      const idText   = idCell ? idCell.textContent.trim() : '';
+      const nameText = (nameIn ? nameIn.value : (nameNew ? nameNew.value : '')).trim();
+
+      if (idText && idText !== 'neu') {
+        ids.push(idText);
+        names.push(nameText);
+      } else if (!idText || idText === 'neu') {
+        if (nameText && !newNames.includes(nameText)) newNames.push(nameText);
+      }
+    });
+
+    idsField.value     = ids.join(',');
+    namesField.value   = names.join(',');
+    newNamesFld.value  = newNames.join(',');
+    delField.value     = Array.from(toDelete).join(',');
+  });
+})();
+</script>
+{% endblock %}
