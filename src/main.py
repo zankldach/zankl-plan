@@ -19,8 +19,15 @@ DB_PATH  = BASE_DIR / "zankl.db"
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("zankl-plan")
 
-# ===== Admin: Templates roh schreiben (Heredoc) =====
+STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
+
+
+# =========================
+# Admin: Templates roh schreiben (Heredoc)
+# =========================
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -110,6 +117,142 @@ NAVBAR_HTML = """<nav class="site" role="navigation" aria-label="Hauptnavigation
 </nav>
 """
 
+SETTINGS_EMPLOYEES_HTML = """{% extends "base.html" %}
+{% block title %}Einstellungen · Mitarbeiter{% endblock %}
+
+{% block content %}
+<h1>Einstellungen · Mitarbeiter</h1>
+
+<!-- Standortwechsel (GET) -->
+/settings/employees
+  <label>Standort:
+    <select name="standort" onchange="document.getElementById('standortForm').submit()">
+      <option value="engelbrechts" {{ 'selected' if standort=='engelbrechts' else '' }}>Engelbrechts</option>
+      <option value="gross-gerungs" {{ 'selected' if standort=='gross-gerungs' else '' }}>Groß Gerungs</option>
+    </select>
+  </label>
+</form>
+
+{% if saved %}
+  <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">
+    Gespeichert.
+  </div>
+{% endif %}
+
+<!-- Bestehende Mitarbeiter (read-only Anzeige) -->
+<table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
+  <thead>
+    <tr>
+      <th style="width:80px; text-align:left;">ID</th>
+      <th style="text-align:left;">Name</th>
+    </tr>
+  </thead>
+  <tbody id="empTableBody">
+    {% for e in employees or [] %}
+    <tr>
+      <td style="text-align:left;">{{ e.id }}</td>
+      <td style="text-align:left;">
+        <input type="text" value="{{ e.name }}" disabled style="width:100%; background:#f8fafc; color:#111;">
+      </td>
+    </tr>
+    {% endfor %}
+    {% if (not employees) or (employees|length==0) %}
+    <tr>
+      <td colspan="2" style="text-align:left; color:#64748b;">Noch keine Mitarbeiter für diesen Standort erfasst.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<!-- Hauptformular (POST) – neue Mitarbeiter anlegen -->
+/settings/employees
+  <input type="hidden" name="standort" value="{{ standort }}"/>
+
+  <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
+    <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
+    <p style="margin:0 0 8px 0; color:#64748b;">
+      Trage die Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
+    </p>
+
+    <div id="newInputs" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="new-row" style="display:grid; grid-template-columns: 180px 1fr; gap:8px; align-items:center;">
+        <label>Neuer Mitarbeiter:</label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
+                 style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+          <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button type="button" id="addBtn">Weiteres Feld</button>
+      <button type="submit" id="saveBtn">Speichern</button>
+    </div>
+  </fieldset>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  const form   = document.getElementById('empForm');
+  const wrap   = document.getElementById('newInputs');
+  const addBtn = document.getElementById('addBtn');
+
+  function makeRow(value=""){
+    const row = document.createElement('div');
+    row.className = 'new-row';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '180px 1fr';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+      <label>Neuer Mitarbeiter:</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
+               style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+        <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
+      </div>
+    `;
+    const inp = row.querySelector('input[name="emp_name_new[]"]');
+    const rmv = row.querySelector('.btn-remove');
+    if (value) inp.value = value;
+
+    rmv.addEventListener('click', ()=>{
+      const rows = wrap.querySelectorAll('.new-row');
+      if (rows.length > 1) { row.remove(); ensureTrailingEmpty(); }
+      else { inp.value = ''; }
+    });
+
+    inp.addEventListener('input', ensureTrailingEmpty);
+    return row;
+  }
+
+  function ensureTrailingEmpty(){
+    const inputs = Array.from(wrap.querySelectorAll('input[name="emp_name_new[]"]'));
+    const needEmpty = !(inputs.length > 0 && inputs[inputs.length-1].value.trim() === '');
+    if (needEmpty) wrap.appendChild(makeRow(""));
+  }
+
+  ensureTrailingEmpty();
+
+  if (addBtn) {
+    addBtn.addEventListener('click', ()=>{
+      wrap.appendChild(makeRow(""));
+      const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
+      all[all.length-1]?.focus();
+    });
+  }
+
+  form.addEventListener('submit', ()=>{
+    // Backend filtert leere Felder; kein extra JS nötig
+  });
+});
+</script>
+{% endblock %}
+"""
+
 @app.post("/admin/write-base")
 def admin_write_base():
     """Schreibt templates/base.html + _navbar.html roh auf die Platte."""
@@ -133,6 +276,17 @@ def admin_write_navbar():
     except Exception as e:
         return Response(str(e), status_code=500, media_type="text/plain")
 
+@app.post("/admin/write-settings")
+def admin_write_settings():
+    """Schreibt templates/settings_employees.html roh auf die Platte."""
+    try:
+        tpl_dir = ROOT_DIR / "templates"
+        tpl_dir.mkdir(parents=True, exist_ok=True)
+        (tpl_dir / "settings_employees.html").write_text(SETTINGS_EMPLOYEES_HTML, encoding="utf-8")
+        return {"ok": True, "wrote": ["settings_employees.html"]}
+    except Exception as e:
+        return Response(str(e), status_code=500, media_type="text/plain")
+
 # Optional: GET-Routen, damit du im Browser klicken kannst
 @app.get("/admin/write-base")
 def admin_write_base_get():
@@ -142,14 +296,14 @@ def admin_write_base_get():
 def admin_write_navbar_get():
     return admin_write_navbar()
 
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("zankl-plan")
-
-STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
+@app.get("/admin/write-settings")
+def admin_write_settings_get():
+    return admin_write_settings()
 
 
-# ---------------- DB Init ----------------
+# =========================
+# DB Init
+# =========================
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -209,7 +363,9 @@ def init_db():
 init_db()
 
 
-# ---------------- Helpers ----------------
+# =========================
+# Helpers
+# =========================
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
@@ -247,7 +403,9 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
     return "engelbrechts"
 
 
-# ---------------- Admin / Debug ----------------
+# =========================
+# Admin / Debug
+# =========================
 @app.get("/admin/normalize-standorte")
 def admin_normalize():
     conn = get_conn(); cur = conn.cursor()
@@ -276,13 +434,17 @@ def admin_debug():
         conn.close()
 
 
-# ---------------- Health ----------------
+# =========================
+# Health
+# =========================
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-# ---------------- Plain Test: Employees ----------------
+# =========================
+# Plain Test: Employees
+# =========================
 @app.get("/settings/employees_plain", response_class=HTMLResponse)
 def employees_plain():
     # Minimal, bewusst ohne Styles – zum Backend-Testen
@@ -302,7 +464,9 @@ def employees_plain():
 """.strip())
 
 
-# ---------------- Week (GET) ----------------
+# =========================
+# Week (GET)
+# =========================
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
     standort = canon_standort(standort)
@@ -351,7 +515,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
                 "standort": standort,
                 "four_day_week": bool(four_day_week),
                 "small_jobs": sj,
-                "standorte": STANDORTE,  # <— wichtig für Dropdown
+                "standorte": STANDORTE,  # für Standort-Dropdown
             }
         )
     except Exception:
@@ -360,7 +524,9 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         conn.close()
 
 
-# ---------------- Week: set cell (single) ----------------
+# =========================
+# Week: set cell (single)
+# =========================
 @app.post("/api/week/set-cell")
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
     conn = get_conn(); cur = conn.cursor()
@@ -387,7 +553,9 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
         conn.close()
 
 
-# ---------------- Week: batch ----------------
+# =========================
+# Week: batch
+# =========================
 @app.post("/api/week/batch")
 async def save_batch(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -412,12 +580,14 @@ async def save_batch(data: dict = Body(...)):
         conn.commit()
         return {"ok": True, "count": len(updates)}
     except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+        return JSONResponse({"ok": False, "error": traceback.format\_exc()}, status\_code=500)
     finally:
         conn.close()
 
 
-# ---------------- Week: 4-Tage-Woche ----------------
+# =========================
+# Week: 4-Tage-Woche
+# =========================
 @app.post("/api/week/set-four-day")
 async def set_four_day(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -445,7 +615,9 @@ async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
 
-# ---------------- Kleinbaustellen ----------------
+# =========================
+# Kleinbaustellen
+# =========================
 @app.post("/api/klein/set")
 async def klein_set(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -486,7 +658,9 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
         conn.close()
 
 
-# ---------------- Einstellungen: Mitarbeiter ----------------
+# =========================
+# Einstellungen: Mitarbeiter
+# =========================
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
     st = canon_standort(standort)
@@ -534,3 +708,14 @@ async def settings_employees_save(request: Request):
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
+
+
+# =========================
+# Year (Platzhalter, mit Fallback)
+# =========================
+@app.get("/year", response_class=HTMLResponse)
+def year_page(request: Request, year: int = 2025):
+    try:
+        return templates.TemplateResponse("year.html", {"request": request, "year": year})
+    except Exception:
+        return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
