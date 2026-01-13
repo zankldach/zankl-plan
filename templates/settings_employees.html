@@ -5,11 +5,10 @@
 {% block content %}
 <h1>Einstellungen · Mitarbeiter</h1>
 
-<!-- Standortwahl (GET) -->
-<form id="standortForm" method="get" action="/settingsstandort|default('engelbrechts') %}
-    <select name="standort" onchange="document.getElementById('standortForm').submit()">
-      <option value="engelbrechts" {{ 'selected' if s == 'engelbrechts' else '' }}>Engelbrechts</option>
-      <option value="gross-gerungs" {{ 'selected' if s == 'gross-gerungs' else '' }}>Groß Gerungs</option>
+<!-- Standortwechsel (GET) -->
+<form id="standortForm" method="get" action="/settings/employees" style="margincument.getElementById('standortForm').submit()">
+      <option value="engelbrechts" {{ 'selected' if standort=='engelbrechts' else '' }}>Engelbrechts</option>
+      <option value="gross-gerungs" {{ 'selected' if standort=='gross-gerungs' else '' }}>Groß Gerungs</option>
     </select>
   </label>
 </form>
@@ -20,62 +19,41 @@
   </div>
 {% endif %}
 
-<!-- HAUPTFORMULAR (POST) -->
+<!-- Hauptformular (POST) -->
 /settings/employees
-  <!-- Standort versteckt mitsenden -->
-  <input type="hidden" name="standort" value="{{ standort }}" />
+  <input type="hidden" name="standort" value="{{ standort }}"/>
 
-  <!-- Hidden-Felder für optionales Löschen/Update (Backend hat Fallback und funktioniert auch ohne diese Felder) -->
-  <input type="hidden" name="ids" id="idsField" />
-  <input type="hidden" name="names" id="namesField" />
-  <input type="hidden" name="new_names" id="newNamesField" />
-  <input type="hidden" name="delete_ids" id="deleteIdsField" />
-
-  <!-- Bestehende Mitarbeiter -->
   <table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
     <thead>
       <tr>
         <th style="width:80px; text-align:left;">ID</th>
         <th style="text-align:left;">Name</th>
-        <th style="width:120px; text-align:left;">Aktionen</th>
       </tr>
     </thead>
     <tbody id="empTableBody">
-      {% for e in employees|default([]) %}
-        <tr data-id="{{ e.id }}">
-          <td>{{ e.id }}</td>
-          <td>
-            <input type="text"
-                   name="emp_name_existing_{{ e.id }}"
-                   value="{{ e.name }}"
-                   class="emp-name"
-                   style="width:100%;">
-          </td>
-          <td>
-            <button type="button" class="btn-del" data-id="{{ e.id }}">Löschen</button>
-          </td>
-        </tr>
+      {% for e in employees or [] %}
+      <tr data-id="{{ e.id }}">
+        <td style="text-align:left;">{{ e.id }}</td>
+        <td style="text-align:left;">
+          <input type="text" value="{{ e.name }}" disabled style="width:100%; background:#f8fafc;">
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <!-- Neue Mitarbeiter: dynamisch & ohne Limit -->
   <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
     <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
-
     <p style="margin:0 0 8px 0; color:#64748b;">
-      Trage die Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
+      Trage Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
     </p>
-
     <div id="newInputs" style="display:flex; flex-direction:column; gap:8px;">
-      <!-- Start: eine leere Zeile -->
       <div class="new-row" style="display:grid; grid-template-columns: 180px 1fr; gap:8px; align-items:center;">
         <label>Neuer Mitarbeiter:</label>
         <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
                style="width:100%; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
       </div>
     </div>
-
     <div style="margin-top:8px;">
       <button type="button" id="addBtn">Weiteres Feld</button>
     </div>
@@ -89,25 +67,18 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  const empForm  = document.getElementById('empForm');
-  const empBody  = document.getElementById('empTableBody');
-  const addBtn   = document.getElementById('addBtn');
-  const newWrap  = document.getElementById('newInputs');
-  const idsField = document.getElementById('idsField');
-  const namesFld = document.getElementById('namesField');
-  const delFld   = document.getElementById('deleteIdsField');
+document.addEventListener('DOMContentLoaded', ()=>{
+  const form   = document.getElementById('empForm');
+  const wrap   = document.getElementById('newInputs');
+  const addBtn = document.getElementById('addBtn');
 
-  if (!empForm || !newWrap) return;
-
-  function createNewRow(value = "") {
+  function makeRow(value=""){
     const row = document.createElement('div');
     row.className = 'new-row';
     row.style.display = 'grid';
     row.style.gridTemplateColumns = '180px 1fr';
     row.style.gap = '8px';
     row.style.alignItems = 'center';
-
     row.innerHTML = `
       <label>Neuer Mitarbeiter:</label>
       <div style="display:flex; gap:6px; align-items:center;">
@@ -119,68 +90,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const inp = row.querySelector('input[name="emp_name_new[]"]');
     const rmv = row.querySelector('.btn-remove');
     if (value) inp.value = value;
-
-    rmv.addEventListener('click', function () {
-      const rows = newWrap.querySelectorAll('.new-row');
-      if (rows.length > 1) {
-        row.remove();
-        ensureTrailingEmpty();
-      }
+    rmv.addEventListener('click', ()=>{
+      const rows = wrap.querySelectorAll('.new-row');
+      if (rows.length > 1) { row.remove(); ensureTrailingEmpty(); }
     });
-
     inp.addEventListener('input', ensureTrailingEmpty);
     return row;
   }
-
-  function ensureTrailingEmpty() {
-    const inputs = Array.from(newWrap.querySelectorAll('input[name="emp_name_new[]"]'));
-    const hasEmptyAtEnd = inputs.length > 0 && (inputs[inputs.length - 1].value.trim() === '');
-    if (!hasEmptyAtEnd) {
-      newWrap.appendChild(createNewRow(""));
-    }
+  function ensureTrailingEmpty(){
+    const inputs = Array.from(wrap.querySelectorAll('input[name="emp_name_new[]"]'));
+    const hasEmpty = inputs.length>0 && inputs[inputs.length-1].value.trim()==='';
+    if (!hasEmpty) wrap.appendChild(makeRow(""));
   }
-
-  // Initial sicherstellen
   ensureTrailingEmpty();
 
-  if (addBtn) {
-    addBtn.addEventListener('click', function () {
-      newWrap.appendChild(createNewRow(""));
-      const last = newWrap.querySelectorAll('input[name="emp_name_new[]"]');
-      if (last.length) last[last.length - 1].focus();
-    });
-  }
+  if (addBtn) addBtn.addEventListener('click', ()=>{
+    wrap.appendChild(makeRow(""));
+    const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
+    all[all.length-1]?.focus();
+  });
 
-  if (empBody) {
-    empBody.querySelectorAll('.btn-del').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        const id = this.getAttribute('data-id');
-        const tr = this.closest('tr');
-        if (id && tr) {
-          const current = delFld.value ? delFld.value.split(',').filter(Boolean) : [];
-          current.push(id);
-          delFld.value = current.join(',');
-          tr.remove();
-        }
-      });
-    });
-  }
-
-  empForm.addEventListener('submit', function () {
-    const ids = [];
-    const names = [];
-    if (empBody) {
-      empBody.querySelectorAll('tr').forEach(function (tr) {
-        const idCell = tr.querySelector('td:first-child');
-        const input  = tr.querySelector('input.emp-name');
-        const idText = idCell ? idCell.textContent.trim() : '';
-        const nameText = input ? input.value.trim() : '';
-        if (idText && idText !== 'neu') { ids.push(idText); names.push(nameText); }
-      });
-    }
-    idsField.value = ids.join(',');
-    namesFld.value = names.join(',');
-    // Neue Namen kommen über emp_name_new[]; leere Felder ignoriert das Backend.
+  form.addEventListener('submit', ()=>{
+    // nichts weiter – Backend ignoriert leere Felder ohnehin
   });
 });
 </script>
