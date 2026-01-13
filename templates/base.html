@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -6,101 +7,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- CSS -->
-  <link rel="stylesheet" href="/static/style.v2.css">
-  <link rel="stylesheet" href="/static/style.css">
-
-  <!-- App JS -->
-  <script src="/static/app.js" defer></script>
+  <linkic/style.v2.css
+  /static/style.css
 
   <style>
-    :root { --blue: #003a8f; --bg: #f4f6f8; }
-    html, body { height: 100%; }
+    :root { --blue:#003a8f; --bg:#f4f6f8; }
+    html, body { height:100%; }
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
-      background: var(--bg);
-      color: #0f172a;
+      margin:0; background:var(--bg); color:#0f172a;
     }
-
     header.site {
-      background: var(--blue);
-      color: #fff;
-      padding: 10px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      background:var(--blue); color:#fff; padding:10px 20px;
+      display:flex; justify-content:space-between; align-items:center;
     }
-
     nav.site {
-      background: var(--blue);
-      padding: 6px 20px;
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
+      background:var(--blue); padding:6px 20px; display:flex; gap:16px; align-items:center;
+      position:sticky; top:0; z-index:1000;
     }
+    nav.site a { color:white; text-decoration:none; font-weight:600; padding:6px 10px; border-radius:6px; }
+    nav.site a:hover { background: rgba(255,255,255,0.14); }
+    nav.site a.is-active { background: rgba(255,255,255,0.22); }
+    #settingsGear { cursor:pointer; font-size:20px; }
+    main { padding:20px; }
 
-    nav.site a {
-      color: white;
-      text-decoration: none;
-      font-weight: 600;
-      padding: 6px 10px;
-      border-radius: 6px;
-    }
-
-    nav.site a:hover {
-      background: rgba(255,255,255,0.14);
-    }
-
-    nav.site a.is-active {
-      background: rgba(255,255,255,0.22);
-    }
-
-    #settingsGear {
-      cursor: pointer;
-      font-size: 20px;
-    }
-
-    main {
-      padding: 20px;
-    }
-
-    /* Tabellen Defaults */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 6px;
-      text-align: center;
-    }
-    th {
-      background: #eef2f6;
-    }
-    td input {
-      width: 100%;
-      height: 100%;
-      padding: 6px;
-      box-sizing: border-box;
-      border: none;
-      background: transparent;
-      text-align: center;
-      font-size: 14px;
+    table { width:100%; border-collapse: collapse; background:#fff; }
+    th, td { border:1px solid #ddd; padding:6px; text-align:center; }
+    th { background:#eef2f6; }
+    td input, td textarea {
+      width:100%; height:100%; padding:6px; box-sizing:border-box;
+      border:none; background:transparent; text-align:center; font-size:14px;
     }
   </style>
 
   {% block head %}{% endblock %}
 </head>
-
 <body>
-
-  <!-- 4-Tage-Woche Flag -->
+  <!-- four_day_week sicher defaulten -->
   <script>
-    window.__fourDay = {{ 'true' if four_day_week else 'false' }};
+    window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }};
   </script>
 
   <header class="site">
@@ -109,11 +54,11 @@
   </header>
 
   <nav class="site">
-    <a href="/week?standort=engelbrechts">Engelbrechts</a>
-    <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
-    <a href="/settings/employees">Einstellungen</a>
-    <a href="/year">Jahr</a>
-    <a href="/health">Health</a>
+    /week?standort=engelbrechtsEngelbrechts</a>
+    /week?standort=gross-gerungsGroß Gerungs</a>
+    <a href="/employeesEinstellungen</a>
+    /yearJahr</a>
+    /healthHealth</a>
   </nav>
 
   <main>
@@ -123,19 +68,13 @@
   <script>
     // Zahnrad → Einstellungen
     const gear = document.getElementById('settingsGear');
-    if (gear) {
-      gear.addEventListener('click', () => {
-        window.location.href = '/settings/employees';
-      });
-    }
+    if (gear) gear.addEventListener('click', ()=>{ window.location.href = '/settings/employees'; });
 
     // Aktiven Menüpunkt markieren
     const currentPath = window.location.pathname;
-    document.querySelectorAll('nav.site a').forEach(a => {
+    document.querySelectorAll('nav.site a').forEach(a=>{
       const aPath = new URL(a.href, window.location.origin).pathname;
-      if (currentPath === aPath || currentPath.startsWith(aPath)) {
-        a.classList.add('is-active');
-      }
+      if (currentPath === aPath || currentPath.startsWith(aPath)) a.classList.add('is-active');
     });
   </script>
 
