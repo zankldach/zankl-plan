@@ -742,7 +742,7 @@ def view_week(
     kw: int | None = None,
     standort: str = "engelbrechts"
 ):
-    year, kw = normalize_year_kw(year, kw)
+   year, kw = get_year_kw(year, kw)
 
     plan = load_week_plan(year, kw, standort)
     cells = load_week_cells(plan["id"]) if plan else {}
