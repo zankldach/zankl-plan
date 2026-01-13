@@ -1,49 +1,87 @@
-{% extends "base.html" %}
-{% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse
+from jinja2 import Template
+from utils import get_year_kw  # <- genau die Funktion, die du im /week-Handler nutzt
 
-{% block content %}
-<h1>
-  Wochenplan · {{ standort|capitalize }}
-  <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
-</h1>
+router = APIRouter()
 
-<table id="weekTable" class="planner">
-  <thead>
-    <tr>
-      <th>Mitarbeiter</th>
-      <th>Mo</th>
-      <th>Di</th>
-      <th>Mi</th>
-      <th>Do</th>
-      <th class="{% if four_day_week %}cell-friday-locked{% endif %}">Fr</th>
-    </tr>
-  </thead>
+# Dummy-Daten für Test, in echt holst du sie aus DB
+employees = [
+    {"name": "Max Mustermann"},
+    {"name": "Anna Beispiel"},
+]
+cells = {
+    (0, 0): "Projekt A",
+    (0, 1): "Projekt B",
+    (1, 0): "Urlaub",
+}
+four_day_week = True  # Beispiel, kann aus DB oder Settings kommen
 
-  <tbody>
-    {% for emp in employees %}
-    {% set row = loop.index0 %}
-    <tr>
-      <td class="emp">
-        {{ emp.name }}
-      </td>
+@router.get("/view/week", response_class=HTMLResponse)
+async def view_week(request: Request, standort: str, year: int | None = None, kw: int | None = None):
+    # 🔧 FIX: Jahr/KW wie im /week-Handler holen
+    year, kw = get_year_kw(year, kw)
 
-      {% for day in range(5) %}
-      {% set key = (row, day) %}
-      <td class="
-        cell
-        {% if four_day_week and day == 4 %}cell-friday-locked{% endif %}
-      ">
-        <div style="white-space:pre-line;">
-          {{ cells.get(key, '') }}
-        </div>
-      </td>
-      {% endfor %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    # Template laden (kannst du auch als separate HTML-Datei nutzen)
+    template_str = """
+    {% extends "base.html" %}
+    {% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
 
-<p style="margin-top:10px;color:#64748b;">
-  🔍 Ansicht nur zur Einsicht – Änderungen sind hier nicht möglich.
-</p>
-{% endblock %}
+    {% block content %}
+    <h1>
+      Wochenplan · {{ standort|capitalize }}
+      <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
+    </h1>
+
+    <table id="weekTable" class="planner">
+      <thead>
+        <tr>
+          <th>Mitarbeiter</th>
+          <th>Mo</th>
+          <th>Di</th>
+          <th>Mi</th>
+          <th>Do</th>
+          <th class="{% if four_day_week %}cell-friday-locked{% endif %}">Fr</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for emp in employees %}
+        {% set row = loop.index0 %}
+        <tr>
+          <td class="emp">
+            {{ emp.name }}
+          </td>
+
+          {% for day in range(5) %}
+          {% set key = (row, day) %}
+          <td class="
+            cell
+            {% if four_day_week and day == 4 %}cell-friday-locked{% endif %}
+          ">
+            <div style="white-space:pre-line;">
+              {{ cells.get(key, '') }}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p style="margin-top:10px;color:#64748b;">
+      🔍 Ansicht nur zur Einsicht – Änderungen sind hier nicht möglich.
+    </p>
+    {% endblock %}
+    """
+
+    template = Template(template_str)
+    html_content = template.render(
+        standort=standort,
+        year=year,
+        kw=kw,
+        employees=employees,
+        cells=cells,
+        four_day_week=four_day_week,
+    )
+    return HTMLResponse(content=html_content)
