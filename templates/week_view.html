@@ -15,15 +15,16 @@
       <th>Di</th>
       <th>Mi</th>
       <th>Do</th>
-      <th class="{{ 'cell-friday-locked' if four_day_week else '' }}">Fr</th>
+      <th class="{% if four_day_week %}cell-friday-locked{% endif %}">Fr</th>
     </tr>
   </thead>
 
   <tbody>
-    {% for row in range(employees|length) %}
+    {% for emp in employees %}
+    {% set row = loop.index0 %}
     <tr>
       <td class="emp">
-        {{ employees[row].name if employees[row] else '' }}
+        {{ emp.name }}
       </td>
 
       {% for day in range(5) %}
