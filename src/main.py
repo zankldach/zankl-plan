@@ -1,6 +1,6 @@
 
 # src/main.py
-from fastapi import FastAPI, Request, Body, Form, Query
+from fastapi import FastAPI, Request, Body, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -12,8 +12,8 @@ from urllib.parse import urlparse, parse_qs
 
 app = FastAPI(title="Zankl-Plan MVP")
 
-BASE_DIR = Path(__file__).resolve().parent  # src/
-ROOT_DIR = BASE_DIR.parent                  # project root
+BASE_DIR = Path(__file__).resolve().parent           # src/
+ROOT_DIR = BASE_DIR.parent                           # project root
 DB_PATH  = BASE_DIR / "zankl.db"
 
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
@@ -22,7 +22,10 @@ app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="stat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("zankl-plan")
 
-# -------------------- DB Init --------------------
+STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
+
+
+# ---------------- DB Init ----------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -36,48 +39,53 @@ def init_db():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("""
     CREATE TABLE IF NOT EXISTS week_plans (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      year INTEGER,
-      kw INTEGER,
-      standort TEXT,
-      row_count INTEGER DEFAULT 5,
-      four_day_week INTEGER DEFAULT 1,
-      UNIQUE(year, kw, standort)
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        year INTEGER,
+        kw INTEGER,
+        standort TEXT,
+        row_count INTEGER DEFAULT 5,
+        four_day_week INTEGER DEFAULT 1,
+        UNIQUE(year, kw, standort)
     )
     """)
     if not column_exists(cur, "week_plans", "four_day_week"):
         cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS week_cells (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      week_plan_id INTEGER,
-      row_index INTEGER,
-      day_index INTEGER,
-      text TEXT,
-      UNIQUE(week_plan_id, row_index, day_index)
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week_plan_id INTEGER,
+        row_index INTEGER,
+        day_index INTEGER,
+        text TEXT,
+        UNIQUE(week_plan_id, row_index, day_index)
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS employees (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      standort TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        standort TEXT
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS global_small_jobs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      standort TEXT,
-      row_index INTEGER,
-      text TEXT,
-      UNIQUE(standort, row_index)
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        standort TEXT,
+        row_index INTEGER,
+        text TEXT,
+        UNIQUE(standort, row_index)
     )
     """)
+
     conn.commit(); conn.close()
 
 init_db()
 
-# -------------------- Helpers --------------------
+
+# ---------------- Helpers ----------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
@@ -86,7 +94,8 @@ def build_days(year: int, kw: int):
 
 def canon_standort(s: str | None) -> str:
     s = (s or "").strip()
-    if not s: return "engelbrechts"
+    if not s:
+        return "engelbrechts"
     s_low = " ".join(s.lower().split())
     s_low = s_low.replace("ß", "ss").replace("_", "-")
     aliases = {
@@ -98,37 +107,33 @@ def canon_standort(s: str | None) -> str:
     return aliases.get(s_low, s_low)
 
 def resolve_standort(request: Request, body_standort: str | None, query_standort: str | None) -> str:
-    if body_standort and body_standort.strip(): return canon_standort(body_standort)
-    if query_standort and query_standort.strip(): return canon_standort(query_standort)
+    if body_standort and body_standort.strip():
+        return canon_standort(body_standort)
+    if query_standort and query_standort.strip():
+        return canon_standort(query_standort)
     ref = request.headers.get("referer") or request.headers.get("Referer")
     if ref:
         try:
             qs = parse_qs(urlparse(ref).query)
             ref_st = (qs.get("standort") or [""])[0]
-            if ref_st.strip(): return canon_standort(ref_st)
-        except Exception: pass
+            if ref_st.strip():
+                return canon_standort(ref_st)
+        except Exception:
+            pass
     return "engelbrechts"
 
-# -------------------- Admin (optional) --------------------
+
+# ---------------- Admin / Debug ----------------
 @app.get("/admin/normalize-standorte")
 def admin_normalize():
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id, standort FROM employees")
-        for r in cur.fetchall():
-            st_new = canon_standort(r["standort"])
-            if st_new != (r["standort"] or ""):
-                cur.execute("UPDATE employees SET standort=? WHERE id=?", (st_new, r["id"]))
-        cur.execute("SELECT id, standort FROM week_plans")
-        for r in cur.fetchall():
-            st_new = canon_standort(r["standort"])
-            if st_new != (r["standort"] or ""):
-                cur.execute("UPDATE week_plans SET standort=? WHERE id=?", (st_new, r["id"]))
-        cur.execute("SELECT id, standort FROM global_small_jobs")
-        for r in cur.fetchall():
-            st_new = canon_standort(r["standort"])
-            if st_new != (r["standort"] or ""):
-                cur.execute("UPDATE global_small_jobs SET standort=? WHERE id=?", (st_new, r["id"]))
+        for table, col in [("employees", "standort"), ("week_plans", "standort"), ("global_small_jobs", "standort")]:
+            cur.execute(f"SELECT id, {col} FROM {table}")
+            for r in cur.fetchall():
+                st_new = canon_standort(r[col])
+                if st_new != (r[col] or ""):
+                    cur.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (st_new, r["id"]))
         conn.commit()
         return {"ok": True}
     except Exception:
@@ -146,39 +151,47 @@ def admin_debug():
     finally:
         conn.close()
 
-# -------------------- Routes --------------------
+
+# ---------------- Health ----------------
 @app.get("/health")
-def health(): return {"status": "ok"}
+def health():
+    return {"status": "ok"}
 
-from fastapi.responses import HTMLResponse
 
+# ---------------- Plain Test: Employees ----------------
 @app.get("/settings/employees_plain", response_class=HTMLResponse)
 def employees_plain():
+    # Minimal, bewusst ohne Styles – zum Backend-Testen
     return HTMLResponse("""
 <!DOCTYPE html>
 <html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
 <body>
   <h1>Plain · Mitarbeiter</h1>
   /settings/employees
-    <input type="hidden" name="standort" value="gross-gerungs">
+    <input type="hidden" name="standort" value="gross-gerungs" />
     <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
     <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
-    <button type="submit">Speichern</button>
+    <p><button type="submit">Speichern</button></p>
   </form>
 </body>
 </html>
 """.strip())
 
-# ---- Wochenansicht ----
+
+# ---------------- Week (GET) ----------------
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
     standort = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
+                    (year, kw, standort))
         plan = cur.fetchone()
         if not plan:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)", (year, kw, standort, 5))
+            cur.execute(
+                "INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
+                (year, kw, standort, 5)
+            )
             conn.commit()
             plan_id, rows, four_day_week = cur.lastrowid, 5, 1
         else:
@@ -186,7 +199,8 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
 
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
         employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
-        if employees: rows = max(rows, len(employees))
+        if employees:
+            rows = max(rows, len(employees))
 
         grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
         cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
@@ -203,15 +217,26 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
 
         return templates.TemplateResponse(
             "week.html",
-            {"request": request, "grid": grid, "employees": employees, "kw": kw, "year": year,
-             "days": build_days(year, kw), "standort": standort, "four_day_week": bool(four_day_week), "small_jobs": sj}
+            {
+                "request": request,
+                "grid": grid,
+                "employees": employees,
+                "kw": kw,
+                "year": year,
+                "days": build_days(year, kw),
+                "standort": standort,
+                "four_day_week": bool(four_day_week),
+                "small_jobs": sj,
+                "standorte": STANDORTE,       # <— wichtig für Dropdown
+            }
         )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
 
-# ---- Zelle setzen (einzeln) ----
+
+# ---------------- Week: set cell (single) ----------------
 @app.post("/api/week/set-cell")
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
     conn = get_conn(); cur = conn.cursor()
@@ -221,8 +246,10 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
         row = int(data.get("row")); day = int(data.get("day")); val = data.get("value") or ""
         cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
-        if not plan: return {"ok": False, "error": "Plan not found"}
-        if plan["four_day_week"] and day == 4: return {"ok": True, "skipped": True}
+        if not plan:
+            return {"ok": False, "error": "Plan not found"}
+        if plan["four_day_week"] and day == 4:
+            return {"ok": True, "skipped": True}
         cur.execute("""
             INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
             VALUES(?,?,?,?)
@@ -235,7 +262,8 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
     finally:
         conn.close()
 
-# ---- Batch speichern ----
+
+# ---------------- Week: batch ----------------
 @app.post("/api/week/batch")
 async def save_batch(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -245,10 +273,12 @@ async def save_batch(data: dict = Body(...)):
         updates = data.get("updates") or []
         cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         plan = cur.fetchone()
-        if not plan: return {"ok": False, "error": "Plan not found"}
+        if not plan:
+            return {"ok": False, "error": "Plan not found"}
         for u in updates:
             row = int(u.get("row")); day = int(u.get("day"))
-            if plan["four_day_week"] and day == 4: continue
+            if plan["four_day_week"] and day == 4:
+                continue
             val = u.get("value") or ""
             cur.execute("""
                 INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
@@ -262,7 +292,8 @@ async def save_batch(data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- 4-Tage-Woche ----
+
+# ---------------- Week: 4-Tage-Woche ----------------
 @app.post("/api/week/set-four-day")
 async def set_four_day(data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -273,9 +304,11 @@ async def set_four_day(data: dict = Body(...)):
         cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
         row = cur.fetchone()
         if not row:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)", (year, kw, standort, 5, value))
+            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,?)",
+                        (year, kw, standort, 5, value))
         else:
-            cur.execute("UPDATE week_plans SET four_day_week=? WHERE year=? AND kw=? AND standort=?", (value, year, kw, standort))
+            cur.execute("UPDATE week_plans SET four_day_week=? WHERE year=? AND kw=? AND standort=?",
+                        (value, year, kw, standort))
         conn.commit()
         return {"ok": True, "four_day_week": bool(value)}
     except Exception:
@@ -287,7 +320,8 @@ async def set_four_day(data: dict = Body(...)):
 async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
-# ---- Kleinbaustellen: einzeln ----
+
+# ---------------- Kleinbaustellen ----------------
 @app.post("/api/klein/set")
 async def klein_set(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -306,7 +340,6 @@ async def klein_set(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- Kleinbaustellen: Liste ----
 @app.post("/api/klein/save-list")
 async def klein_save_list(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
@@ -328,61 +361,53 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---- Einstellungen: Mitarbeiter ----
+
+# ---------------- Einstellungen: Mitarbeiter ----------------
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
-    standort = canon_standort(standort)
+    st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
         employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse("settings_employees.html", {"request": request, "standort": standort, "employees": employees})
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees}
+        )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
 
-
-
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     form = await request.form()
 
-    # Standort robust
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
 
     # Neue: emp_name_new[]
     new_list = []
     for key, val in form.multi_items():
-      if key == "emp_name_new[]":
-        t = (val or "").strip()
-        if t:
-          new_list.append(t)
+        if key == "emp_name_new[]":
+            t = (val or "").strip()
+            if t:
+                new_list.append(t)
 
     conn = get_conn(); cur = conn.cursor()
     try:
-      for n in new_list:
-        cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
-      conn.commit()
+        for n in new_list:
+            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+        conn.commit()
 
-      cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-      employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-      return templates.TemplateResponse("settings_employees.html",
-        {"request": request, "standort": st, "employees": employees, "saved": True})
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees, "saved": True}
+        )
     except Exception:
-      return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
-      conn.close()
-
-
-
-
-
-# ---- Jahresseite ----
-@app.get("/year", response_class=HTMLResponse)
-def year_page(request: Request, year: int = 2025):
-    try:
-        return templates.TemplateResponse("year.html", {"request": request, "year": year})
-    except Exception:
-        return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
+        conn.close()
