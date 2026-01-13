@@ -5,15 +5,10 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Styles -->
   <link rel="stylesheet" href="/static/style.v2.css">
-
-  <!-- KEIN globales app.js laden (bewusst) -->
-  <!-- <script src="/static/app.js"></script> -->
 
   <style>
     :root { --blue:#003a8f; --bg:#f4f6f8; }
-    html, body { height:100%; }
     body {
       margin:0;
       font-family: Arial, sans-serif;
@@ -34,11 +29,9 @@
       background: var(--blue);
       padding:6px 20px;
       display:flex;
-      gap:16px;
+      gap:12px;
       align-items:center;
-      position:sticky;
-      top:0;
-      z-index:1000;
+      flex-wrap:wrap;
     }
 
     nav.site a {
@@ -48,10 +41,16 @@
       padding:6px 10px;
       border-radius:6px;
     }
-    nav.site a:hover { background: rgba(255,255,255,0.14); }
-    nav.site a.is-active { background: rgba(255,255,255,0.22); }
+    nav.site a:hover { background: rgba(255,255,255,0.15); }
+    nav.site a.is-active { background: rgba(255,255,255,0.25); }
 
-    #settingsGear { cursor:pointer; font-size:20px; }
+    nav.site .sep {
+      width:1px;
+      height:22px;
+      background: rgba(255,255,255,0.35);
+      margin:0 4px;
+    }
+
     main { padding:20px; }
   </style>
 
@@ -59,25 +58,27 @@
 </head>
 <body>
 
-<script>
-  try {
-    window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }};
-  } catch(e) {
-    window.__fourDay = false;
-  }
-</script>
-
 <header class="site">
-  <strong>Zankl Plan</strong>
-  <div id="settingsGear" title="Einstellungen">⚙️</div>
+  <strong>Zankl-Plan</strong>
+  <span>⚙️</span>
 </header>
 
-<nav class="site" role="navigation" aria-label="Hauptnavigation">
+<nav class="site">
+  <!-- Arbeitsansicht -->
   <a href="/week?standort=engelbrechts">Engelbrechts</a>
   <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
+
+  <span class="sep"></span>
+
+  <!-- Viewer -->
+  <a href="/view/week?standort=engelbrechts">View EB</a>
+  <a href="/view/week?standort=gross-gerungs">View GG</a>
+
+  <span class="sep"></span>
+
+  <!-- Sonstiges -->
   <a href="/settings/employees">Einstellungen</a>
-  <a href="/year">Jahr</a>
-  <a href="/health">Health</a>
+  <a href="/bedienung">Bedienung</a>
 </nav>
 
 <main>
@@ -85,17 +86,9 @@
 </main>
 
 <script>
-  const gear = document.getElementById('settingsGear');
-  if (gear) {
-    gear.addEventListener('click', () => {
-      window.location.href = '/settings/employees';
-    });
-  }
-
-  const currentPath = window.location.pathname;
+  const path = window.location.pathname;
   document.querySelectorAll('nav.site a').forEach(a => {
-    const aPath = new URL(a.href, window.location.origin).pathname;
-    if (currentPath === aPath || currentPath.startsWith(aPath)) {
+    if (path === new URL(a.href).pathname) {
       a.classList.add('is-active');
     }
   });
