@@ -734,3 +734,30 @@ def year_page(request: Request, year: int = 2025):
         return templates.TemplateResponse("year.html", {"request": request, "year": year})
     except Exception:
         return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
+
+@app.get("/view/week")
+def view_week(
+    request: Request,
+    year: int | None = None,
+    kw: int | None = None,
+    standort: str = "engelbrechts"
+):
+    year, kw = normalize_year_kw(year, kw)
+
+    plan = load_week_plan(year, kw, standort)
+    cells = load_week_cells(plan["id"]) if plan else {}
+    employees = load_employees_by_standort(standort)
+
+    return templates.TemplateResponse(
+        "week_view.html",
+        {
+            "request": request,
+            "year": year,
+            "kw": kw,
+            "standort": standort,
+            "plan": plan,
+            "cells": cells,
+            "employees": employees,
+            "four_day_week": plan["four_day_week"] if plan else False,
+        }
+    )
