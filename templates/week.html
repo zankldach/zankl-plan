@@ -199,22 +199,35 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (!inp.value && cache && typeof cache[idx] === 'string') inp.value = cache[idx];
       });
     }
-    function applyFourDayWeekUI(flag){
-      document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
-        const ta = td.querySelector('textarea.cell');
-        if (flag){
-          td.classList.add('disabled-day');
-          if (ta) ta.disabled = true;
-          const hint = td.querySelector('.hint'); if (hint) hint.textContent = "gesperrt";
-        } else {
-          td.classList.remove('disabled-day');
-          if (ta) ta.disabled = false;
-          const hint = td.querySelector('.hint'); if (hint) hint.textContent = "";
-          if (ta){ ta.style.background=''; ta.style.color=''; }
-        }
-      });
-      if (flag) restoreFridayFromCache();
+function applyFourDayWeekUI(flag){
+  document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td => {
+    const ta = td.querySelector('textarea.cell');
+    const hint = td.querySelector('.hint');
+
+    if (flag) {
+      // Freitag: grau + readOnly, Inhalt bleibt sichtbar
+      td.classList.add('cell-friday-locked');
+
+      if (ta) {
+        ta.readOnly = true;     // NICHT disabled → Text bleibt
+      }
+
+      // "gesperrt" komplett entfernen
+      if (hint) hint.textContent = "";
+
+    } else {
+      // Freitag wieder normal
+      td.classList.remove('cell-friday-locked');
+
+      if (ta) {
+        ta.readOnly = false;
+      }
+
+      if (hint) hint.textContent = "";
     }
+  });
+}
+
     async function setFourDayWeek(flag){
       const payload = { year: YEAR, kw: KW, standort: (locSel?.value || CURLOC), four_day_week: !!flag };
       try{
