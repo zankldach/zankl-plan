@@ -1,6 +1,6 @@
 
 # src/main.py
-from fastapi import FastAPI, Request, Body, Query
+from fastapi import FastAPI, Request, Body, Query, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +12,15 @@ from urllib.parse import urlparse, parse_qs
 
 app = FastAPI(title="Zankl-Plan MVP")
 
+BASE_DIR = Path(__file__).resolve().parent           # src/
+ROOT_DIR = BASE_DIR.parent                           # project root
+DB_PATH  = BASE_DIR / "zankl.db"
 
+templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
+
+
+# ===== Admin: Templates roh schreiben (Heredoc) =====
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -93,8 +101,6 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
 </html>
 """
 
-
-
 NAVBAR_HTML = """<nav class="site" role="navigation" aria-label="Hauptnavigation">
   /week?standort=engelbrechtsEngelbrechts</a>
   /week?standort=gross-gerungsGroß Gerungs</a>
@@ -103,7 +109,6 @@ NAVBAR_HTML = """<nav class="site" role="navigation" aria-label="Hauptnavigation
   /healthHealth</a>
 </nav>
 """
-
 
 @app.post("/admin/write-base")
 def admin_write_base():
@@ -127,6 +132,15 @@ def admin_write_navbar():
         return {"ok": True, "wrote": ["_navbar.html"]}
     except Exception as e:
         return Response(str(e), status_code=500, media_type="text/plain")
+
+# Optional: GET-Routen, damit du im Browser klicken kannst
+@app.get("/admin/write-base")
+def admin_write_base_get():
+    return admin_write_base()
+
+@app.get("/admin/write-navbar")
+def admin_write_navbar_get():
+    return admin_write_navbar()
 
 
 logging.basicConfig(level=logging.INFO)
@@ -337,7 +351,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
                 "standort": standort,
                 "four_day_week": bool(four_day_week),
                 "small_jobs": sj,
-                "standorte": STANDORTE,       # <— wichtig für Dropdown
+                "standorte": STANDORTE,  # <— wichtig für Dropdown
             }
         )
     except Exception:
@@ -492,7 +506,6 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     form = await request.form()
-
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
 
