@@ -83,7 +83,14 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
     <div id="settingsGear" title="Einstellungen">⚙️</div>
   </header>
 
-  {% include '_navbar.html' %}
+  <!-- DIREKTE Navbar (kein Include, keine externe Datei nötig) -->
+  <nav class="site" role="navigation" aria-label="Hauptnavigation">
+    /week?standort=engelbrechtsEngelbrechts</a>
+    /week?standort=gross-gerungsGroß Gerungs</a>
+    /settings/employeesEinstellungen</a>
+    /yearJahr</a>
+    /healthHealth</a>
+  </nav>
 
   <main>
     {% block content %}{% endblock %}
@@ -105,15 +112,6 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
   {% block scripts %}{% endblock %}
 </body>
 </html>
-"""
-
-NAVBAR_HTML = """<nav class="site" role="navigation" aria-label="Hauptnavigation">
-  /week?standort=engelbrechtsEngelbrechts</a>
-  /week?standort=gross-gerungsGroß Gerungs</a>
-  /settings/employeesEinstellungen</a>
-  /yearJahr</a>
-  /healthHealth</a>
-</nav>
 """
 
 SETTINGS_EMPLOYEES_HTML = """{% extends "base.html" %}
@@ -164,8 +162,7 @@ SETTINGS_EMPLOYEES_HTML = """{% extends "base.html" %}
 </table>
 
 <!-- Hauptformular (POST) – neue Mitarbeiter anlegen -->
-/settings/employees
-  <input type="hidden" name="standort" value="{{ standort }}"/>
+<form id="empForm" method="post" action="/ name="standort" value="{{ standort }}"/>
 
   <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
     <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
@@ -254,26 +251,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 @app.post("/admin/write-base")
 def admin_write_base():
-    """Schreibt templates/base.html + _navbar.html roh auf die Platte."""
+    """Schreibt templates/base.html roh auf die Platte (inkl. direkter Navbar)."""
     try:
         tpl_dir = ROOT_DIR / "templates"
         tpl_dir.mkdir(parents=True, exist_ok=True)
         (tpl_dir / "base.html").write_text(BASE_HTML_SAFE, encoding="utf-8")
-        (tpl_dir / "_navbar.html").write_text(NAVBAR_HTML, encoding="utf-8")
-        return {"ok": True, "wrote": ["base.html", "_navbar.html"]}
+        return {"ok": True, "wrote": ["base.html"]}
     except Exception as e:
         return Response(str(e), status_code=500, media_type="text/plain")
 
-@app.post("/admin/write-navbar")
-def admin_write_navbar():
-    """Schreibt nur templates/_navbar.html roh auf die Platte."""
-    try:
-        tpl_dir = ROOT_DIR / "templates"
-        tpl_dir.mkdir(parents=True, exist_ok=True)
-        (tpl_dir / "_navbar.html").write_text(NAVBAR_HTML, encoding="utf-8")
-        return {"ok": True, "wrote": ["_navbar.html"]}
-    except Exception as e:
-        return Response(str(e), status_code=500, media_type="text/plain")
+@app.get("/admin/write-base")
+def admin_write_base_get():
+    return admin_write_base()
 
 @app.post("/admin/write-settings")
 def admin_write_settings():
@@ -285,15 +274,6 @@ def admin_write_settings():
         return {"ok": True, "wrote": ["settings_employees.html"]}
     except Exception as e:
         return Response(str(e), status_code=500, media_type="text/plain")
-
-# Optional: GET-Routen, damit du im Browser klicken kannst
-@app.get("/admin/write-base")
-def admin_write_base_get():
-    return admin_write_base()
-
-@app.get("/admin/write-navbar")
-def admin_write_navbar_get():
-    return admin_write_navbar()
 
 @app.get("/admin/write-settings")
 def admin_write_settings_get():
@@ -447,8 +427,7 @@ def employees_plain():
 <html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
 <body>
   <h1>Plain · Mitarbeiter</h1>
-  /settings/employees
-    <input type="hidden" name="standort" value="gross-gerungs" />
+  <form method="post" action="/t type="hidden" name="standort" value="gross-gerungs" />
     <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
     <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
     <p><button type="submit">Speichern</button></p>
@@ -571,7 +550,6 @@ async def save_batch(data: dict = Body(...)):
         conn.commit()
         return {"ok": True, "count": len(updates)}
     except Exception:
-        # <<< FIX: keine Backslashes im Funktions-/Parameternamen >>>
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
@@ -669,6 +647,14 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     form = await request.form()
+
+    # DEBUG: eingehende Form-Schlüssel loggen
+    try:
+        items_preview = [(k, v) for k, v in form.items()]
+        logger.info("POST /settings/employees · items=%s", items_preview)
+    except Exception:
+        logger.info("POST /settings/employees · (items preview nicht möglich)")
+
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
 
@@ -679,6 +665,8 @@ async def settings_employees_save(request: Request):
             t = (val or "").strip()
             if t:
                 new_list.append(t)
+
+    logger.info("POST /settings/employees · standort=%s · new_list=%s", st, new_list)
 
     conn = get_conn(); cur = conn.cursor()
     try:
