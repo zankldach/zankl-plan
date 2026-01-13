@@ -34,3 +34,15 @@ def kw_date_range(year: int, kw: int, workdays: int = 5):
     d = dt.date.fromisocalendar(year, kw, 1)
     days = [d + dt.timedelta(days=i) for i in range(workdays)]
     return days
+# utils.py
+
+import datetime as dt
+
+# … bestehender Code …
+
+def get_year_kw(year: int | None, kw: int | None) -> tuple[int, int]:
+    """Wenn year oder kw None sind, setze auf aktuelles Jahr/KW."""
+    today = dt.date.today()
+    year = year or today.isocalendar()[0]
+    kw = kw or today.isocalendar()[1]
+    return year, kw
