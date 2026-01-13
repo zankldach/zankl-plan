@@ -6,7 +6,9 @@
 <h1>Einstellungen · Mitarbeiter</h1>
 
 <!-- Standortwechsel (GET) -->
-<form id="standortForm" method="get" action="/settings/employees" style="margincument.getElementById('standortForm').submit()">
+/settings/employees
+  <label>Standort:
+    <select name="standort" onchange="document.getElementById('standortForm').submit()">
       <option value="engelbrechts" {{ 'selected' if standort=='engelbrechts' else '' }}>Engelbrechts</option>
       <option value="gross-gerungs" {{ 'selected' if standort=='gross-gerungs' else '' }}>Groß Gerungs</option>
     </select>
@@ -19,49 +21,57 @@
   </div>
 {% endif %}
 
-<!-- Hauptformular (POST) -->
-/settings/employees
-  <input type="hidden" name="standort" value="{{ standort }}"/>
+<!-- Bestehende Mitarbeiter (read-only Anzeige, Änderungen machen wir später) -->
+<table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
+  <thead>
+    <tr>
+      <th style="width:80px; text-align:left;">ID</th>
+      <th style="text-align:left;">Name</th>
+    </tr>
+  </thead>
+  <tbody id="empTableBody">
+    {% for e in employees or [] %}
+    <tr>
+      <td style="text-align:left;">{{ e.id }}</td>
+      <td style="text-align:left;">
+        <input type="text" value="{{ e.name }}" disabled style="width:100%; background:#f8fafc; color:#111;">
+      </td>
+    </tr>
+    {% endfor %}
+    {% if (not employees) or (employees|length==0) %}
+    <tr>
+      <td colspan="2" style="text-align:left; color:#64748b;">Noch keine Mitarbeiter für diesen Standort erfasst.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
 
-  <table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
-    <thead>
-      <tr>
-        <th style="width:80px; text-align:left;">ID</th>
-        <th style="text-align:left;">Name</th>
-      </tr>
-    </thead>
-    <tbody id="empTableBody">
-      {% for e in employees or [] %}
-      <tr data-id="{{ e.id }}">
-        <td style="text-align:left;">{{ e.id }}</td>
-        <td style="text-align:left;">
-          <input type="text" value="{{ e.name }}" disabled style="width:100%; background:#f8fafc;">
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- Hauptformular (POST): nur neue Mitarbeiter anlegen -->
+<formings/employees
+  <input type="hidden" name="standort" value="{{ standort }}"/>
 
   <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
     <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
     <p style="margin:0 0 8px 0; color:#64748b;">
-      Trage Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
+      Trage die Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
     </p>
+
     <div id="newInputs" style="display:flex; flex-direction:column; gap:8px;">
       <div class="new-row" style="display:grid; grid-template-columns: 180px 1fr; gap:8px; align-items:center;">
         <label>Neuer Mitarbeiter:</label>
-        <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
-               style="width:100%; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
+                 style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+          <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
+        </div>
       </div>
     </div>
-    <div style="margin-top:8px;">
+
+    <div style="margin-top:8px; display:flex; gap:8px;">
       <button type="button" id="addBtn">Weiteres Feld</button>
+      <button type="submit" id="saveBtn">Speichern</button>
     </div>
   </fieldset>
-
-  <div style="margin-top:12px;">
-    <button type="submit" id="saveBtn">Speichern</button>
-  </div>
 </form>
 {% endblock %}
 
@@ -84,34 +94,51 @@ document.addEventListener('DOMContentLoaded', ()=>{
       <div style="display:flex; gap:6px; align-items:center;">
         <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
                style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
-        <button type="button" class="btn-remove" title="Zeile entfernen">✕</button>
+        <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
       </div>
     `;
     const inp = row.querySelector('input[name="emp_name_new[]"]');
     const rmv = row.querySelector('.btn-remove');
     if (value) inp.value = value;
+
     rmv.addEventListener('click', ()=>{
       const rows = wrap.querySelectorAll('.new-row');
-      if (rows.length > 1) { row.remove(); ensureTrailingEmpty(); }
+      // Mindestens eine leere Zeile behalten
+      if (rows.length > 1) {
+        row.remove();
+        ensureTrailingEmpty();
+      } else {
+        // letzte Zeile nur leeren
+        inp.value = '';
+      }
     });
+
+    // Bei Eingabe ggf. neue leere Zeile anhängen
     inp.addEventListener('input', ensureTrailingEmpty);
     return row;
   }
+
   function ensureTrailingEmpty(){
     const inputs = Array.from(wrap.querySelectorAll('input[name="emp_name_new[]"]'));
-    const hasEmpty = inputs.length>0 && inputs[inputs.length-1].value.trim()==='';
-    if (!hasEmpty) wrap.appendChild(makeRow(""));
+    const needEmpty = !(inputs.length > 0 && inputs[inputs.length-1].value.trim() === '');
+    if (needEmpty) wrap.appendChild(makeRow(""));
   }
+
+  // Initial sicherstellen
   ensureTrailingEmpty();
 
-  if (addBtn) addBtn.addEventListener('click', ()=>{
-    wrap.appendChild(makeRow(""));
-    const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
-    all[all.length-1]?.focus();
-  });
+  // Button: weitere Zeile
+  if (addBtn) {
+    addBtn.addEventListener('click', ()=>{
+      wrap.appendChild(makeRow(""));
+      const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
+      all[all.length-1]?.focus();
+    });
+  }
 
+  // Beim Absenden: Leere Felder automatisch ignorieren (Server macht das ohnehin).
   form.addEventListener('submit', ()=>{
-    // nichts weiter – Backend ignoriert leere Felder ohnehin
+    // Nichts weiter nötig – Backend liest await request.form() und filtert leere Werte.
   });
 });
 </script>
