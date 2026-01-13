@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
+
+{% block content %}
+<h1>
+  Wochenplan · {{ standort|capitalize }}
+  <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
+</h1>
+
+<table id="weekTable" class="planner">
+  <thead>
+    <tr>
+      <th>Mitarbeiter</th>
+      <th>Mo</th>
+      <th>Di</th>
+      <th>Mi</th>
+      <th>Do</th>
+      <th class="{{ 'cell-friday-locked' if four_day_week else '' }}">Fr</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for row in range(employees|length) %}
+    <tr>
+      <td class="emp">
+        {{ employees[row].name if employees[row] else '' }}
+      </td>
+
+      {% for day in range(5) %}
+      {% set key = (row, day) %}
+      <td class="
+        cell
+        {% if four_day_week and day == 4 %}cell-friday-locked{% endif %}
+      ">
+        <div style="white-space:pre-line;">
+          {{ cells.get(key, '') }}
+        </div>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p style="margin-top:10px;color:#64748b;">
+  🔍 Ansicht nur zur Einsicht – Änderungen sind hier nicht möglich.
+</p>
+{% endblock %}
