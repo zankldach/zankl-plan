@@ -24,7 +24,6 @@ logger = logging.getLogger("zankl-plan")
 
 STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
 
-
 # =========================
 # Admin: Templates roh schreiben (Heredoc)
 # =========================
@@ -300,7 +299,6 @@ def admin_write_navbar_get():
 def admin_write_settings_get():
     return admin_write_settings()
 
-
 # =========================
 # DB Init
 # =========================
@@ -362,7 +360,6 @@ def init_db():
 
 init_db()
 
-
 # =========================
 # Helpers
 # =========================
@@ -402,7 +399,6 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
             pass
     return "engelbrechts"
 
-
 # =========================
 # Admin / Debug
 # =========================
@@ -433,14 +429,12 @@ def admin_debug():
     finally:
         conn.close()
 
-
 # =========================
 # Health
 # =========================
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
 
 # =========================
 # Plain Test: Employees
@@ -462,7 +456,6 @@ def employees_plain():
 </body>
 </html>
 """.strip())
-
 
 # =========================
 # Week (GET)
@@ -523,7 +516,6 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     finally:
         conn.close()
 
-
 # =========================
 # Week: set cell (single)
 # =========================
@@ -552,7 +544,6 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
     finally:
         conn.close()
 
-
 # =========================
 # Week: batch
 # =========================
@@ -580,10 +571,10 @@ async def save_batch(data: dict = Body(...)):
         conn.commit()
         return {"ok": True, "count": len(updates)}
     except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format\_exc()}, status\_code=500)
+        # <<< FIX: keine Backslashes im Funktions-/Parameternamen >>>
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
-
 
 # =========================
 # Week: 4-Tage-Woche
@@ -613,7 +604,6 @@ async def set_four_day(data: dict = Body(...)):
 @app.post("/api/week/options")
 async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
-
 
 # =========================
 # Kleinbaustellen
@@ -656,7 +646,6 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
-
 
 # =========================
 # Einstellungen: Mitarbeiter
@@ -709,9 +698,8 @@ async def settings_employees_save(request: Request):
     finally:
         conn.close()
 
-
 # =========================
-# Year (Platzhalter, mit Fallback)
+# Year (Platzhalter)
 # =========================
 @app.get("/year", response_class=HTMLResponse)
 def year_page(request: Request, year: int = 2025):
