@@ -1,28 +1,32 @@
+# src/routes/week_view.py
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from jinja2 import Template
-from utils import get_year_kw  # <- genau die Funktion, die du im /week-Handler nutzt
+from utils import get_year_kw  # Funktion zum Normalisieren von Jahr/KW
 
 router = APIRouter()
 
-# Dummy-Daten für Test, in echt holst du sie aus DB
+# Dummy-Daten für Testzwecke
 employees = [
     {"name": "Max Mustermann"},
     {"name": "Anna Beispiel"},
 ]
+
 cells = {
     (0, 0): "Projekt A",
     (0, 1): "Projekt B",
     (1, 0): "Urlaub",
 }
-four_day_week = True  # Beispiel, kann aus DB oder Settings kommen
+
+four_day_week = True  # Beispiel: kann aus DB oder Settings kommen
 
 @router.get("/view/week", response_class=HTMLResponse)
 async def view_week(request: Request, standort: str, year: int | None = None, kw: int | None = None):
-    # 🔧 FIX: Jahr/KW wie im /week-Handler holen
+    # 🔧 Jahr und KW korrekt holen
     year, kw = get_year_kw(year, kw)
 
-    # Template laden (kannst du auch als separate HTML-Datei nutzen)
+    # HTML-Template direkt hier (alternativ als separate Datei speichern)
     template_str = """
     {% extends "base.html" %}
     {% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
@@ -44,15 +48,11 @@ async def view_week(request: Request, standort: str, year: int | None = None, kw
           <th class="{% if four_day_week %}cell-friday-locked{% endif %}">Fr</th>
         </tr>
       </thead>
-
       <tbody>
         {% for emp in employees %}
         {% set row = loop.index0 %}
         <tr>
-          <td class="emp">
-            {{ emp.name }}
-          </td>
-
+          <td class="emp">{{ emp.name }}</td>
           {% for day in range(5) %}
           {% set key = (row, day) %}
           <td class="
