@@ -6,21 +6,14 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- CSS -->
+  <!-- Ein einziges, sicheres Stylesheet -->
   <linkic/style.v2.css
-  
 
   <style>
     :root { --blue:#003a8f; --bg:#f4f6f8; }
     html, body { height:100%; }
-    body {
-      font-family: Arial, sans-serif;
-      margin:0; background:var(--bg); color:#0f172a;
-    }
-    header.site {
-      background:var(--blue); color:#fff; padding:10px 20px;
-      display:flex; justify-content:space-between; align-items:center;
-    }
+    body { font-family: Arial, sans-serif; margin:0; background:var(--bg); color:#0f172a; }
+    header.site { background:var(--blue); color:#fff; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
     nav.site {
       background:var(--blue); padding:6px 20px; display:flex; gap:16px; align-items:center;
       position:sticky; top:0; z-index:1000;
@@ -43,9 +36,9 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  <!-- four_day_week sicher defaulten -->
+  <!-- four_day_week sicher defaulten, auch auf Seiten ohne Variable -->
   <script>
-    window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }};
+    try { window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }}; } catch(e){ window.__fourDay = false; }
   </script>
 
   <header class="site">
@@ -56,7 +49,7 @@
   <nav class="site">
     /week?standort=engelbrechtsEngelbrechts</a>
     /week?standort=gross-gerungsGroß Gerungs</a>
-    <a href="/employeesEinstellungen</a>
+    /settings/employeesEinstellungen</a>
     /yearJahr</a>
     /healthHealth</a>
   </nav>
