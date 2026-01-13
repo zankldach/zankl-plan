@@ -279,6 +279,45 @@ def admin_write_settings():
 def admin_write_settings_get():
     return admin_write_settings()
 
+from datetime import datetime
+
+def _tpl_dir():
+    return ROOT_DIR / "templates"
+
+def _tpl_path(name: str):
+    return _tpl_dir() / name
+
+@app.get("/admin/verify-templates")
+def admin_verify_templates():
+    """Listet templates/base.html und settings_employees.html mit Pfad, Größe, mtime und ersten Zeilen."""
+    out = {"root": str(ROOT_DIR), "templates_dir": str(_tpl_dir()), "files": []}
+    for name in ["base.html", "settings_employees.html"]:
+        p = _tpl_path(name)
+        info = {
+            "name": name,
+            "exists": p.exists(),
+            "size": p.stat().st_size if p.exists() else 0,
+            "mtime": datetime.fromtimestamp(p.stat().st_mtime).isoformat() if p.exists() else None,
+            "first_lines": []
+        }
+        if p.exists():
+            try:
+                txt = p.read_text(encoding="utf-8")
+                info["first_lines"] = txt.splitlines()[:20]
+            except Exception as e:
+                info["first_lines"] = [f"ERROR reading {name}: {e}"]
+        out["files"].append(info)
+    return out
+
+@app.get("/admin/show-file")
+def admin_show_file(name: str):
+    """Zeigt Rohinhalt einer Template-Datei (z. B. name=base.html)."""
+    p = _tpl_path(name)
+    if not p.exists():
+        return Response(f"{p} not found", status_code=404, media_type="text/plain")
+    return Response(p.read_text(encoding="utf-8"), media_type="text/plain")
+
+
 # =========================
 # DB Init
 # =========================
