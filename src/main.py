@@ -12,16 +12,6 @@ from urllib.parse import urlparse, parse_qs
 
 app = FastAPI(title="Zankl-Plan MVP")
 
-BASE_DIR = Path(__file__).resolve().parent           # src/
-ROOT_DIR = BASE_DIR.parent                           # project root
-DB_PATH  = BASE_DIR / "zankl.db"
-
-templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
-
-
-# ===== Admin: Templates roh schreiben (Heredoc) =====
-from fastapi import Response
 
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
@@ -103,14 +93,17 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
 </html>
 """
 
+
+
 NAVBAR_HTML = """<nav class="site" role="navigation" aria-label="Hauptnavigation">
   /week?standort=engelbrechtsEngelbrechts</a>
   /week?standort=gross-gerungsGroß Gerungs</a>
   /settings/employeesEinstellungen</a>
-  <aearJahr</a>
+  /yearJahr</a>
   /healthHealth</a>
 </nav>
 """
+
 
 @app.post("/admin/write-base")
 def admin_write_base():
