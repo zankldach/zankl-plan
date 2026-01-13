@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -6,119 +5,102 @@
   <title>{% block title %}Zankl Plan{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Ein einziges, verlässliches Stylesheet -->
-  /static/style.v2.css
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/style.v2.css">
 
-  <!-- KEIN globales app.js laden, damit nichts mit week.html kollidiert -->
-  <!-- /static/app.js</script> -->
+  <!-- KEIN globales app.js laden (bewusst) -->
+  <!-- <script src="/static/app.js"></script> -->
 
   <style>
-    :root { --blue: #003a8f; --bg: #f4f6f8; }
-    html, body { height: 100%; }
+    :root { --blue:#003a8f; --bg:#f4f6f8; }
+    html, body { height:100%; }
     body {
+      margin:0;
       font-family: Arial, sans-serif;
-      margin: 0;
       background: var(--bg);
-      color: #0f172a;
+      color:#0f172a;
     }
 
     header.site {
       background: var(--blue);
-      color: #fff;
-      padding: 10px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      color:#fff;
+      padding:10px 20px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
     }
 
     nav.site {
       background: var(--blue);
-      padding: 6px 20px;
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
+      padding:6px 20px;
+      display:flex;
+      gap:16px;
+      align-items:center;
+      position:sticky;
+      top:0;
+      z-index:1000;
     }
 
     nav.site a {
-      color: white;
-      text-decoration: none;
-      font-weight: 600;
-      padding: 6px 10px;
-      border-radius: 6px;
+      color:#fff;
+      text-decoration:none;
+      font-weight:600;
+      padding:6px 10px;
+      border-radius:6px;
     }
     nav.site a:hover { background: rgba(255,255,255,0.14); }
     nav.site a.is-active { background: rgba(255,255,255,0.22); }
 
-    #settingsGear { cursor: pointer; font-size: 20px; }
-
-    main { padding: 20px; }
-
-    /* Tabellen Defaults */
-    table { width: 100%; border-collapse: collapse; background: #fff; }
-    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
-    th { background: #eef2f6; }
-    td input, td textarea {
-      width: 100%;
-      height: 100%;
-      padding: 6px;
-      box-sizing: border-box;
-      border: none;
-      background: transparent;
-      text-align: center;
-      font-size: 14px;
-    }
+    #settingsGear { cursor:pointer; font-size:20px; }
+    main { padding:20px; }
   </style>
 
   {% block head %}{% endblock %}
 </head>
 <body>
 
-  <!-- 4-Tage-Woche Flag (robust auch auf Seiten ohne 'four_day_week') -->
-  <script>
-    try {
-      window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }};
-    } catch (e) {
-      window.__fourDay = false;
-    }
-  </script>
+<script>
+  try {
+    window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }};
+  } catch(e) {
+    window.__fourDay = false;
+  }
+</script>
 
-  <header class="site">
-    <strong>Zankl Plan</strong>
-    <div id="settingsGear" title="Einstellungen">⚙️</div>
-  </header>
+<header class="site">
+  <strong>Zankl Plan</strong>
+  <div id="settingsGear" title="Einstellungen">⚙️</div>
+</header>
 
-  <nav class="site">
-    /week?standort=engelbrechtsEngelbrechts</a>
-    /week?standort=gross-gerungsGroß Gerungs</a>
-    /settings/employeesEinstellungen</a>
-    /yearJahr</a>
-    <aealthHealth</a>
-  </nav>
+<nav class="site" role="navigation" aria-label="Hauptnavigation">
+  <a href="/week?standort=engelbrechts">Engelbrechts</a>
+  <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
+  <a href="/settings/employees">Einstellungen</a>
+  <a href="/year">Jahr</a>
+  <a href="/health">Health</a>
+</nav>
 
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+<main>
+  {% block content %}{% endblock %}
+</main>
 
-  <script>
-    // Zahnrad → Einstellungen
-    const gear = document.getElementById('settingsGear');
-    if (gear) {
-      gear.addEventListener('click', () => { window.location.href = '/settings/employees'; });
-    }
-
-    // Aktiven Menüpunkt markieren
-    const currentPath = window.location.pathname;
-    document.querySelectorAll('nav.site a').forEach(a => {
-      const aPath = new URL(a.href, window.location.origin).pathname;
-      if (currentPath === aPath || currentPath.startsWith(aPath)) {
-        a.classList.add('is-active');
-      }
+<script>
+  const gear = document.getElementById('settingsGear');
+  if (gear) {
+    gear.addEventListener('click', () => {
+      window.location.href = '/settings/employees';
     });
-  </script>
+  }
 
-  {% block scripts %}{% endblock %}
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('nav.site a').forEach(a => {
+    const aPath = new URL(a.href, window.location.origin).pathname;
+    if (currentPath === aPath || currentPath.startsWith(aPath)) {
+      a.classList.add('is-active');
+    }
+  });
+</script>
+
+{% block scripts %}{% endblock %}
 </body>
 </html>
