@@ -3,16 +3,11 @@
 nav.site { display: flex !important; visibility: visible !important; opacity: 1 !important; }
 
 /* Freitag in 4-Tage-Woche: Text sichtbar, aber grau & nicht editierbar */
-.fri-disabled {
-  background: #f1f3f5 !important;
-  color: #555 !important;
+.cell-friday-locked {
+  background: #f1f5f9 !important;
+  color: #64748b;
 }
-.fri-disabled input,
-.fri-disabled textarea {
-  background: transparent !important;
-  color: #555 !important;
-  pointer-events: none !important; /* keine Eingabe möglich */
-}
+
 
 
 
