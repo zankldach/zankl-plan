@@ -20,3 +20,14 @@ nav.site { display: flex !important; visibility: visible !important; opacity: 1 
 
 /* Zielzellen-Indikator beim Drop */
 .drop-hover { outline: 2px dashed #0b5ea7; outline-offset: -2px; background: #eaf4ff; }
+
+table.planner td.cell {
+  vertical-align: top;
+  padding: 6px;
+  min-width: 120px;
+}
+
+table.planner td.emp {
+  font-weight: 600;
+  background: #f8fafc;
+}
