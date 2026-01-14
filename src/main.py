@@ -1,21 +1,21 @@
 # src/main.py
 from fastapi import FastAPI, Request, Body, Query, Response
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-from datetime import date, timedelta, datetime
-from urllib.parse import urlparse, parse_qs
 import sqlite3
+from pathlib import Path
+from datetime import date, timedelta
 import logging, traceback
+from urllib.parse import urlparse, parse_qs
 
+# --------------------------------------------------
+# App / Paths
+# --------------------------------------------------
 app = FastAPI(title="Zankl-Plan MVP")
 
-# =========================
-# BASE DIRS & TEMPLATES
-# =========================
-BASE_DIR = Path(__file__).resolve().parent           # src/
-ROOT_DIR = BASE_DIR.parent                           # project root
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
 DB_PATH  = BASE_DIR / "zankl.db"
 
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
@@ -26,9 +26,9 @@ logger = logging.getLogger("zankl-plan")
 
 STANDORTE = ["engelbrechts", "gross-gerungs"]
 
-# =========================
-# DB HELPERS
-# =========================
+# --------------------------------------------------
+# DB
+# --------------------------------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -40,6 +40,7 @@ def column_exists(cur, table: str, column: str) -> bool:
 
 def init_db():
     conn = get_conn(); cur = conn.cursor()
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS week_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,109 +84,108 @@ def init_db():
     )
     """)
 
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
 
 init_db()
 
-# =========================
-# STANDORT HELPERS
-# =========================
-def canon_standort(s: str | None) -> str:
-    s = (s or "").strip()
-    if not s:
-        return "engelbrechts"
-    s_low = s.lower().replace("ß", "ss").replace("_", "-").strip()
-    aliases = {
-        "engelbrechts": "engelbrechts", "eng": "engelbrechts", "e": "engelbrechts",
-        "gross gerungs": "gross-gerungs", "gross-gerungs": "gross-gerungs",
-        "grossgerungs": "gross-gerungs", "groß gerungs": "gross-gerungs",
-        "groß-gerungs": "gross-gerungs", "großgerungs": "gross-gerungs", "gg": "gross-gerungs",
-    }
-    return aliases.get(s_low, s_low)
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+def build_days(year: int, kw: int, workdays: int = 5):
+    start = date.fromisocalendar(year, kw, 1)
+    labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
+    return [
+        {
+            "label": labels[i],
+            "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")
+        }
+        for i in range(workdays)
+    ]
 
-def resolve_standort(request: Request, body_standort: str | None, query_standort: str | None) -> str:
-    if body_standort and body_standort.strip():
-        return canon_standort(body_standort)
-    if query_standort and query_standort.strip():
-        return canon_standort(query_standort)
-    ref = request.headers.get("referer") or request.headers.get("Referer")
+def canon_standort(s: str | None) -> str:
+    s = (s or "").strip().lower()
+    s = s.replace("ß", "ss").replace("_", "-")
+    aliases = {
+        "engelbrechts": "engelbrechts",
+        "gross gerungs": "gross-gerungs",
+        "gross-gerungs": "gross-gerungs",
+        "grossgerungs": "gross-gerungs",
+        "groß gerungs": "gross-gerungs",
+        "gg": "gross-gerungs",
+        "eng": "engelbrechts",
+    }
+    return aliases.get(s, s or "engelbrechts")
+
+def resolve_standort(request: Request, body: str | None, query: str | None):
+    if body:
+        return canon_standort(body)
+    if query:
+        return canon_standort(query)
+
+    ref = request.headers.get("referer")
     if ref:
         try:
             qs = parse_qs(urlparse(ref).query)
-            ref_st = (qs.get("standort") or [""])[0]
-            if ref_st.strip():
-                return canon_standort(ref_st)
+            return canon_standort(qs.get("standort", ["engelbrechts"])[0])
         except Exception:
             pass
-    return "engelbrechts"
 
-# =========================
-# DATE / KW HELPERS
-# =========================
-def build_days(year: int, kw: int):
-    kw = max(1, min(kw, 53))
-    start = date.fromisocalendar(year, kw, 1)
-    labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
-    return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
+    return "engelbrechts"
 
 def get_year_kw(year: int | None, kw: int | None):
     today = date.today()
-    if year is None or kw is None:
-        iso = today.isocalendar()
-        return iso[0] if year is None else year, iso[1] if kw is None else kw
-    return year, kw
+    return (
+        year or today.isocalendar()[0],
+        kw or today.isocalendar()[1]
+    )
 
-# =========================
-# ROOT & HEALTH
-# =========================
-@app.get("/")
-def root():
-    return RedirectResponse(url="/week")
-
+# --------------------------------------------------
+# Health
+# --------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# =========================
-# WEEK EDITABLE
-# =========================
+# --------------------------------------------------
+# WEEK (Edit-Ansicht – unverändert stabil)
+# --------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
-def week(request: Request, kw: int = None, year: int = None, standort: str = "engelbrechts"):
-    year, kw = get_year_kw(year, kw)
+def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
     standort = canon_standort(standort)
-
     conn = get_conn(); cur = conn.cursor()
+
     try:
-        # Week plan
-        cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
+        cur.execute("""
+            SELECT id,row_count,four_day_week
+            FROM week_plans
+            WHERE year=? AND kw=? AND standort=?
+        """, (year, kw, standort))
         plan = cur.fetchone()
+
         if not plan:
-            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)", (year, kw, standort, 5))
+            cur.execute("""
+                INSERT INTO week_plans(year,kw,standort,row_count,four_day_week)
+                VALUES(?,?,?,?,1)
+            """, (year, kw, standort, 5))
             conn.commit()
             plan_id, rows, four_day_week = cur.lastrowid, 5, 1
         else:
-            plan_id, rows, four_day_week = plan["id"], plan["row_count"], plan["four_day_week"]
+            plan_id = plan["id"]
+            rows = plan["row_count"]
+            four_day_week = plan["four_day_week"]
 
-        # Employees
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        if employees:
-            rows = max(rows, len(employees))
+        employees = cur.fetchall()
+        rows = max(rows, len(employees))
 
-        # Week cells
         grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
-        cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
+        cur.execute("""
+            SELECT row_index,day_index,text
+            FROM week_cells WHERE week_plan_id=?
+        """, (plan_id,))
         for r in cur.fetchall():
-            if 0 <= r["row_index"] < rows and 0 <= r["day_index"] < 5:
-                grid[r["row_index"]][r["day_index"]]["text"] = r["text"] or ""
-
-        # Small jobs
-        cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (standort,))
-        sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
-        max_idx = max([x["row_index"] for x in sj], default=-1)
-        while len(sj) < 10:
-            max_idx += 1
-            sj.append({"row_index": max_idx, "text": ""})
+            grid[r["row_index"]][r["day_index"]]["text"] = r["text"] or ""
 
         return templates.TemplateResponse(
             "week.html",
@@ -198,92 +198,68 @@ def week(request: Request, kw: int = None, year: int = None, standort: str = "en
                 "days": build_days(year, kw),
                 "standort": standort,
                 "four_day_week": bool(four_day_week),
-                "small_jobs": sj,
                 "standorte": STANDORTE,
             }
         )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
 
-# =========================
-# WEEK VIEW ONLY
-# =========================
-def load_week_plan(year, kw, standort):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
-        return cur.fetchone()
-    finally:
-        conn.close()
-
-def load_week_cells(plan_id):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
-        data = cur.fetchall()
-        cells = {}
-        for r in data:
-            cells.setdefault(r["row_index"], {})[r["day_index"]] = r["text"] or ""
-        return cells
-    finally:
-        conn.close()
-
-def load_employees_by_standort(standort):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
-        return [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-    finally:
-        conn.close()
-
+# --------------------------------------------------
+# VIEW WEEK (NEU – READ ONLY)
+# --------------------------------------------------
 @app.get("/view/week", response_class=HTMLResponse)
-def view_week(request: Request, year: int | None = None, kw: int | None = None, standort: str = "engelbrechts"):
+def view_week(
+    request: Request,
+    year: int | None = None,
+    kw: int | None = None,
+    standort: str = "engelbrechts"
+):
     year, kw = get_year_kw(year, kw)
     standort = canon_standort(standort)
 
-    plan = load_week_plan(year, kw, standort)
-    cells = load_week_cells(plan["id"]) if plan else {}
-    employees = load_employees_by_standort(standort)
-
-    return templates.TemplateResponse(
-        "week_view.html",
-        {
-            "request": request,
-            "year": year,
-            "kw": kw,
-            "standort": standort,
-            "plan": plan,
-            "cells": cells,
-            "employees": employees,
-            "four_day_week": plan["four_day_week"] if plan else False,
-        }
-    )
-
-# =========================
-# WEEK CELL API (editable)
-# =========================
-@app.post("/api/week/set-cell")
-async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
     conn = get_conn(); cur = conn.cursor()
     try:
-        year, kw = int(data.get("year")), int(data.get("kw"))
-        standort = resolve_standort(request, data.get("standort"), standort_q)
-        row, day = int(data.get("row")), int(data.get("day"))
-        val = data.get("value") or ""
-
-        cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
-        plan = cur.fetchone()
-        if not plan: return {"ok": False, "error": "Plan not found"}
-
-        if plan["four_day_week"] and day == 4:
-            return {"ok": True, "skipped": True}
-
         cur.execute("""
-            INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
-            VALUES(?,?,?,?)
-            ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-        """, (plan["id"], row, day, val))
-        conn.commit()
-        return {"ok": True, "standort": standort}
+            SELECT id,row_count,four_day_week
+            FROM week_plans
+            WHERE year=? AND kw=? AND standort=?
+        """, (year, kw, standort))
+        plan = cur.fetchone()
+        if not plan:
+            return HTMLResponse("<h1>Kein Wochenplan vorhanden</h1>", status_code=404)
+
+        workdays = 4 if plan["four_day_week"] else 5
+
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
+        employees = cur.fetchall()
+        rows = max(plan["row_count"], len(employees))
+
+        grid = [[{"text": ""} for _ in range(workdays)] for _ in range(rows)]
+        cur.execute("""
+            SELECT row_index,day_index,text
+            FROM week_cells
+            WHERE week_plan_id=?
+        """, (plan["id"],))
+        for r in cur.fetchall():
+            if r["day_index"] < workdays:
+                grid[r["row_index"]][r["day_index"]]["text"] = r["text"] or ""
+
+        return templates.TemplateResponse(
+            "week_view.html",
+            {
+                "request": request,
+                "year": year,
+                "kw": kw,
+                "standort": standort,
+                "employees": employees,
+                "grid": grid,
+                "days": build_days(year, kw, workdays),
+                "four_day_week": bool(plan["four_day_week"]),
+            }
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
