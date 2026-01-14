@@ -59,7 +59,6 @@
     cursor:default;
   }
 
-  /* Freitag gesperrt (nur Ansicht) */
   td.cell-friday-locked {
     background:#f1f5f9 !important;
   }
@@ -75,41 +74,29 @@
   <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
 </h1>
 
-<table id="weekTable" class="planner">
+<table id="weekTable">
   <thead>
     <tr>
       <th>Mitarbeiter</th>
-      {% for day in days %}
-        <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-      {% endfor %}
+      <th>Mo</th>
+      <th>Di</th>
+      <th>Mi</th>
+      <th>Do</th>
+      <th>Fr</th>
     </tr>
   </thead>
 
   <tbody>
-    {% for row in grid %}
+    {% for emp in employees %}
       {% set r = loop.index0 %}
       <tr>
-        <td>
-          {% if employees and employees|length > r and employees[r] %}
-            {{ employees[r].name }}
-          {% else %}
-            Unbenannt
-          {% endif %}
-        </td>
+        <td>{{ emp.name }}</td>
 
-        {% for cell in row %}
-          {% set d = loop.index0 %}
-          <td
-            data-row-index="{{ r }}"
-            data-day-index="{{ d }}"
-            class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}"
-          >
-            <textarea
-              class="cell"
-              readonly
-              data-row-index="{{ r }}"
-              data-day-index="{{ d }}"
-            >{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+        {% for d in range(5) %}
+          <td class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+            <textarea class="cell" readonly>
+{{ cells.get((r, d), '') }}
+            </textarea>
           </td>
         {% endfor %}
       </tr>
