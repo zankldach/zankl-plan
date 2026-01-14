@@ -1,4 +1,3 @@
-
 # src/main.py
 from fastapi import FastAPI, Request, Body, Query, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -11,6 +10,92 @@ import logging, traceback
 from urllib.parse import urlparse, parse_qs
 
 app = FastAPI(title="Zankl-Plan MVP")
+
+# =========================
+# ROOT – WICHTIG FÜR RENDER
+# =========================
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+BASE_DIR = Path(__file__).resolve().parent           # src/
+ROOT_DIR = BASE_DIR.parent                           # project root
+DB_PATH  = BASE_DIR / "zankl.db"
+
+templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("zankl-plan")
+
+STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
+
+# =========================
+# Admin: Templates roh schreiben (Heredoc)
+# =========================
+BASE_HTML_SAFE = """<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}Zankl Plan{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/style.v2.css">
+  <style>
+    :root { --blue: #003a8f; --bg: #f4f6f8; }
+    html, body { height: 100%; }
+    body { font-family: Arial, sans-serif; margin: 0; background: var(--bg); color: #0f172a; }
+    header.site { background: var(--blue); color: #fff; padding: 10px 20px;
+      display: flex; justify-content: space-between; align-items: center; }
+    nav.site { background: var(--blue); padding: 6px 20px; display: flex; gap: 16px; align-items: center;
+      position: sticky; top: 0; z-index: 1000; }
+    nav.site a { color: white; text-decoration: none; font-weight: 600; padding: 6px 10px; border-radius: 6px; }
+    nav.site a:hover { background: rgba(255,255,255,0.14); }
+    nav.site a.is-active { background: rgba(255,255,255,0.22); }
+    #settingsGear { cursor: pointer; font-size: 20px; }
+    main { padding: 20px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+    th { background: #eef2f6; }
+    td input, td textarea {
+      width: 100%; height: 100%; padding: 6px; box-sizing: border-box; border: none;
+      background: transparent; text-align: center; font-size: 14px;
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <script>
+    try { window.__fourDay = {{ 'true' if (four_day_week | default(false)) else 'false' }}; }
+    catch (e) { window.__fourDay = false; }
+  </script>
+
+  <header class="site">
+    <strong>Zankl Plan</strong>
+    <div id="settingsGear" title="Einstellungen">⚙️</div>
+  </header>
+
+  <nav class="site">
+    <a href="/week?standort=engelbrechts">Engelbrechts</a>
+    <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
+    <a href="/settings/employees">Einstellungen</a>
+    <a href="/year">Jahr</a>
+    <a href="/health">Health</a>
+  </nav>
+
+  <main>{% block content %}{% endblock %}</main>
+
+  <script>
+    const gear = document.getElementById('settingsGear');
+    if (gear) gear.onclick = () => location.href = '/settings/employees';
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+"""
+# --- REST DEINER DATEI BLEIBT UNVERÄNDERT ---
+
+
 
 BASE_DIR = Path(__file__).resolve().parent           # src/
 ROOT_DIR = BASE_DIR.parent                           # project root
