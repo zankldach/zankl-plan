@@ -1,71 +1,114 @@
+
 {% extends "base.html" %}
-{% block title %}Wochenplanung – Ansicht KW {{ kw }}{% endblock %}
+{% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
 
 {% block head %}
 <style>
-  table.planner {
-    width: 100%;
-    border-collapse: collapse;
+  #weekTable {
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    table-layout:fixed;
+    background:#fff;
+    border:1px solid #d9dee5;
+    border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 3px 12px rgba(0,0,0,0.06);
   }
-  table.planner th,
-  table.planner td {
-    border: 1px solid #ccc;
-    padding: 6px;
-    text-align: center;
-    vertical-align: middle;
+  #weekTable thead th {
+    position:sticky; top:0; z-index:2;
+    background:#0b57d0; color:#fff; padding:8px 6px; font-weight:700; text-align:center;
   }
-  table.planner th {
-    background: #f2f2f2;
+  #weekTable thead th:first-child,
+  #weekTable tbody td:first-child {
+    position:sticky; left:0; z-index:1; background:#f7f9fc; font-weight:600; width:180px; text-align:left;
   }
-  .cell-view {
-    min-height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  #weekTable tbody td {
+    border-top:1px solid #eef2f6; border-right:1px solid #eef2f6;
+    padding:4px 6px; height:54px; vertical-align:middle;
   }
+  /* reine Anzeige */
+  .cell {
+    width:100%; height:46px; padding:4px 6px; border:none; background:transparent;
+    text-align:center; font-size:13px; resize:none; outline:none; color:#0f172a; cursor:default;
+    white-space:pre-wrap; /* Zeilenumbrüche bleiben sichtbar */
+  }
+  td.cell-friday-locked { background:#f1f5f9 !important; }
+  td.cell-friday-locked .cell { color:#64748b; }
 </style>
 {% endblock %}
 
 {% block content %}
+<h1>
+  Wochenplan · {{ standort|capitalize }}
+  <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
+</h1>
 
-<h2>Wochenplanung – Ansicht</h2>
-<p>
-  <strong>Standort:</strong> {{ standort }} |
-  <strong>KW:</strong> {{ kw }} / {{ year }}
-</p>
+{# ---------- Kompatibilitäts-Helper ---------- #}
+{% set has_grid = grid is defined and grid %}
+{% set has_cells = (not has_grid) and (cells is defined and cells) %}
 
-<div class="plan-wrap">
-  <table class="planner">
-    <thead>
-      <tr>
-        <th>Mitarbeiter</th>
+{# Zeilenanzahl ermitteln: bevorzugt grid, sonst max-Zeile in cells, sonst Mitarbeiteranzahl #}
+{% if has_grid %}
+  {% set row_count = grid|length %}
+{% elif has_cells %}
+  {# max row index aus cells-Keys (row, day) #}
+  {% set _max_row = -1 %}
+  {% for k, v in cells.items() %}
+    {% if k is sequence and (k|length) >= 2 and (k[0] > _max_row) %}
+      {% set _max_row = k[0] %}
+    {% endif %}
+  {% endfor %}
+  {% set row_count = (_max_row + 1) if _max_row >= 0 else (employees|length if employees is defined else 0) %}
+{% else %}
+  {% set row_count = employees|length if employees is defined else 0 %}
+{% endif %}
+
+<table id="weekTable">
+  <thead>
+    <tr>
+      <th>Mitarbeiter</th>
+      {# Spaltenköpfe mit Datum – falls days geliefert wurde, nimm sie, sonst Mo–Fr #}
+      {% if days is defined and days %}
         {% for day in days %}
           <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
         {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in grid %}
-        {% set r = loop.index0 %}
-        <tr>
-          <td>
-            {% if employees and employees|length > r %}
-              {{ employees[r].name }}
-            {% else %}
-              &nbsp;
-            {% endif %}
-          </td>
-          {% for cell in row %}
-            <td>
-              <div class="cell-view">
-                {{ cell.text }}
-              </div>
-            </td>
-          {% endfor %}
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+      {% else %}
+        {% set headers = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"] %}
+        {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in range(row_count) %}
+      <tr>
+        <td>
+          {% if employees is defined and employees and (employees|length) > r and employees[r] %}
+            {{ employees[r].name }}
+          {% else %}
+            Unbenannt
+          {% endif %}
+        </td>
 
+        {% for d in range(5) %}
+          {% set readonly_val = "" %}
+          {% if has_grid %}
+            {% set cellobj = (grid[r][d] if (grid|length) > r and (grid[r]|length) > d else None) %}
+            {% set readonly_val = (cellobj.text if (cellobj is defined and cellobj and cellobj.text is defined) else "") %}
+          {% elif has_cells %}
+            {% set readonly_val = cells.get((r, d), "") %}
+          {% endif %}
+
+          <td class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+            <div class="cell">{{ readonly_val }}</div>
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p style="margin-top:10px;color:#64748b;">
+  🔍 Reine Ansicht – Änderungen sind hier nicht möglich.
+</p>
 {% endblock %}
