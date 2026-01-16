@@ -1,7 +1,7 @@
 
 # src/main.py
 from fastapi import FastAPI, Request, Body, Query, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -24,7 +24,7 @@ logger = logging.getLogger("zankl-plan")
 STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
 
 # -----------------------------------------------------------------------------
-# (Notfall) Templates-Schreiber – unverändert, gekürzt
+# (Notfall) Templates-Schreiber – kurz gehalten
 # -----------------------------------------------------------------------------
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
@@ -281,7 +281,7 @@ def init_db():
 init_db()
 
 # -----------------------------------------------------------------------------
-# Helpers (Standort, Tage, KW)
+# Helpers (Standort, Tage, KW/Auto-Navigation)
 # -----------------------------------------------------------------------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
@@ -326,15 +326,9 @@ def get_year_kw(year: int | None, kw: int | None) -> tuple[int, int]:
     return int(y), int(w)
 
 def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
-    """
-    Gibt (year, kw) für die Viewer-Ansicht zurück:
-    - Normal: aktuelle ISO-KW
-    - Ab Freitag 12:00 sowie am Wochenende: nächste KW (Jahreswechsel berücksichtigt)
-    """
     now = now or datetime.now()
-    y, w, wd = now.isocalendar()  # (year, week, weekday) mit ISO: Mo=1 … So=7
+    y, w, wd = now.isocalendar()
     if (wd == 5 and now.hour >= 12) or (wd >= 6):
-        # nächste ISO-Woche berechnen: zum Montag der nächsten Woche springen
         monday = date.fromisocalendar(y, w, 1)
         next_monday = monday + timedelta(days=7)
         y2, w2 = next_monday.isocalendar()[:2]
@@ -342,10 +336,9 @@ def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
     return int(y), int(w)
 
 # -----------------------------------------------------------------------------
-# *** Zentrale Week-Logik: exakt wie /week ***
+# Zentrale Week-Logik (für Edit & View ident)
 # -----------------------------------------------------------------------------
 def build_week_context(year: int, kw: int, standort: str):
-    """Erzeugt das identische Datenpaket wie die Edit-Seite /week."""
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -375,7 +368,7 @@ def build_week_context(year: int, kw: int, standort: str):
             if 0 <= ri < rows and 0 <= di < 5:
                 grid[ri][di]["text"] = r["text"] or ""
 
-        # Kleinbaustellen (nur für Edit; View zeigt sie nicht – trotzdem hier konsistent)
+        # Kleinbaustellen (nur zur Vollständigkeit)
         cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (st,))
         small_jobs = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in small_jobs], default=-1)
@@ -426,6 +419,30 @@ def admin_debug():
     finally:
         conn.close()
 
+@app.get("/admin/peek-week")
+def admin_peek_week(standort: str, year: int, kw: int):
+    """Schnelle Sicht in Plan + Cells für Debug."""
+    st = canon_standort(standort)
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        out = {"standort": st, "year": year, "kw": kw}
+        cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
+                    (year, kw, st))
+        p = cur.fetchone()
+        if not p:
+            out["plan"] = None
+            out["cells"] = []
+        else:
+            out["plan"] = {"id": p["id"], "row_count": p["row_count"], "four_day_week": p["four_day_week"]}
+            cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=? ORDER BY row_index,day_index",
+                        (p["id"],))
+            out["cells"] = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        out["employees"] = [dict(r) for r in cur.fetchall()]
+        return out
+    finally:
+        conn.close()
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -450,7 +467,7 @@ def employees_plain():
 """.strip())
 
 # -----------------------------------------------------------------------------
-# WEEK – Edit (unverändert, nutzt weiterhin eigenen Codepfad)
+# WEEK – Edit (bestehende Logik)
 # -----------------------------------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
@@ -509,7 +526,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         conn.close()
 
 # -----------------------------------------------------------------------------
-# WEEK API – unverändert
+# WEEK API
 # -----------------------------------------------------------------------------
 @app.post("/api/week/set-cell")
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
@@ -591,7 +608,90 @@ async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
 # -----------------------------------------------------------------------------
-# VIEW (Read-only) – nutzt dieselbe Week-Logik + Freitag-12-Regel
+# Einstellungen: Mitarbeiter
+# -----------------------------------------------------------------------------
+@app.get("/settings/employees", response_class=HTMLResponse)
+def settings_employees_page(request: Request, standort: str = "engelbrechts"):
+    st = canon_standort(standort)
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees}
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format\_exc()}</pre>", status\_code=500)
+    finally:
+        conn.close()
+
+@app.post("/settings/employees", response_class=HTMLResponse)
+async def settings_employees_save(request: Request):
+    form = await request.form()
+    # robust: getlist + Fallback
+    try:
+        new_list = []
+        if hasattr(form, "getlist"):
+            for v in form.getlist("emp_name_new[]"):
+                t = (v or "").strip()
+                if t:
+                    new_list.append(t)
+        else:
+            for k, v in form.multi_items():
+                if k == "emp_name_new[]":
+                    t = (v or "").strip()
+                    if t:
+                        new_list.append(t)
+    except Exception:
+        new_list = []
+    st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        for n in new_list:
+            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+        conn.commit()
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees, "saved": True}
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
+
+# (optional) kompatibel zur älteren Vorlage mit Papierkorb-Button
+@app.post("/settings/employees/delete")
+async def settings_employees_delete(request: Request):
+    form = await request.form()
+    emp_id = int((form.get("emp_id") or "0") or 0)
+    st = form.get("standort") or request.query_params.get("standort") or "engelbrechts"
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        if emp_id:
+            cur.execute("DELETE FROM employees WHERE id=?", (emp_id,))
+            conn.commit()
+        return RedirectResponse(url=f"/settings/employees?standort={canon_standort(st)}", status_code=303)
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
+
+# -----------------------------------------------------------------------------
+# YEAR (Platzhalter)
+# -----------------------------------------------------------------------------
+@app.get("/year", response_class=HTMLResponse)
+def year_page(request: Request, year: int = 2025):
+    try:
+        return templates.TemplateResponse("year.html", {"request": request, "year": year})
+    except Exception:
+        return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
+
+# -----------------------------------------------------------------------------
+# VIEW (Read-only) – selbe Week-Logik + Freitag-12-Regel
 # -----------------------------------------------------------------------------
 @app.get("/view/week", response_class=HTMLResponse)
 def view_week(
@@ -601,7 +701,6 @@ def view_week(
     standort: str = "engelbrechts"
 ):
     try:
-        # Auto-Ziel wenn Parameter fehlen: aktuelle oder nächste Woche (Fr 12:00 Regel)
         if year is None or kw is None:
             year, kw = auto_view_target()
         else:
