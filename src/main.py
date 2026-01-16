@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import sqlite3
 from datetime import date
@@ -23,7 +23,6 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
-    # week_plans
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +34,6 @@ def init_db():
         )
     """)
 
-    # employees
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +53,14 @@ def startup():
 
 
 # -------------------------------------------------
+# ✅ HEALTHCHECK (RENDER!)
+# -------------------------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# -------------------------------------------------
 # WEEK – EDITIERBAR
 # -------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
@@ -66,7 +72,6 @@ def week(request: Request, year: int | None = None, kw: int | None = None, stand
     conn = get_conn()
     cur = conn.cursor()
 
-    # Week Plan
     cur.execute(
         "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
         (year, kw, standort)
@@ -85,7 +90,6 @@ def week(request: Request, year: int | None = None, kw: int | None = None, stand
         )
         plan = cur.fetchone()
 
-    # Employees
     cur.execute(
         "SELECT * FROM employees WHERE standort=? AND active=1 ORDER BY name",
         (standort,)
@@ -93,7 +97,6 @@ def week(request: Request, year: int | None = None, kw: int | None = None, stand
     employees = cur.fetchall()
 
     rows = max(5, len(employees))
-
     conn.close()
 
     return templates.TemplateResponse(
