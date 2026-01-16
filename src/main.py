@@ -152,3 +152,4 @@ def add_employee(
         f"/settings/employees?standort={standort}",
         status_code=303
     )
+
