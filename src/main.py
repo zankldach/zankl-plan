@@ -24,7 +24,7 @@ logger = logging.getLogger("zankl-plan")
 STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
 
 # -----------------------------------------------------------------------------
-# TEMPLATES SCHREIBEN (Admin) - unverändert
+# ADMIN: Templates schreiben (nur für Notfälle/Reset)
 # -----------------------------------------------------------------------------
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
@@ -32,68 +32,45 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
  <meta charset="UTF-8">
  <title>{% block title %}Zankl Plan{% endblock %}</title>
  <meta name="viewport" content="width=device-width, initial-scale=1">
- <!-- Ein einziges, verlässliches Stylesheet -->
  /static/style.v2.css
- <!-- KEIN globales app.js laden, damit nichts mit week.html kollidiert -->
- <!-- /static/app.js</script> -->
  <style>
- :root { --blue: #003a8f; --bg: #f4f6f8; }
- html, body { height: 100%; }
- body { font-family: Arial, sans-serif; margin: 0; background: var(--bg); color: #0f172a; }
- header.site { background: var(--blue); color: #fff; padding: 10px 20px;
- display: flex; justify-content: space-between; align-items: center; }
- nav.site { background: var(--blue); padding: 6px 20px; display: flex; gap: 16px; align-items: center;
- position: sticky; top: 0; z-index: 1000; }
- nav.site a { color: white; text-decoration: none; font-weight: 600; padding: 6px 10px; border-radius: 6px; }
- nav.site a:hover { background: rgba(255,255,255,0.14); }
- nav.site a.is-active { background: rgba(255,255,255,0.22); }
- #settingsGear { cursor: pointer; font-size: 20px; }
- main { padding: 20px; }
- /* Tabellen Defaults */
- table { width: 100%; border-collapse: collapse; background: #fff; }
- th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
- th { background: #eef2f6; }
- td input, td textarea {
- width: 100%; height: 100%; padding: 6px; box-sizing: border-box; border: none;
- background: transparent; text-align: center; font-size: 14px;
- }
+ :root { --blue:#003a8f; --bg:#f4f6f8; }
+ body { margin:0; font-family: Arial, sans-serif; background: var(--bg); color:#0f172a; }
+ header.site { background: var(--blue); color:#fff; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+ nav.site { background: var(--blue); padding:6px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+ nav.site a { color:#fff; text-decoration:none; font-weight:600; padding:6px 10px; border-radius:6px; }
+ nav.site a:hover { background: rgba(255,255,255,0.15); }
+ nav.site a.is-active { background: rgba(255,255,255,0.25); }
+ nav.site .sep { width:1px; height:22px; background: rgba(255,255,255,0.35); margin:0 4px; }
+ main { padding:20px; }
  </style>
  {% block head %}{% endblock %}
 </head>
 <body>
- <!-- 4-Tage-Woche Flag (robust auch auf Seiten ohne 'four_day_week') -->
- <script>
- try { window.__fourDay = {{ 'true' if (four_day_week
- default(false)) else 'false' }}; }
- catch (e) { window.__fourDay = false; }
- </script>
- <header class="site">
- <strong>Zankl Plan</strong>
- <div id="settingsGear" title="Einstellungen">⚙️</div>
- </header>
- <!-- DIREKTE Navbar (kein Include, keine externe Datei nötig) -->
- <nav class="site" role="navigation" aria-label="Hauptnavigation">
- <week?standort=engelbrechtsEngelbrechts</a>
+<header class="site">
+ <strong>Zankl-Plan</strong>
+ <span>⚙️</span>
+</header>
+<nav class="site">
+ /week?standort=engelbrechtsEngelbrechts</a>
  /week?standort=gross-gerungsGroß Gerungs</a>
+ <span class="sep"></span>
+ /view/week?standort=engelbrechtsView EB</a>
+ /view/week?standort=gross-gerungsView GG</a>
+ <span class="sep"></span>
  /settings/employeesEinstellungen</a>
- <yearJahr</a>
  /healthHealth</a>
- </nav>
- <main>
+</nav>
+<main>
  {% block content %}{% endblock %}
- </main>
- <script>
- // Zahnrad → Einstellungen
- const gear = document.getElementById('settingsGear');
- if (gear) gear.addEventListener('click', () => { window.location.href = '/settings/employees'; });
- // Aktiven Menüpunkt markieren
- const currentPath = window.location.pathname;
+</main>
+<script>
+ const path = window.location.pathname;
  document.querySelectorAll('nav.site a').forEach(a => {
- const aPath = new URL(a.href, window.location.origin).pathname;
- if (currentPath === aPath || currentPath.startsWith(aPath)) a.classList.add('is-active');
+   if (path === new URL(a.href).pathname) { a.classList.add('is-active'); }
  });
- </script>
- {% block scripts %}{% endblock %}
+</script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
 """
@@ -102,99 +79,89 @@ SETTINGS_EMPLOYEES_HTML = """{% extends "base.html" %}
 {% block title %}Einstellungen · Mitarbeiter{% endblock %}
 {% block content %}
 <h1>Einstellungen · Mitarbeiter</h1>
-/settings/employees
+<formings/employees
  <label>Standort:
- <select name="standort" onchange="document.getElementById('standortForm').submit()">
- <option value="engelbrechts" {{ 'selected' if standort=='engelbrechts' else '' }}>Engelbrechts</option>
- <option value="gross-gerungs" {{ 'selected' if standort=='gross-gerungs' else '' }}>Groß Gerungs</option>
- </select>
+   <select name="standort" onchange="this.form.submit()">
+     <option value="engelbrechts" {{ 'selected' if standort=='engelbrechts' else '' }}>Engelbrechts</option>
+     <option value="gross-gerungs" {{ 'selected' if standort=='gross-gerungs' else '' }}>Groß Gerungs</option>
+   </select>
  </label>
 </form>
+
 {% if saved %}
- <div style="padding:8px; background:#e8ffe8; border:1px solid #9bd49b; margin-bottom:10px;">
- Gespeichert.
- </div>
+<div style="background:#e7ffe7;padding:8px;margin-bottom:10px;">Gespeichert.</div>
 {% endif %}
-<table class="table" style="margin-bottom:10px; width:100%; border-collapse:collapse;">
+
+<table class="table" style="margin-bottom:16px; width:100%; border-collapse:collapse;">
  <thead>
- <tr>
- <th style="width:80px; text-align:left;">ID</th>
- <th style="text-align:left;">Name</th>
- </tr>
+  <tr><th style="width:60px;">ID</th><th>Name</th></tr>
  </thead>
- <tbody id="empTableBody">
- {% for e in employees or [] %}
- <tr>
- <td style="text-align:left;">{{ e.id }}</td>
- <td style="text-align:left;">
- <input type="text" value="{{ e.name }}" disabled style="width:100%; background:#f8fafc; color:#111;">
- </td>
- </tr>
- {% endfor %}
- {% if (not employees) or (employees|length==0) %}
- <tr>
- <td colspan="2" style="text-align:left; color:#64748b;">Noch keine Mitarbeiter für diesen Standort erfasst.</td>
- </tr>
- {% endif %}
+ <tbody>
+  {% for e in employees %}
+  <tr>
+    <td>{{ e.id }}</td>
+    <td><input type="text" value="{{ e.name }}" disabled style="width:100%;"></td>
+  </tr>
+  {% endfor %}
+  {% if (not employees) or (employees|length==0) %}
+  <tr><td colspan="2" style="color:#64748b;">Noch keine Mitarbeiter für diesen Standort erfasst.</td></tr>
+  {% endif %}
  </tbody>
 </table>
-/settings/employees
- <input type="hidden" name="standort" value="{{ standort }}"/>
- <fieldset style="border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
- <legend style="padding:0 6px; color:#334155; font-weight:600;">Neue Mitarbeiter</legend>
- <p style="margin:0 0 8px 0; color:#64748b;">
- Trage die Namen ein. Leere Felder werden ignoriert. Es gibt <strong>immer eine leere Zeile am Ende</strong>.
- </p>
- <div id="newInputs" style="display:flex; flex-direction:column; gap:8px;"></div>
- <div style="margin-top:8px; display:flex; gap:8px;">
- <button type="button" id="addBtn">Weiteres Feld</button>
- <button type="submit" id="saveBtn">Speichern</button>
- </div>
+
+<formings/employees
+ <input type="hidden" name="standort" value="{{ standort }}">
+ <fieldset style="padding:10px;border:1px solid #e5e7eb;border-radius:6px;">
+   <legend>Neue Mitarbeiter</legend>
+   <div id="newInputs" style="display:flex;flex-direction:column;gap:8px;"></div>
+   <div style="margin-top:8px;display:flex;gap:8px;">
+     <button type="button" id="addBtn">Weiteres Feld</button>
+     <button type="submit">Speichern</button>
+   </div>
  </fieldset>
 </form>
 {% endblock %}
+
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', ()=>{
- const wrap = document.getElementById('newInputs');
- const addBtn = document.getElementById('addBtn');
- function makeRow(value=""){
-   const row = document.createElement('div');
-   row.className = 'new-row';
-   row.style.display = 'grid';
-   row.style.gridTemplateColumns = '180px 1fr';
-   row.style.gap = '8px';
-   row.style.alignItems = 'center';
-   row.innerHTML = `
-   <label>Neuer Mitarbeiter:</label>
-   <div style="display:flex; gap:6px; align-items:center;">
-     <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
-       style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
-     <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
-   </div>`;
-   const inp = row.querySelector('input[name="emp_name_new[]"]');
-   const rmv = row.querySelector('.btn-remove');
-   if (value) inp.value = value;
-   rmv.addEventListener('click', ()=>{
-     const rows = wrap.querySelectorAll('.new-row');
-     if (rows.length > 1) { row.remove(); ensureTrailingEmpty(); } else { inp.value = ''; }
-   });
-   inp.addEventListener('input', ensureTrailingEmpty);
-   return row;
- }
- function ensureTrailingEmpty(){
-   const inputs = Array.from(wrap.querySelectorAll('input[name="emp_name_new[]"]'));
-   const needEmpty = !(inputs.length > 0 && inputs[inputs.length-1].value.trim() === '');
-   if (needEmpty) wrap.appendChild(makeRow(""));
- }
- ensureTrailingEmpty();
- if (addBtn) {
-   addBtn.addEventListener('click', ()=>{
-     wrap.appendChild(makeRow(""));
-     const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
-     all[all.length-1]?.focus();
-   });
- }
+  const wrap = document.getElementById('newInputs');
+  const addBtn = document.getElementById('addBtn');
+  function makeRow(value=""){
+    const row = document.createElement('div');
+    row.className = 'new-row';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '180px 1fr';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+      <label>Neuer Mitarbeiter:</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" name="emp_name_new[]" placeholder="Name eingeben"
+          style="flex:1; padding:6px 8px; border:1px solid #d9dee5; border-radius:6px;">
+        <button type="button" class="btn-remove" title="Zeile entfernen" style="padding:6px 10px;">✕</button>
+      </div>`;
+    const inp = row.querySelector('input[name="emp_name_new[]"]');
+    const rmv = row.querySelector('.btn-remove');
+    if (value) inp.value = value;
+    rmv.addEventListener('click', ()=>{
+      const rows = wrap.querySelectorAll('.new-row');
+      if (rows.length > 1) { row.remove(); ensureTrailingEmpty(); } else { inp.value = ''; }
+    });
+    inp.addEventListener('input', ensureTrailingEmpty);
+    return row;
+  }
+  function ensureTrailingEmpty(){
+    const inputs = Array.from(wrap.querySelectorAll('input[name="emp_name_new[]"]'));
+    const needEmpty = !(inputs.length > 0 && inputs[inputs.length-1].value.trim() === '');
+    if (needEmpty) wrap.appendChild(makeRow(""));
+  }
+  ensureTrailingEmpty();
+  if (addBtn) addBtn.addEventListener('click', ()=>{
+    wrap.appendChild(makeRow(""));
+    const all = wrap.querySelectorAll('input[name="emp_name_new[]"]');
+    all[all.length-1]?.focus();
+  });
 });
 </script>
 {% endblock %}
@@ -263,7 +230,7 @@ def admin_show_file(name: str):
     return Response(p.read_text(encoding="utf-8"), media_type="text/plain")
 
 # -----------------------------------------------------------------------------
-# DB INIT (unverändert)
+# DB
 # -----------------------------------------------------------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
@@ -317,7 +284,7 @@ def init_db():
 init_db()
 
 # -----------------------------------------------------------------------------
-# HILFSFUNKTIONEN (Kanons, Tage)
+# Helpers
 # -----------------------------------------------------------------------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
@@ -355,18 +322,14 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
             pass
     return "engelbrechts"
 
-# -----------------------------------------------------------------------------
-# *** NEU: View-Helper, die vorher gefehlt haben ***
-# -----------------------------------------------------------------------------
+# --- View-Helper (neu) ---
 def get_year_kw(year: int | None, kw: int | None) -> tuple[int, int]:
-    """Fallback auf aktuelle ISO-Woche/Jahr, wenn Parameter None sind."""
     today = date.today()
     y = year or today.isocalendar()[0]
     w = kw or today.isocalendar()[1]
     return int(y), int(w)
 
 def ensure_week_plan(year: int, kw: int, standort: str) -> dict:
-    """Holt oder erzeugt den Week-Plan (inkl. four_day_week, row_count)."""
     standort = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -375,7 +338,6 @@ def ensure_week_plan(year: int, kw: int, standort: str) -> dict:
         row = cur.fetchone()
         if row:
             return {"id": row["id"], "row_count": int(row["row_count"] or 5), "four_day_week": int(row["four_day_week"] or 0)}
-        # neu anlegen (Default 5 Zeilen, 4-Tage-Woche aktiv = 1, wie bisheriger Default)
         cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
                     (year, kw, standort, 5))
         conn.commit()
@@ -385,7 +347,6 @@ def ensure_week_plan(year: int, kw: int, standort: str) -> dict:
         conn.close()
 
 def load_employees_by_standort(standort: str) -> list[dict]:
-    """Lädt Mitarbeiterliste für Standort (sortiert nach id)."""
     standort = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -395,7 +356,6 @@ def load_employees_by_standort(standort: str) -> list[dict]:
         conn.close()
 
 def load_week_cells_as_grid(plan_id: int, rows: int) -> list[list[dict]]:
-    """Lädt Zellen zu plan_id in ein Grid [rows x 5] mit {'text': ...}."""
     grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -409,7 +369,7 @@ def load_week_cells_as_grid(plan_id: int, rows: int) -> list[list[dict]]:
     return grid
 
 # -----------------------------------------------------------------------------
-# ADMIN/DEBUG/HEALTH – unverändert
+# Admin/Debug/Health
 # -----------------------------------------------------------------------------
 @app.get("/admin/normalize-standorte")
 def admin_normalize():
@@ -443,7 +403,7 @@ def health():
     return {"status": "ok"}
 
 # -----------------------------------------------------------------------------
-# PLAIN TEST / EMPLOYEES (unverändert)
+# Plain Test: Employees
 # -----------------------------------------------------------------------------
 @app.get("/settings/employees_plain", response_class=HTMLResponse)
 def employees_plain():
@@ -452,7 +412,7 @@ def employees_plain():
 <html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
 <body>
  <h1>Plain · Mitarbeiter</h1>
- /settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
+ <settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
  <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
  <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
  <p><button type="submit">Speichern</button></p>
@@ -462,7 +422,7 @@ def employees_plain():
 """.strip())
 
 # -----------------------------------------------------------------------------
-# WEEK (GET) – unverändert aus deiner Basis
+# WEEK – Edit
 # -----------------------------------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
@@ -481,21 +441,25 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
             plan_id, rows, four_day_week = cur.lastrowid, 5, 1
         else:
             plan_id = plan["id"]; rows = plan["row_count"]; four_day_week = plan["four_day_week"]
+
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (standort,))
         employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
         if employees:
             rows = max(rows, len(employees))
+
         grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
         cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
         for r in cur.fetchall():
             if 0 <= r["row_index"] < rows and 0 <= r["day_index"] < 5:
                 grid[r["row_index"]][r["day_index"]]["text"] = r["text"] or ""
+
         cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (standort,))
         sj = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in sj], default=-1)
         while len(sj) < 10:
             max_idx += 1
             sj.append({"row_index": max_idx, "text": ""})
+
         return templates.TemplateResponse(
             "week.html",
             {
@@ -508,7 +472,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
                 "standort": standort,
                 "four_day_week": bool(four_day_week),
                 "small_jobs": sj,
-                "standorte": STANDORTE,  # für Standort-Dropdown
+                "standorte": STANDORTE,
             }
         )
     except Exception:
@@ -517,7 +481,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         conn.close()
 
 # -----------------------------------------------------------------------------
-# WEEK API (POST) – unverändert aus deiner Basis
+# WEEK API
 # -----------------------------------------------------------------------------
 @app.post("/api/week/set-cell")
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
@@ -599,7 +563,7 @@ async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
 # -----------------------------------------------------------------------------
-# KLEINBAUSTELLEN – unverändert aus deiner Basis
+# Kleinbaustellen
 # -----------------------------------------------------------------------------
 @app.post("/api/klein/set")
 async def klein_set(request: Request, data: dict = Body(...)):
@@ -641,7 +605,7 @@ async def klein_save_list(request: Request, data: dict = Body(...)):
         conn.close()
 
 # -----------------------------------------------------------------------------
-# EINSTELLUNGEN: MITARBEITER – unverändert aus deiner Basis
+# Einstellungen: Mitarbeiter
 # -----------------------------------------------------------------------------
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
@@ -662,15 +626,15 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     form = await request.form()
-    # DEBUG: eingehende Form-Schlüssel loggen
     try:
         items_preview = [(k, v) for k, v in form.items()]
         logger.info("POST /settings/employees · items=%s", items_preview)
     except Exception:
         logger.info("POST /settings/employees · (items preview nicht möglich)")
+
     st = form.get("standort") or request.query_params.get("standort") or None
     st = resolve_standort(request, st, request.query_params.get("standort"))
-    # Neue: emp_name_new[]
+
     new_list = []
     for key, val in form.multi_items():
         if key == "emp_name_new[]":
@@ -678,6 +642,7 @@ async def settings_employees_save(request: Request):
             if t:
                 new_list.append(t)
     logger.info("POST /settings/employees · standort=%s · new_list=%s", st, new_list)
+
     conn = get_conn(); cur = conn.cursor()
     try:
         for n in new_list:
@@ -695,7 +660,7 @@ async def settings_employees_save(request: Request):
         conn.close()
 
 # -----------------------------------------------------------------------------
-# YEAR (Platzhalter) – unverändert
+# YEAR (Platzhalter)
 # -----------------------------------------------------------------------------
 @app.get("/year", response_class=HTMLResponse)
 def year_page(request: Request, year: int = 2025):
@@ -705,7 +670,7 @@ def year_page(request: Request, year: int = 2025):
         return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
 
 # -----------------------------------------------------------------------------
-# *** FIXED: VIEW / READ-ONLY – funktioniert jetzt stabil ***
+# VIEW (Read-only) – stabil
 # -----------------------------------------------------------------------------
 @app.get("/view/week", response_class=HTMLResponse)
 def view_week(
@@ -717,7 +682,6 @@ def view_week(
     try:
         year, kw = get_year_kw(year, kw)
         st = canon_standort(standort)
-        # Plan sicherstellen + Daten laden
         plan = ensure_week_plan(year, kw, st)
         employees = load_employees_by_standort(st)
         rows = max(int(plan["row_count"] or 5), len(employees) or 0)
@@ -738,4 +702,3 @@ def view_week(
         )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-``
