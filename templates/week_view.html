@@ -1,37 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Wochenplan Ansicht – KW {{ kw }} / {{ year }}{% endblock %}
+{% block title %}Wochenplanung – Ansicht KW {{ kw }}{% endblock %}
+
+{% block head %}
+<style>
+  table.planner {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  table.planner th,
+  table.planner td {
+    border: 1px solid #ccc;
+    padding: 6px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.planner th {
+    background: #f2f2f2;
+  }
+  .cell-view {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 
-<h1>Wochenplanung – Ansicht</h1>
-<p><strong>Standort:</strong> {{ standort }} · <strong>KW:</strong> {{ kw }} / {{ year }}</p>
+<h2>Wochenplanung – Ansicht</h2>
+<p>
+  <strong>Standort:</strong> {{ standort }} |
+  <strong>KW:</strong> {{ kw }} / {{ year }}
+</p>
 
-<table class="planner">
-  <thead>
-    <tr>
-      <th>Mitarbeiter</th>
-      {% for day in days %}
-        <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-      {% endfor %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in grid %}
-      {% set r = loop.index0 %}
+<div class="plan-wrap">
+  <table class="planner">
+    <thead>
       <tr>
-        <td>
-          {% if employees and employees|length > r %}
-            {{ employees[r].name }}
-          {% else %}
-            —
-          {% endif %}
-        </td>
-        {% for cell in row %}
-          <td>{{ cell.text }}</td>
+        <th>Mitarbeiter</th>
+        {% for day in days %}
+          <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
         {% endfor %}
       </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </thead>
+    <tbody>
+      {% for row in grid %}
+        {% set r = loop.index0 %}
+        <tr>
+          <td>
+            {% if employees and employees|length > r %}
+              {{ employees[r].name }}
+            {% else %}
+              &nbsp;
+            {% endif %}
+          </td>
+          {% for cell in row %}
+            <td>
+              <div class="cell-view">
+                {{ cell.text }}
+              </div>
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 {% endblock %}
