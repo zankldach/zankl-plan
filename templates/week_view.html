@@ -28,13 +28,13 @@
     padding:4px 6px; height:54px; vertical-align:middle;
   }
   /* reine Anzeige */
-  .cell {
+  textarea.cell {
     width:100%; height:46px; padding:4px 6px; border:none; background:transparent;
     text-align:center; font-size:13px; resize:none; outline:none; color:#0f172a; cursor:default;
-    white-space:pre-wrap; /* Zeilenumbrüche bleiben sichtbar */
+    white-space:pre-wrap;
   }
   td.cell-friday-locked { background:#f1f5f9 !important; }
-  td.cell-friday-locked .cell { color:#64748b; }
+  td.cell-friday-locked textarea.cell { color:#64748b; }
 </style>
 {% endblock %}
 
@@ -44,63 +44,28 @@
   <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
 </h1>
 
-{# ---------- Kompatibilitäts-Helper ---------- #}
-{% set has_grid = grid is defined and grid %}
-{% set has_cells = (not has_grid) and (cells is defined and cells) %}
-
-{# Zeilenanzahl ermitteln: bevorzugt grid, sonst max-Zeile in cells, sonst Mitarbeiteranzahl #}
-{% if has_grid %}
-  {% set row_count = grid|length %}
-{% elif has_cells %}
-  {# max row index aus cells-Keys (row, day) #}
-  {% set _max_row = -1 %}
-  {% for k, v in cells.items() %}
-    {% if k is sequence and (k|length) >= 2 and (k[0] > _max_row) %}
-      {% set _max_row = k[0] %}
-    {% endif %}
-  {% endfor %}
-  {% set row_count = (_max_row + 1) if _max_row >= 0 else (employees|length if employees is defined else 0) %}
-{% else %}
-  {% set row_count = employees|length if employees is defined else 0 %}
-{% endif %}
-
 <table id="weekTable">
   <thead>
     <tr>
       <th>Mitarbeiter</th>
-      {# Spaltenköpfe mit Datum – falls days geliefert wurde, nimm sie, sonst Mo–Fr #}
-      {% if days is defined and days %}
-        {% for day in days %}
-          <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-        {% endfor %}
-      {% else %}
-        {% set headers = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag"] %}
-        {% for h in headers %}<th>{{ h }}</th>{% endfor %}
-      {% endif %}
+      {% for day in days %}
+        <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+      {% endfor %}
     </tr>
   </thead>
   <tbody>
-    {% for r in range(row_count) %}
+    {% for row in grid %}
+      {% set r = loop.index0 %}
       <tr>
         <td>
-          {% if employees is defined and employees and (employees|length) > r and employees[r] %}
+          {% if employees and employees|length > r and employees[r] %}
             {{ employees[r].name }}
-          {% else %}
-            Unbenannt
-          {% endif %}
+          {% else %}Unbenannt{% endif %}
         </td>
-
-        {% for d in range(5) %}
-          {% set readonly_val = "" %}
-          {% if has_grid %}
-            {% set cellobj = (grid[r][d] if (grid|length) > r and (grid[r]|length) > d else None) %}
-            {% set readonly_val = (cellobj.text if (cellobj is defined and cellobj and cellobj.text is defined) else "") %}
-          {% elif has_cells %}
-            {% set readonly_val = cells.get((r, d), "") %}
-          {% endif %}
-
+        {% for cell in row %}
+          {% set d = loop.index0 %}
           <td class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-            <div class="cell">{{ readonly_val }}</div>
+            <textarea class="cell" readonly>{{ cell.text or '' }}</textarea>
           </td>
         {% endfor %}
       </tr>
@@ -112,3 +77,4 @@
   🔍 Reine Ansicht – Änderungen sind hier nicht möglich.
 </p>
 {% endblock %}
+``
