@@ -1,110 +1,37 @@
 {% extends "base.html" %}
-{% block title %}View · {{ standort|capitalize }} · KW {{ kw }}{% endblock %}
-
-{% block head %}
-<style>
-  #weekTable {
-    width:100%;
-    border-collapse:separate;
-    border-spacing:0;
-    table-layout:fixed;
-    background:#fff;
-    border:1px solid #d9dee5;
-    border-radius:8px;
-    overflow:hidden;
-    box-shadow:0 3px 12px rgba(0,0,0,0.06);
-  }
-
-  #weekTable thead th {
-    position:sticky;
-    top:0;
-    z-index:2;
-    background:#0b57d0;
-    color:#fff;
-    padding:8px 6px;
-    font-weight:700;
-    text-align:center;
-  }
-
-  #weekTable thead th:first-child,
-  #weekTable tbody td:first-child {
-    position:sticky;
-    left:0;
-    z-index:1;
-    background:#f7f9fc;
-    font-weight:600;
-    width:180px;
-    text-align:left;
-  }
-
-  #weekTable tbody td {
-    border-top:1px solid #eef2f6;
-    border-right:1px solid #eef2f6;
-    padding:4px 6px;
-    height:54px;
-    vertical-align:middle;
-  }
-
-  #weekTable textarea.cell {
-    width:100%;
-    height:46px;
-    padding:4px 6px;
-    border:none;
-    background:transparent;
-    text-align:center;
-    font-size:13px;
-    resize:none;
-    outline:none;
-    color:#0f172a;
-    cursor:default;
-  }
-
-  td.cell-friday-locked {
-    background:#f1f5f9 !important;
-  }
-  td.cell-friday-locked textarea.cell {
-    color:#64748b;
-  }
-</style>
-{% endblock %}
+{% block title %}Wochenplan Ansicht – KW {{ kw }} / {{ year }}{% endblock %}
 
 {% block content %}
-<h1>
-  Wochenplan · {{ standort|capitalize }}
-  <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
-</h1>
 
-<table id="weekTable">
+<h1>Wochenplanung – Ansicht</h1>
+<p><strong>Standort:</strong> {{ standort }} · <strong>KW:</strong> {{ kw }} / {{ year }}</p>
+
+<table class="planner">
   <thead>
     <tr>
       <th>Mitarbeiter</th>
-      <th>Mo</th>
-      <th>Di</th>
-      <th>Mi</th>
-      <th>Do</th>
-      <th>Fr</th>
+      {% for day in days %}
+        <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+      {% endfor %}
     </tr>
   </thead>
-
   <tbody>
-    {% for emp in employees %}
+    {% for row in grid %}
       {% set r = loop.index0 %}
       <tr>
-        <td>{{ emp.name }}</td>
-
-        {% for d in range(5) %}
-          <td class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-            <textarea class="cell" readonly>
-{{ cells.get((r, d), '') }}
-            </textarea>
-          </td>
+        <td>
+          {% if employees and employees|length > r %}
+            {{ employees[r].name }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        {% for cell in row %}
+          <td>{{ cell.text }}</td>
         {% endfor %}
       </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<p style="margin-top:10px;color:#64748b;">
-  🔍 Reine Ansicht – Änderungen sind hier nicht möglich.
-</p>
 {% endblock %}
