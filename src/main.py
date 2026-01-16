@@ -24,7 +24,7 @@ logger = logging.getLogger("zankl-plan")
 STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
 
 # -----------------------------------------------------------------------------
-# (Notfall) Templates-Schreiber – kurz gehalten
+# (Optional) Notfall-Templates-Schreiber
 # -----------------------------------------------------------------------------
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
@@ -326,6 +326,11 @@ def get_year_kw(year: int | None, kw: int | None) -> tuple[int, int]:
     return int(y), int(w)
 
 def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
+    """
+    (year, kw) für Viewer:
+    - Normal: aktuelle ISO-KW
+    - Ab Freitag 12:00 sowie Sa/So: nächste ISO-KW
+    """
     now = now or datetime.now()
     y, w, wd = now.isocalendar()
     if (wd == 5 and now.hour >= 12) or (wd >= 6):
@@ -368,7 +373,7 @@ def build_week_context(year: int, kw: int, standort: str):
             if 0 <= ri < rows and 0 <= di < 5:
                 grid[ri][di]["text"] = r["text"] or ""
 
-        # Kleinbaustellen (nur zur Vollständigkeit)
+        # Kleinbaustellen (nur der Vollständigkeit halber)
         cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (st,))
         small_jobs = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in small_jobs], default=-1)
@@ -421,7 +426,7 @@ def admin_debug():
 
 @app.get("/admin/peek-week")
 def admin_peek_week(standort: str, year: int, kw: int):
-    """Schnelle Sicht in Plan + Cells für Debug."""
+    """Schneller Blick in Plan + Cells (Debughilfe)."""
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -457,7 +462,7 @@ def employees_plain():
 <html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
 <body>
  <h1>Plain · Mitarbeiter</h1>
- /settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
+ <settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
  <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
  <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
  <p><button type="submit">Speichern</button></p>
@@ -467,7 +472,7 @@ def employees_plain():
 """.strip())
 
 # -----------------------------------------------------------------------------
-# WEEK – Edit (bestehende Logik)
+# WEEK – Edit
 # -----------------------------------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
@@ -622,16 +627,16 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
             {"request": request, "standort": st, "employees": employees}
         )
     except Exception:
-        return HTMLResponse(f"<pre>{traceback.format\_exc()}</pre>", status\_code=500)
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
 
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     form = await request.form()
-    # robust: getlist + Fallback
+    # robustes Einlesen der emp_name_new[]-Felder
+    new_list = []
     try:
-        new_list = []
         if hasattr(form, "getlist"):
             for v in form.getlist("emp_name_new[]"):
                 t = (v or "").strip()
@@ -644,7 +649,8 @@ async def settings_employees_save(request: Request):
                     if t:
                         new_list.append(t)
     except Exception:
-        new_list = []
+        pass
+
     st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
 
     conn = get_conn(); cur = conn.cursor()
@@ -663,7 +669,6 @@ async def settings_employees_save(request: Request):
     finally:
         conn.close()
 
-# (optional) kompatibel zur älteren Vorlage mit Papierkorb-Button
 @app.post("/settings/employees/delete")
 async def settings_employees_delete(request: Request):
     form = await request.form()
