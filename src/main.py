@@ -1,18 +1,27 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 import sqlite3
 from datetime import date
 
-app = FastAPI()
-templates = Jinja2Templates(directory="src/templates")
+# --------------------------------------------------
+# APP SETUP
+# --------------------------------------------------
+app = FastAPI(title="Zankl Plan – Stable")
 
-DB_PATH = "data.db"
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+DB_PATH = BASE_DIR / "zankl.db"
+
+templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
 
 
-# -------------------------------------------------
-# DB HELPER
-# -------------------------------------------------
+# --------------------------------------------------
+# DB
+# --------------------------------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -24,22 +33,19 @@ def init_db():
     cur = conn.cursor()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS week_plans (
+        CREATE TABLE IF NOT EXISTS employees (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            year INTEGER NOT NULL,
-            kw INTEGER NOT NULL,
-            standort TEXT NOT NULL,
-            row_count INTEGER DEFAULT 5,
-            four_day_week INTEGER DEFAULT 0
+            name TEXT NOT NULL,
+            standort TEXT NOT NULL
         )
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS employees (
+        CREATE TABLE IF NOT EXISTS week_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            standort TEXT NOT NULL,
-            active INTEGER DEFAULT 1
+            year INTEGER,
+            kw INTEGER,
+            standort TEXT
         )
     """)
 
@@ -52,51 +58,40 @@ def startup():
     init_db()
 
 
-# -------------------------------------------------
-# ✅ HEALTHCHECK (RENDER!)
-# -------------------------------------------------
+# --------------------------------------------------
+# HEALTH (RENDER!)
+# --------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-# -------------------------------------------------
-# WEEK – EDITIERBAR
-# -------------------------------------------------
+# --------------------------------------------------
+# ROOT
+# --------------------------------------------------
+@app.get("/")
+def root():
+    return RedirectResponse("/week")
+
+
+# --------------------------------------------------
+# WEEK (EDIT)
+# --------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
-def week(request: Request, year: int | None = None, kw: int | None = None, standort: str = "Hauptbetrieb"):
+def week(request: Request, standort: str = "engelbrechts"):
     today = date.today()
-    year = year or today.year
-    kw = kw or today.isocalendar().week
+    year = today.year
+    kw = today.isocalendar().week
 
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
-        (year, kw, standort)
-    )
-    plan = cur.fetchone()
-
-    if not plan:
-        cur.execute(
-            "INSERT INTO week_plans (year, kw, standort) VALUES (?, ?, ?)",
-            (year, kw, standort)
-        )
-        conn.commit()
-        cur.execute(
-            "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
-            (year, kw, standort)
-        )
-        plan = cur.fetchone()
-
-    cur.execute(
-        "SELECT * FROM employees WHERE standort=? AND active=1 ORDER BY name",
+        "SELECT * FROM employees WHERE standort=? ORDER BY id",
         (standort,)
     )
     employees = cur.fetchall()
 
-    rows = max(5, len(employees))
     conn.close()
 
     return templates.TemplateResponse(
@@ -106,49 +101,54 @@ def week(request: Request, year: int | None = None, kw: int | None = None, stand
             "year": year,
             "kw": kw,
             "standort": standort,
-            "plan": plan,
             "employees": employees,
-            "rows": rows,
-        },
+        }
     )
 
 
-# -------------------------------------------------
-# WEEK – VIEW ONLY
-# -------------------------------------------------
-@app.get("/view/week", response_class=HTMLResponse)
-def view_week(request: Request, year: int | None = None, kw: int | None = None, standort: str = "Hauptbetrieb"):
-    today = date.today()
-    year = year or today.year
-    kw = kw or today.isocalendar().week
-
+# --------------------------------------------------
+# SETTINGS – EMPLOYEES ✅ (WAR WEG!)
+# --------------------------------------------------
+@app.get("/settings/employees", response_class=HTMLResponse)
+def settings_employees(request: Request, standort: str = "engelbrechts"):
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT * FROM week_plans WHERE year=? AND kw=? AND standort=?",
-        (year, kw, standort)
-    )
-    plan = cur.fetchone()
-
-    cur.execute(
-        "SELECT * FROM employees WHERE standort=? AND active=1 ORDER BY name",
+        "SELECT * FROM employees WHERE standort=? ORDER BY id",
         (standort,)
     )
     employees = cur.fetchall()
 
-    rows = max(5, len(employees))
     conn.close()
 
     return templates.TemplateResponse(
-        "week_view.html",
+        "settings_employees.html",
         {
             "request": request,
-            "year": year,
-            "kw": kw,
-            "standort": standort,
-            "plan": plan,
             "employees": employees,
-            "rows": rows,
-        },
+            "standort": standort,
+        }
+    )
+
+
+@app.post("/settings/employees/add")
+def add_employee(
+    name: str = Form(...),
+    standort: str = Form(...)
+):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO employees (name, standort) VALUES (?, ?)",
+        (name, standort)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(
+        f"/settings/employees?standort={standort}",
+        status_code=303
     )
