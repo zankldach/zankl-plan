@@ -24,7 +24,7 @@ logger = logging.getLogger("zankl-plan")
 STANDORTE = ["engelbrechts", "gross-gerungs"]  # Kanonisierte Werte
 
 # -----------------------------------------------------------------------------
-# ADMIN: Templates schreiben (nur für Notfälle/Reset)
+# (Notfall) Templates-Schreiber – unverändert, gekürzt
 # -----------------------------------------------------------------------------
 BASE_HTML_SAFE = """<!DOCTYPE html>
 <html lang="de">
@@ -41,7 +41,6 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
  nav.site a { color:#fff; text-decoration:none; font-weight:600; padding:6px 10px; border-radius:6px; }
  nav.site a:hover { background: rgba(255,255,255,0.15); }
  nav.site a.is-active { background: rgba(255,255,255,0.25); }
- nav.site .sep { width:1px; height:22px; background: rgba(255,255,255,0.35); margin:0 4px; }
  main { padding:20px; }
  </style>
  {% block head %}{% endblock %}
@@ -52,12 +51,10 @@ BASE_HTML_SAFE = """<!DOCTYPE html>
  <span>⚙️</span>
 </header>
 <nav class="site">
- /week?standort=engelbrechtsEngelbrechts</a>
+ <week?standort=engelbrechtsEngelbrechts</a>
  /week?standort=gross-gerungsGroß Gerungs</a>
- <span class="sep"></span>
  /view/week?standort=engelbrechtsView EB</a>
- /view/week?standort=gross-gerungsView GG</a>
- <span class="sep"></span>
+ <view/week?standort=gross-gerungsView GG</a>
  /settings/employeesEinstellungen</a>
  /healthHealth</a>
 </nav>
@@ -284,7 +281,7 @@ def init_db():
 init_db()
 
 # -----------------------------------------------------------------------------
-# Helpers
+# Helpers (Standort, Tage, KW)
 # -----------------------------------------------------------------------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
@@ -322,51 +319,82 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
             pass
     return "engelbrechts"
 
-# --- View-Helper (neu) ---
 def get_year_kw(year: int | None, kw: int | None) -> tuple[int, int]:
     today = date.today()
     y = year or today.isocalendar()[0]
     w = kw or today.isocalendar()[1]
     return int(y), int(w)
 
-def ensure_week_plan(year: int, kw: int, standort: str) -> dict:
-    standort = canon_standort(standort)
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT id, row_count, four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
-                    (year, kw, standort))
-        row = cur.fetchone()
-        if row:
-            return {"id": row["id"], "row_count": int(row["row_count"] or 5), "four_day_week": int(row["four_day_week"] or 0)}
-        cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
-                    (year, kw, standort, 5))
-        conn.commit()
-        pid = cur.lastrowid
-        return {"id": pid, "row_count": 5, "four_day_week": 1}
-    finally:
-        conn.close()
+def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
+    """
+    Gibt (year, kw) für die Viewer-Ansicht zurück:
+    - Normal: aktuelle ISO-KW
+    - Ab Freitag 12:00 sowie am Wochenende: nächste KW (Jahreswechsel berücksichtigt)
+    """
+    now = now or datetime.now()
+    y, w, wd = now.isocalendar()  # (year, week, weekday) mit ISO: Mo=1 … So=7
+    if (wd == 5 and now.hour >= 12) or (wd >= 6):
+        # nächste ISO-Woche berechnen: zum Montag der nächsten Woche springen
+        monday = date.fromisocalendar(y, w, 1)
+        next_monday = monday + timedelta(days=7)
+        y2, w2 = next_monday.isocalendar()[:2]
+        return int(y2), int(w2)
+    return int(y), int(w)
 
-def load_employees_by_standort(standort: str) -> list[dict]:
-    standort = canon_standort(standort)
+# -----------------------------------------------------------------------------
+# *** Zentrale Week-Logik: exakt wie /week ***
+# -----------------------------------------------------------------------------
+def build_week_context(year: int, kw: int, standort: str):
+    """Erzeugt das identische Datenpaket wie die Edit-Seite /week."""
+    st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id, name FROM employees WHERE standort=? ORDER BY id", (standort,))
-        return [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-    finally:
-        conn.close()
+        # Plan holen/erzeugen
+        cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?",
+                    (year, kw, st))
+        plan = cur.fetchone()
+        if not plan:
+            cur.execute("INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
+                        (year, kw, st, 5))
+            conn.commit()
+            plan_id, rows, four_day_week = cur.lastrowid, 5, 1
+        else:
+            plan_id = plan["id"]; rows = plan["row_count"]; four_day_week = plan["four_day_week"]
 
-def load_week_cells_as_grid(plan_id: int, rows: int) -> list[list[dict]]:
-    grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT row_index, day_index, text FROM week_cells WHERE week_plan_id=?", (plan_id,))
+        # Mitarbeiter
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
+        if employees:
+            rows = max(rows, len(employees))
+
+        # Grid
+        grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
+        cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
         for r in cur.fetchall():
             ri, di = int(r["row_index"]), int(r["day_index"])
             if 0 <= ri < rows and 0 <= di < 5:
                 grid[ri][di]["text"] = r["text"] or ""
+
+        # Kleinbaustellen (nur für Edit; View zeigt sie nicht – trotzdem hier konsistent)
+        cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (st,))
+        small_jobs = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
+        max_idx = max([x["row_index"] for x in small_jobs], default=-1)
+        while len(small_jobs) < 10:
+            max_idx += 1
+            small_jobs.append({"row_index": max_idx, "text": ""})
+
+        return {
+            "plan_id": plan_id,
+            "rows": rows,
+            "four_day_week": bool(four_day_week),
+            "employees": employees,
+            "grid": grid,
+            "small_jobs": small_jobs,
+            "standort": st,
+            "days": build_days(year, kw),
+        }
     finally:
         conn.close()
-    return grid
 
 # -----------------------------------------------------------------------------
 # Admin/Debug/Health
@@ -403,7 +431,7 @@ def health():
     return {"status": "ok"}
 
 # -----------------------------------------------------------------------------
-# Plain Test: Employees
+# Plain Test: Employees (minimal)
 # -----------------------------------------------------------------------------
 @app.get("/settings/employees_plain", response_class=HTMLResponse)
 def employees_plain():
@@ -412,7 +440,7 @@ def employees_plain():
 <html lang="de"><head><meta charset="utf-8"><title>Plain · Mitarbeiter</title></head>
 <body>
  <h1>Plain · Mitarbeiter</h1>
- <settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
+ /settings/employees<input type="hidden" name="standort" value="gross-gerungs" />
  <p><label>Neuer Mitarbeiter 1: <input type="text" name="emp_name_new[]" /></label></p>
  <p><label>Neuer Mitarbeiter 2: <input type="text" name="emp_name_new[]" /></label></p>
  <p><button type="submit">Speichern</button></p>
@@ -422,7 +450,7 @@ def employees_plain():
 """.strip())
 
 # -----------------------------------------------------------------------------
-# WEEK – Edit
+# WEEK – Edit (unverändert, nutzt weiterhin eigenen Codepfad)
 # -----------------------------------------------------------------------------
 @app.get("/week", response_class=HTMLResponse)
 def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
@@ -481,7 +509,7 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
         conn.close()
 
 # -----------------------------------------------------------------------------
-# WEEK API
+# WEEK API – unverändert
 # -----------------------------------------------------------------------------
 @app.post("/api/week/set-cell")
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
@@ -563,114 +591,7 @@ async def options_alias(data: dict = Body(...)):
     return await set_four_day(data)
 
 # -----------------------------------------------------------------------------
-# Kleinbaustellen
-# -----------------------------------------------------------------------------
-@app.post("/api/klein/set")
-async def klein_set(request: Request, data: dict = Body(...)):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        standort = resolve_standort(request, data.get("standort"), None)
-        idx = int(data.get("row_index")); text = (data.get("text") or "").strip()
-        cur.execute("""
-         INSERT INTO global_small_jobs(standort,row_index,text)
-         VALUES(?,?,?)
-         ON CONFLICT(standort,row_index) DO UPDATE SET text=excluded.text
-        """, (standort, idx, text))
-        conn.commit()
-        return {"ok": True}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-    finally:
-        conn.close()
-
-@app.post("/api/klein/save-list")
-async def klein_save_list(request: Request, data: dict = Body(...)):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        standort = resolve_standort(request, data.get("standort"), None)
-        items = data.get("items") or []
-        if items and isinstance(items[0], dict):
-            items = sorted(items, key=lambda x: int(x.get("row_index", 0)))
-            normalized = [(int(x.get("row_index", i)), (x.get("text") or "").strip()) for i, x in enumerate(items)]
-        else:
-            normalized = [(i, (str(x) if x is not None else "").strip()) for i, x in enumerate(items)]
-        cur.execute("DELETE FROM global_small_jobs WHERE standort=?", (standort,))
-        for idx, text in normalized:
-            cur.execute("INSERT INTO global_small_jobs(standort,row_index,text) VALUES(?,?,?)", (standort, idx, text))
-        conn.commit()
-        return {"ok": True, "count": len(normalized)}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-    finally:
-        conn.close()
-
-# -----------------------------------------------------------------------------
-# Einstellungen: Mitarbeiter
-# -----------------------------------------------------------------------------
-@app.get("/settings/employees", response_class=HTMLResponse)
-def settings_employees_page(request: Request, standort: str = "engelbrechts"):
-    st = canon_standort(standort)
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees}
-        )
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-    finally:
-        conn.close()
-
-@app.post("/settings/employees", response_class=HTMLResponse)
-async def settings_employees_save(request: Request):
-    form = await request.form()
-    try:
-        items_preview = [(k, v) for k, v in form.items()]
-        logger.info("POST /settings/employees · items=%s", items_preview)
-    except Exception:
-        logger.info("POST /settings/employees · (items preview nicht möglich)")
-
-    st = form.get("standort") or request.query_params.get("standort") or None
-    st = resolve_standort(request, st, request.query_params.get("standort"))
-
-    new_list = []
-    for key, val in form.multi_items():
-        if key == "emp_name_new[]":
-            t = (val or "").strip()
-            if t:
-                new_list.append(t)
-    logger.info("POST /settings/employees · standort=%s · new_list=%s", st, new_list)
-
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        for n in new_list:
-            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
-        conn.commit()
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees, "saved": True}
-        )
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-    finally:
-        conn.close()
-
-# -----------------------------------------------------------------------------
-# YEAR (Platzhalter)
-# -----------------------------------------------------------------------------
-@app.get("/year", response_class=HTMLResponse)
-def year_page(request: Request, year: int = 2025):
-    try:
-        return templates.TemplateResponse("year.html", {"request": request, "year": year})
-    except Exception:
-        return HTMLResponse(f"<h1>Jahresplanung</h1><p>year={year}</p>", status_code=200)
-
-# -----------------------------------------------------------------------------
-# VIEW (Read-only) – stabil
+# VIEW (Read-only) – nutzt dieselbe Week-Logik + Freitag-12-Regel
 # -----------------------------------------------------------------------------
 @app.get("/view/week", response_class=HTMLResponse)
 def view_week(
@@ -680,24 +601,24 @@ def view_week(
     standort: str = "engelbrechts"
 ):
     try:
-        year, kw = get_year_kw(year, kw)
-        st = canon_standort(standort)
-        plan = ensure_week_plan(year, kw, st)
-        employees = load_employees_by_standort(st)
-        rows = max(int(plan["row_count"] or 5), len(employees) or 0)
-        grid = load_week_cells_as_grid(int(plan["id"]), rows)
+        # Auto-Ziel wenn Parameter fehlen: aktuelle oder nächste Woche (Fr 12:00 Regel)
+        if year is None or kw is None:
+            year, kw = auto_view_target()
+        else:
+            year, kw = int(year), int(kw)
+
+        ctx = build_week_context(year, kw, standort)
         return templates.TemplateResponse(
             "week_view.html",
             {
                 "request": request,
                 "year": year,
                 "kw": kw,
-                "standort": st,
-                "plan": plan,
-                "grid": grid,
-                "employees": employees,
-                "four_day_week": bool(plan.get("four_day_week") or 0),
-                "days": build_days(year, kw),
+                "standort": ctx["standort"],
+                "grid": ctx["grid"],
+                "employees": ctx["employees"],
+                "four_day_week": ctx["four_day_week"],
+                "days": ctx["days"],
             }
         )
     except Exception:
