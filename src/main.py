@@ -1,14 +1,16 @@
-# --- unverändert: Imports & App-Setup ---
-from fastapi import FastAPI, Request, Body, Query
+from fastapi import FastAPI, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import sqlite3
 from pathlib import Path
+import sqlite3
 from datetime import date, timedelta
-import traceback
 
-app = FastAPI(title="Zankl-Plan MVP")
+# --------------------------------------------------
+# APP
+# --------------------------------------------------
+
+app = FastAPI(title="Zankl Planungstool – STABLE")
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
@@ -28,9 +30,17 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    c = conn.cursor()
+    cur = conn.cursor()
 
-    c.execute("""
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        standort TEXT NOT NULL
+    )
+    """)
+
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS week_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         year INTEGER,
@@ -42,7 +52,7 @@ def init_db():
     )
     """)
 
-    c.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS week_cells (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         week_plan_id INTEGER,
@@ -53,30 +63,26 @@ def init_db():
     )
     """)
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS employees (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        standort TEXT
-    )
-    """)
-
     conn.commit()
     conn.close()
 
 init_db()
 
 # --------------------------------------------------
-# Helper
+# HELPER
 # --------------------------------------------------
 
 def canon_standort(s: str | None) -> str:
     if not s:
         return "engelbrechts"
-    s = s.lower().replace("ß", "ss").replace("_", "-").strip()
-    if "gross" in s or "groß" in s or "gg" == s:
+    s = s.lower().replace("ß", "ss")
+    if "gross" in s or "gerungs" in s or s == "gg":
         return "gross-gerungs"
     return "engelbrechts"
+
+def get_current_year_kw():
+    today = date.today()
+    return today.year, today.isocalendar().week
 
 def build_days(year: int, kw: int):
     start = date.fromisocalendar(year, kw, 1)
@@ -86,12 +92,8 @@ def build_days(year: int, kw: int):
         for i in range(5)
     ]
 
-def get_current_year_kw():
-    today = date.today()
-    return today.year, today.isocalendar().week
-
 # --------------------------------------------------
-# ZENTRALE WOCHENLOGIK  (NEU – wird von /week UND /view genutzt)
+# ZENTRALE WOCHENLOGIK
 # --------------------------------------------------
 
 def load_week_data(year: int, kw: int, standort: str):
@@ -118,7 +120,10 @@ def load_week_data(year: int, kw: int, standort: str):
         rows = plan["row_count"]
         four_day_week = bool(plan["four_day_week"])
 
-    cur.execute("SELECT id, name FROM employees WHERE standort=? ORDER BY id", (standort,))
+    cur.execute(
+        "SELECT id, name FROM employees WHERE standort=? ORDER BY id",
+        (standort,)
+    )
     employees = cur.fetchall()
     if employees:
         rows = max(rows, len(employees))
@@ -142,7 +147,7 @@ def load_week_data(year: int, kw: int, standort: str):
     }
 
 # --------------------------------------------------
-# WEEK – EDITOR
+# WEEK – EDIT
 # --------------------------------------------------
 
 @app.get("/week", response_class=HTMLResponse)
@@ -169,7 +174,49 @@ def week(request: Request, year: int | None = None, kw: int | None = None, stand
     )
 
 # --------------------------------------------------
-# WEEK – VIEW (READ ONLY)  ✅ FIX
+# WEEK – SAVE  ✅ FIX
+# --------------------------------------------------
+
+@app.post("/week/save")
+def save_week(payload: dict = Body(...)):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    year = payload["year"]
+    kw = payload["kw"]
+    standort = payload["standort"]
+    cells = payload["cells"]
+
+    cur.execute(
+        "SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?",
+        (year, kw, standort)
+    )
+    plan = cur.fetchone()
+    if not plan:
+        conn.close()
+        return JSONResponse({"status": "error"}, status_code=400)
+
+    plan_id = plan["id"]
+
+    for cell in cells:
+        cur.execute("""
+            INSERT INTO week_cells (week_plan_id, row_index, day_index, text)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(week_plan_id, row_index, day_index)
+            DO UPDATE SET text=excluded.text
+        """, (
+            plan_id,
+            cell["row"],
+            cell["col"],
+            cell["text"]
+        ))
+
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+# --------------------------------------------------
+# WEEK – VIEW (READ ONLY)
 # --------------------------------------------------
 
 @app.get("/view/week", response_class=HTMLResponse)
@@ -192,6 +239,26 @@ def week_view(request: Request, year: int | None = None, kw: int | None = None, 
             "kw": kw,
             "standort": standort,
             "editable": False
+        }
+    )
+
+# --------------------------------------------------
+# SETTINGS – EMPLOYEES  ✅ FIX
+# --------------------------------------------------
+
+@app.get("/settings/employees", response_class=HTMLResponse)
+def settings_employees(request: Request):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, standort FROM employees ORDER BY standort, name")
+    employees = cur.fetchall()
+    conn.close()
+
+    return templates.TemplateResponse(
+        "settings_employees.html",
+        {
+            "request": request,
+            "employees": employees
         }
     )
 
