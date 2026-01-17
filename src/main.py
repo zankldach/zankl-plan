@@ -1,7 +1,7 @@
 
 # src/main.py
 from fastapi import FastAPI, Request, Body, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -188,26 +188,13 @@ def build_week_context(year: int, kw: int, standort: str):
 # ------------------------------------
 # Admin/Debug/Health
 # ------------------------------------
-@app.get("/admin/normalize-standorte")
-def admin_normalize():
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        for table, col in [("employees", "standort"), ("week_plans", "standort"), ("global_small_jobs", "standort")]:
-            cur.execute(f"SELECT id, {col} FROM {table}")
-            for r in cur.fetchall():
-                st_new = canon_standort(r[col])
-                if st_new != (r[col] or ""):
-                    cur.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (st_new, r["id"]))
-        conn.commit()
-        return {"ok": True}
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-    finally:
-        conn.close()
+@app.get("/admin/routes")
+def admin_routes():
+    """Schnell prüfen, ob /view und /view/week registriert sind."""
+    return {"routes": sorted([r.path for r in app.routes])}
 
 @app.get("/admin/peek-week")
 def admin_peek_week(standort: str, year: int, kw: int):
-    """Schneller Blick in Plan + Cells (Debughilfe)."""
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -230,6 +217,11 @@ def admin_peek_week(standort: str, year: int, kw: int):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# sauberes Favicon (nicht zwingend, aber vermeidet 404-Rauschen)
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
 
 # ------------------------------------
 # WEEK – Edit Seite
@@ -444,10 +436,6 @@ def view_shortcut(
     year: int | None = None,
     kw: int | None = None
 ):
-    """
-    Neuer Short-Viewer: /view[?standort=...&year=...&kw=...]
-    Rendert die selbe View wie /view/week, ohne Redirect.
-    """
     try:
         if year is None or kw is None:
             year, kw = auto_view_target()
