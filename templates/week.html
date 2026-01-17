@@ -278,26 +278,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== DnD & Eingabe-Events im Grid =====
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
-    const cells = document.querySelectorAll('#weekTable td');
+    const cells  = document.querySelectorAll('#weekTable td');
 
-    // Status, ob Copy (Strg/Cmd) aktiv ist – wird in dragover aktualisiert
+    // Copy/Move je nach Strg/Cmd
     let DND_COPY = false;
-    // Quelle für grid→grid Move/Copy
-    const GRID_SRC = { row: null, day: null };
 
     inputs.forEach(inp=>{
       inp.addEventListener('dragstart', e=>{
         const payload = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value || '' };
-        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
-        e.dataTransfer.effectAllowed = 'copyMove'; // im Ziel setzen wir dropEffect
+        const s = JSON.stringify(payload);
+        try{ e.dataTransfer.setData('application/json', s); }catch(_){}
+        try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
+        try{ e.dataTransfer.setData('text', s); }catch(_){}
+        e.dataTransfer.effectAllowed = 'copyMove';
         inp.classList.add('dragging');
-        GRID_SRC.row = Number(inp.dataset.row);
-        GRID_SRC.day = Number(inp.dataset.day);
       });
       inp.addEventListener('dragend', ()=>{
         document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-        // Quelle bleibt belegt; wird auf Drop ausgewertet
       });
       inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
       inp.addEventListener('keydown', async ev=>{
@@ -315,11 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cells.forEach(td=>{
       td.addEventListener('dragover', e=>{
-        // Modifier (Strg/Cmd) bestimmen Copy/Move
         DND_COPY = !!(e.ctrlKey || e.metaKey);
         e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
-
-        // Default verhindern und Ziel markieren
         e.preventDefault();
         const targetDay = Number(td.dataset.day);
         if (fourChk.checked && targetDay === 4) return;
@@ -330,36 +325,40 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         td.classList.remove('drag-over');
         try{
-          const payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+          let dataStr =
+            e.dataTransfer.getData('application/json') ||
+            e.dataTransfer.getData('text/plain') ||
+            e.dataTransfer.getData('text') || '';
+          let payload = {};
+          try { payload = JSON.parse(dataStr || '{}'); } catch(_) { payload = {}; }
+
           const targetRow = Number(td.dataset.row);
           const targetDay = Number(td.dataset.day);
           if (fourChk.checked && targetDay === 4) return;
           const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
 
-          // Quelle: Grid → Grid (MOVE default, COPY bei Strg/Cmd)
+          // GRID → GRID (MOVE default, COPY bei Strg/Cmd)
           if (payload && payload.source === 'grid'){
-            const text = (payload.value || '');
-            const srcRow = Number(payload.row);
-            const srcDay = Number(payload.day);
+            const text  = (payload.value || '');
+            const srcR  = Number(payload.row);
+            const srcD  = Number(payload.day);
 
-            // Ziel überschreiben & speichern
             tgt.value = text;
             await saveCell(targetRow, targetDay, text);
             applyColors();
 
-            // Bei MOVE (ohne Strg/Cmd) und wenn Quelle != Ziel → Quelle leeren & speichern
-            if (!DND_COPY && (srcRow !== targetRow || srcDay !== targetDay)) {
-              const srcTa = document.querySelector(`#weekTable textarea.cell[data-row="${srcRow}"][data-day="${srcDay}"]`);
+            if (!DND_COPY && (srcR !== targetRow || srcD !== targetDay)) {
+              const srcTa = document.querySelector(`#weekTable textarea.cell[data-row="${srcR}"][data-day="${srcD}"]`);
               if (srcTa) {
                 srcTa.value = '';
-                await saveCell(srcRow, srcDay, '');
+                await saveCell(srcR, srcD, '');
                 applyColors();
               }
             }
             return;
           }
 
-          // Quelle: Kleinbaustellen → Grid (immer COPY)
+          // KLEIN → GRID (immer COPY)
           if (payload && payload.source === 'klein'){
             const text = (payload.value || '').trim();
             tgt.value = text;
@@ -367,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
             applyColors();
             return;
           }
-
         }catch(err){ console.warn('Drop-Fehler:', err); }
       });
     });
@@ -400,88 +398,61 @@ document.addEventListener('DOMContentLoaded', () => {
        ======================= */
     (function () {
       const JOB_SELECTOR = '#kleinList input.job';
-
-      function debounce(fn, wait) {
-        let t = null;
-        return function(...args) {
-          clearTimeout(t);
-          t = setTimeout(() => fn.apply(this, args), wait);
-        };
-      }
-
+      function debounce(fn, wait) { let t=null; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait);} }
       async function saveKlein(rowIndex, text) {
         try {
-          const payload = {
-            standort: CURLOC,
-            row_index: Number(rowIndex || 0),
-            text: (text || '').trim()
-          };
-          const res = await fetch('/api/klein/set', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+          const payload = { standort: CURLOC, row_index: Number(rowIndex||0), text: (text||'').trim() };
+          const res = await fetch('/api/klein/set', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           if (!res.ok) console.warn('Kleinbaustellen-HTTP-Fehler:', res.status);
-        } catch (e) {
-          console.warn('Netz-/Serverfehler Kleinbaustellen:', e);
-        }
+        } catch (e) { console.warn('Netz-/Serverfehler Kleinbaustellen:', e); }
       }
-
-      function wireKleinInputs(root = document) {
+      function wireKleinInputs(root=document){
         const inputs = root.querySelectorAll(JOB_SELECTOR);
-        const debouncedSave = debounce((inp) => {
-          const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
-          saveKlein(idx, inp.value);
-        }, 400);
-
-        inputs.forEach(inp => {
-          inp.addEventListener('blur', () => {
-            const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
-            saveKlein(idx, inp.value);
-          });
-
-          inp.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Enter' && !ev.shiftKey) {
-              ev.preventDefault();
-              const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
-              saveKlein(idx, inp.value);
-            }
-          });
-
-          inp.addEventListener('input', () => debouncedSave(inp));
+        const debouncedSave = debounce((inp)=>{ const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value); }, 400);
+        inputs.forEach(inp=>{
+          inp.addEventListener('blur', ()=>{ const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value); });
+          inp.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value);} });
+          inp.addEventListener('input', ()=> debouncedSave(inp));
         });
       }
-
       wireKleinInputs(document);
     })();
 
     /* =======================
-       Kleinbaustellen → Drag & Drop (COPY)
+       Kleinbaustellen → Drag & Drop (COPY) — ROBUSTER PAYLOAD
        ======================= */
     (function () {
       const LIST = document.getElementById('kleinList');
       if (!LIST) return;
 
-      // Drag-Start am Griff (⋮⋮)
+      // Helfer: Payload in mehreren Formaten setzen (max. Browser-Kompatibilität)
+      function setDragPayload(dt, obj){
+        const s = JSON.stringify(obj || {});
+        try{ dt.setData('application/json', s); }catch(_){}
+        try{ dt.setData('text/plain', s); }catch(_){}
+        try{ dt.setData('text', s); }catch(_){}
+      }
+
+      // 1) Griff (⋮⋮)
       LIST.querySelectorAll('.row .drag-handle').forEach(handle=>{
         handle.setAttribute('draggable','true');
         handle.addEventListener('dragstart', (e)=>{
           const rowEl = handle.closest('.row');
           const inp = rowEl?.querySelector('input.job');
           const value = (inp?.value || '').trim();
-          e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
+          setDragPayload(e.dataTransfer, { source:'klein', value });
           e.dataTransfer.effectAllowed = 'copy';
           handle.classList.add('dragging');
         });
         handle.addEventListener('dragend', ()=> handle.classList.remove('dragging'));
       });
 
-      // Optional: Drag auch direkt vom Eingabefeld
+      // 2) Optional: Drag auch direkt vom Eingabefeld erlauben
       LIST.querySelectorAll('input.job').forEach(inp=>{
         inp.setAttribute('draggable','true');
         inp.addEventListener('dragstart', (e)=>{
           const value = (inp.value || '').trim();
-          e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
+          setDragPayload(e.dataTransfer, { source:'klein', value });
           e.dataTransfer.effectAllowed = 'copy';
           inp.classList.add('dragging');
         });
