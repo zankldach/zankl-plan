@@ -1,10 +1,10 @@
 
 # src/main.py
 from fastapi import FastAPI, Request, Body, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import sqlite3
+import sqlite3, json
 from pathlib import Path
 from datetime import date, timedelta, datetime
 import traceback
@@ -124,9 +124,10 @@ def _pint(v):
     except Exception: return None
 
 def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]:
-    """1) Body, 2) Referer (/week?kw&year), 3) auto_view_target"""
+    """KW/Jahr robust ermitteln: 1) Body, 2) Referer (/week?kw&year), 3) auto_view_target()."""
     y = _pint(data.get("year")); w = _pint(data.get("kw"))
-    if y is not None and w is not None: return y, w
+    if y is not None and w is not None:
+        return y, w
     ref = request.headers.get("referer") or request.headers.get("Referer") or ""
     try:
         qs = parse_qs(urlparse(ref).query)
@@ -134,7 +135,8 @@ def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]
         if w is None: w = _pint((qs.get("kw") or [""])[0])
     except Exception:
         pass
-    if y is not None and w is not None: return y, w
+    if y is not None and w is not None:
+        return y, w
     ay, aw = auto_view_target()
     return int(y or ay), int(w or aw)
 
@@ -187,10 +189,10 @@ def build_week_context(year: int, kw: int, standort: str):
     finally:
         conn.close()
 
-# ---------------- Admin/Debug/Health ----------------
+# ---------------- Root/Health/Admin ----------------
 @app.get("/")
 def root():
-    # 200 OK (kein 30x) -> Render-Healthcheck ist happy; Meta-Refresh sendet zur View
+    # 200 OK (kein 30x) -> Render-Healthcheck ist happy; Meta-Refresh zur View
     html = """
     <!doctype html><html lang="de"><head>
       <meta charset="utf-8">
@@ -203,6 +205,10 @@ def root():
     </body></html>
     """
     return HTMLResponse(html, status_code=200)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.get("/admin/routes")
 def admin_routes():
@@ -239,25 +245,26 @@ def admin_peek_klein(standort: str = "engelbrechts"):
     finally:
         conn.close()
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
 @app.get("/favicon.ico")
 def favicon():
     return Response(status_code=204)
 
-# ---------------- Einstellungen (Not Found vermeiden) ----------------
+# ---------------- Einstellungen (inkl. /settings/employees) ----------------
 @app.get("/settings", response_class=HTMLResponse)
 def settings_root():
     html = """
     <h1>Einstellungen</h1>
     <ul>
-      <li>/settings/employeesMitarbeiter verwalten</a></li>
+      <li>/settings/employees?standort=engelbrechtsMitarbeiter verwalten</a></li>
       <li>/settings/usersBenutzer-Zuordnung (Viewer → Standort)</a></li>
       <li>/bedienungBedienung / Hilfe</a></li>
     </ul>
     """
+    return HTMLResponse(html, status_code=200)
+
+@app.get("/bedienung", response_class=HTMLResponse)
+def bedienung_page():
+    html = "<h1>Bedienung</h1><p>Kurzbeschreibung folgt. Für jetzt: Navigation über die Leiste oben.</p>"
     return HTMLResponse(html, status_code=200)
 
 @app.get("/settings/users", response_class=HTMLResponse)
@@ -269,13 +276,73 @@ def settings_users_placeholder():
     """
     return HTMLResponse(html, status_code=200)
 
-@app.get("/bedienung", response_class=HTMLResponse)
-def bedienung_page():
-    html = """
-    <h1>Bedienung</h1>
-    <p>Kurzbeschreibung folgt. Für jetzt: Navigation über die Leiste oben.</p>
-    """
-    return HTMLResponse(html, status_code=200)
+@app.get("/settings/employees", response_class=HTMLResponse)
+def settings_employees_page(request: Request, standort: str = "engelbrechts"):
+    st = canon_standort(standort)
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees}
+        )
+    except Exception:
+        # Fallback, falls Template fehlt — damit kein 404 entsteht
+        return HTMLResponse("<h1>Mitarbeiter</h1><p>Template fehlt.</p>", status_code=200)
+    finally:
+        conn.close()
+
+@app.post("/settings/employees", response_class=HTMLResponse)
+async def settings_employees_save(request: Request):
+    form = await request.form()
+    def _collect_names(f):
+        vals = []
+        # unterstützt emp_name_new[] mehrfach
+        for key in ("emp_name_new[]", "emp_name_new"):
+            if hasattr(f, "getlist"):
+                vals += [v for v in f.getlist(key) if (v or "").strip()]
+        # Fallback: iterate all
+        for k, v in getattr(f, "multi_items", lambda: [])():
+            if k in ("emp_name_new[]", "emp_name_new") and (v or "").strip():
+                vals.append(v)
+        return [v.strip() for v in vals if (v or "").strip()]
+    new_names = _collect_names(form)
+    st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        for n in new_names:
+            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+        conn.commit()
+        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
+        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_employees.html",
+            {"request": request, "standort": st, "employees": employees, "saved": True}
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+    finally:
+        conn.close()
+
+@app.post("/settings/employees/delete")
+async def settings_employees_delete(request: Request):
+    form = await request.form()
+    emp_id = _pint(form.get("emp_id"))
+    st = form.get("standort") or request.query_params.get("standort") or "engelbrechts"
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        if emp_id:
+            cur.execute("DELETE FROM employees WHERE id=?", (emp_id,))
+            conn.commit()
+        # zurück zur Liste
+        return HTMLResponse(
+            f'<meta http-equiv="refresh" content="0; url=/settings/employees?standort={canon_standort(st)}" />',
+            status_code=200
+        )
+    finally:
+        conn.close()
 
 # ---------------- WEEK – Edit ----------------
 @app.get("/week", response_class=HTMLResponse)
@@ -285,7 +352,7 @@ def week(
     year: int | None = None,
     standort: str = "engelbrechts"
 ):
-    # Ohne Parameter: aktuelle ISO-KW/Jahr (nicht die Freitag-12-Regel)
+    # Ohne Parameter: aktuelle ISO-KW/Jahr (nicht die Freitag-12-Regel!)
     if year is None or kw is None:
         today = date.today(); iso = today.isocalendar()
         year = int(year or iso[0]); kw = int(kw or iso[1])
@@ -376,7 +443,7 @@ async def save_batch(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---------------- Kleinbaustellen (fix: 2 Endpunkte + flexible Felder) ----------------
+# ---------------- Kleinbaustellen (robust: JSON/Form/Text + Alias) ----------------
 def _save_klein(standort: str, row_index: int, text: str):
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -389,28 +456,67 @@ def _save_klein(standort: str, row_index: int, text: str):
     finally:
         conn.close()
 
-def _row_index_from_payload(d: dict) -> int:
-    # akzeptiere row_index ODER row
-    ri = _pint(d.get("row_index"))
-    if ri is None:
-        ri = _pint(d.get("row"))
-    return int(ri or 0)
+def _coalesce(*vals):
+    for v in vals:
+        if v is None:
+            continue
+        if isinstance(v, str) and v.strip() == "":
+            continue
+        return v
+    return None
+
+async def _parse_klein_payload(request: Request, data_hint: dict | None = None) -> dict:
+    """Akzeptiert JSON, Form und Text; versteht row_index|row, text|value."""
+    if isinstance(data_hint, dict) and data_hint:
+        raw = data_hint
+    else:
+        ct = (request.headers.get("content-type") or "").lower()
+        raw = {}
+        try:
+            if "application/json" in ct:
+                raw = await request.json()
+            elif "application/x-www-form-urlencoded" in ct or "multipart/form-data" in ct:
+                form = await request.form()
+                if hasattr(form, "multi_items"):
+                    raw = {k: v for k, v in form.multi_items()}
+                else:
+                    raw = dict(form)
+            else:
+                body = (await request.body() or b"").decode("utf-8", "ignore").strip()
+                if body:
+                    try:
+                        raw = json.loads(body)
+                    except Exception:
+                        if "=" in body and "&" in body:
+                            parts = [p.split("=", 1) for p in body.split("&")]
+                            raw = {k: v for k, v in parts if k}
+                        else:
+                            raw = {"text": body}
+        except Exception:
+            raw = {}
+
+    standort = _coalesce(raw.get("standort"))
+    row_i = _coalesce(raw.get("row_index"), raw.get("row"))
+    text = _coalesce(raw.get("text"), raw.get("value"))
+    standort = canon_standort(standort or "engelbrechts")
+    try:
+        row_index = int(row_i or 0)
+    except Exception:
+        row_index = 0
+    text = (text or "").strip()
+    return {"standort": standort, "row_index": row_index, "text": text}
 
 @app.post("/api/klein/set")
-async def klein_set(data: dict = Body(...)):
-    st = canon_standort(data.get("standort") or "engelbrechts")
-    ri = _row_index_from_payload(data)
-    txt = (data.get("text") or "").strip()
-    _save_klein(st, ri, txt)
-    return {"ok": True}
+async def klein_set(request: Request, data: dict | None = Body(None)):
+    payload = await _parse_klein_payload(request, data)
+    _save_klein(payload["standort"], payload["row_index"], payload["text"])
+    return {"ok": True, **payload}
 
-@app.post("/api/klein/set-cell")  # Alias für ältere/neue Frontends
-async def klein_set_cell(data: dict = Body(...)):
-    st = canon_standort(data.get("standort") or "engelbrechts")
-    ri = _row_index_from_payload(data)
-    txt = (data.get("text") or "").strip()
-    _save_klein(st, ri, txt)
-    return {"ok": True}
+@app.post("/api/klein/set-cell")  # Alias
+async def klein_set_cell(request: Request, data: dict | None = Body(None)):
+    payload = await _parse_klein_payload(request, data)
+    _save_klein(payload["standort"], payload["row_index"], payload["text"])
+    return {"ok": True, **payload}
 
 # ---------------- VIEW (read-only) ----------------
 @app.get("/view", response_class=HTMLResponse)
@@ -470,3 +576,4 @@ def view_week(
         )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+``
