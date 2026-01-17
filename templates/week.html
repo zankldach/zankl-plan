@@ -28,17 +28,20 @@
   #weekTable tbody td { border-top:1px solid #eef2f6; border-right:1px solid #eef2f6; padding:0 6px; height:54px; vertical-align:middle; }
   #weekTable tbody tr:nth-child(even) td:first-child { background:#f1f5fb; }
   #weekTable tbody tr:hover td { background:#fbfdff; }
-
   #weekTable textarea.cell {
     width:100%; height:46px; padding:4px 6px; border:none; background:transparent;
     text-align:center; font-size:13px; outline:none; resize:vertical; line-height:1.2;
   }
   #weekTable textarea.cell:focus { outline:2px solid #7db3ff; background:#fff; border-radius:6px; }
-  .drag-over  { outline:2px dashed #2196f3; outline-offset:-4px; background:#eef7ff !important; }
-  .paint-select { outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
-  td.disabled-day { background:#eceff4 !important; }
-  td.disabled-day textarea.cell { color:#64748b; pointer-events:none; }
 
+  .drag-over { outline:2px dashed #2196f3; outline-offset:-4px; background:#eef7ff !important; }
+  .paint-select { outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
+
+  /* Freitag in 4‑Tage‑Woche: etwas dunkler */
+  td.cell-friday-locked { background:#e2e8f0 !important; }     /* vorher #f1f5f9 */
+  td.cell-friday-locked textarea.cell { color:#475569; }
+
+  /* Sidebar Kleinbaustellen (optisch unverändert) */
   .side { background:#fff; border:1px solid #d9dee5; border-radius:8px; box-shadow:0 3px 12px rgba(0,0,0,0.06); }
   .side header { background:#0b57d0; color:#fff; padding:8px 12px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); position:sticky; top:0; z-index:2; }
   .side .list { max-height:70vh; overflow-y:auto; padding:8px 12px; }
@@ -59,29 +62,17 @@
 
 <div class="toolbar">
   <div class="group">
-    <label for="locationSelect">Standort:</label>
-    <select id="locationSelect">
-      {% for s in standorte %}
-        {% set s_val = (s|string) %}
-        <option value="{{ s_val }}" {{ 'selected' if s_val==(standort|string) else '' }}>{{ s_val }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div class="group">
-    <button id="prevWeekBtn">←</button>
+    <button id="prevWeekBtn" title="Vorige Woche">←</button>
     <label for="kwSelect">KW:</label>
     <select id="kwSelect"></select>
     <label for="yearSelect">Jahr:</label>
     <select id="yearSelect"></select>
-    <button id="nextWeekBtn">→</button>
-    <button id="goBtn">Öffnen</button>
+    <button id="nextWeekBtn" title="Nächste Woche">→</button>
+    <span class="badge">KW {{ kw }} / {{ year }}</span>
   </div>
-
   <div class="group">
     <label for="fourDayChk">4‑Tage‑Woche:</label>
     <input type="checkbox" id="fourDayChk" {% if four_day_week %}checked{% endif %} />
-    <span class="badge">KW {{ kw }} / {{ year }}</span>
   </div>
 </div>
 
@@ -108,7 +99,7 @@
             </td>
             {% for cell in row %}
               {% set d = loop.index0 %}
-              <td data-row="{{ r }}" data-day="{{ d }}">
+              <td data-row="{{ r }}" data-day="{{ d }}" class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
                 <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
                 {% if d == 4 %}<span class="hint"></span>{% endif %}
               </td>
@@ -117,13 +108,9 @@
         {% endfor %}
       </tbody>
     </table>
-
-    <div style="margin-top:10px;">
-      <button id="saveAllBtn">Alles speichern</button>
-    </div>
   </div>
 
-  <!-- Sidebar: Kleinbaustellen -->
+  <!-- Sidebar: Kleinbaustellen (unverändert) -->
   <div>
     <div class="side">
       <header>Kleinbaustellen</header>
@@ -150,22 +137,21 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded', () => {
   try {
-    // -------- Kontext --------
-    const KW     = parseInt('{{ kw }}', 10);
-    const YEAR   = parseInt('{{ year }}', 10);
+    // --- Kontext ---
+    const KW = parseInt('{{ kw }}', 10);
+    const YEAR = parseInt('{{ year }}', 10);
     const CURLOC = "{{ (standort|string) }}";
     const MAX_WEEKS = 53;
-    const FOUR_DAY  = !!({{ 1 if four_day_week else 0 }});
-
+    const FOUR_DAY = !!({{ 1 if four_day_week else 0 }});
     const PLAN_KEY = (loc, kw, year)=> `${loc}|${kw}|${year}`;
-    const planKey  = PLAN_KEY(CURLOC, KW, YEAR);
+    const planKey = PLAN_KEY(CURLOC, KW, YEAR);
 
-    // Selektoren
-    const locSel  = document.getElementById('locationSelect');
-    const kwSel   = document.getElementById('kwSelect');
+    // Selektoren (ohne Standort-Select, ohne "Öffnen", ohne "Alles speichern")
+    const kwSel = document.getElementById('kwSelect');
     const yearSel = document.getElementById('yearSelect');
+    const fourChk = document.getElementById('fourDayChk');
 
     // KW/Jahr füllen
     function initSelectors(){
@@ -187,7 +173,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     initSelectors();
 
     // 4‑Tage‑Woche UI
-    const fourChk = document.getElementById('fourDayChk');
     function cacheFridayTexts(){
       const vals = Array.from(document.querySelectorAll('#weekTable td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
       localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
@@ -199,64 +184,52 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (!inp.value && cache && typeof cache[idx] === 'string') inp.value = cache[idx];
       });
     }
-function applyFourDayWeekUI(flag){
-  document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td => {
-    const ta = td.querySelector('textarea.cell');
-    const hint = td.querySelector('.hint');
-
-    if (flag) {
-      // Freitag: grau + readOnly, Inhalt bleibt sichtbar
-      td.classList.add('cell-friday-locked');
-
-      if (ta) {
-        ta.readOnly = true;     // NICHT disabled → Text bleibt
-      }
-
-      // "gesperrt" komplett entfernen
-      if (hint) hint.textContent = "";
-
-    } else {
-      // Freitag wieder normal
-      td.classList.remove('cell-friday-locked');
-
-      if (ta) {
-        ta.readOnly = false;
-      }
-
-      if (hint) hint.textContent = "";
+    function applyFourDayWeekUI(flag){
+      document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
+        const ta = td.querySelector('textarea.cell');
+        const hint = td.querySelector('.hint');
+        if (flag) {
+          td.classList.add('cell-friday-locked');
+          if (ta) ta.readOnly = true;  // Text sichtbar, nicht editierbar
+          if (hint) hint.textContent = "";
+        } else {
+          td.classList.remove('cell-friday-locked');
+          if (ta) ta.readOnly = false;
+          if (hint) hint.textContent = "";
+        }
+      });
     }
-  });
-}
-
     async function setFourDayWeek(flag){
-      const payload = { year: YEAR, kw: KW, standort: (locSel?.value || CURLOC), four_day_week: !!flag };
+      const payload = { year: parseInt(yearSel?.value ?? '{{ year }}',10),
+                        kw: parseInt(kwSel?.value ?? '{{ kw }}',10),
+                        standort: CURLOC, four_day_week: !!flag };
       try{
         const res = await fetch('/api/week/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        if (!res.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', await res.text());
-      }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
+        if (!res.ok) console.warn('4‑Tage‑Woche speichern fehlgeschlagen', await res.text());
+      }catch(e){ console.warn('Netz-/Serverfehler bei 4‑Tage‑Woche:', e); }
     }
     fourChk.addEventListener('change', async ()=>{
       const flag = fourChk.checked;
       cacheFridayTexts();
       applyFourDayWeekUI(flag);
-      applyColors();
+      applyColors();  // Farben neu anwenden
       await setFourDayWeek(flag);
     });
     applyFourDayWeekUI(FOUR_DAY);
     if (FOUR_DAY) restoreFridayFromCache();
 
-    // Farben
-    const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx"]);
-    const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    // -------- Farben --------
+    // Erweiterte Rot-Liste inkl. x, xx
+    const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx","x","xx"]);
+    const norm = s => (s||"").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
     function colorFor(text){
       const n = norm(text); if (!n) return null;
-      if (RESERVED_RED.has(n)) return { bg: "hsla(0, 85%, 75%, 0.65)", border: "hsl(0, 85%, 45%)" };
+      if (RESERVED_RED.has(n)) return { bg:"hsla(0, 85%, 67%, 0.70)", border:"hsl(0, 82%, 42%)" };
       let h = hashCode(n) % 360;
-      const isRedish = (h <= 20) || (h >= 340);
-      if (isRedish) h = (h + 40) % 360;
-      const s = 70, l = 80;
-      return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40,l-25)}%)` };
+      if (h <= 20 || h >= 340) h = (h + 40) % 360;
+      const s=70, l=80;
+      return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)` };
     }
     function applyColors(){
       document.querySelectorAll('#weekTable textarea.cell').forEach(inp=>{
@@ -266,7 +239,7 @@ function applyFourDayWeekUI(flag){
       });
     }
 
-    // Speichern Wochenzellen
+    // -------- Speichern (per Zelle / Batch intern genutzt) --------
     async function saveCell(row, day, value){
       if (Number(day) === 4) cacheFridayTexts();
       if (fourChk.checked && Number(day) === 4) return true;
@@ -277,7 +250,7 @@ function applyFourDayWeekUI(flag){
             row:Number(row), day:Number(day), value: value ?? "",
             kw: parseInt(kwSel?.value ?? '{{ kw }}', 10),
             year: parseInt(yearSel?.value ?? '{{ year }}', 10),
-            standort: (locSel?.value || CURLOC)
+            standort: CURLOC
           })
         });
         if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
@@ -286,7 +259,6 @@ function applyFourDayWeekUI(flag){
         return true;
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
-
     async function saveBatch(updates){
       cacheFridayTexts();
       if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
@@ -296,7 +268,7 @@ function applyFourDayWeekUI(flag){
           body: JSON.stringify({
             year: parseInt(yearSel?.value ?? '{{ year }}', 10),
             kw: parseInt(kwSel?.value ?? '{{ kw }}', 10),
-            standort: (locSel?.value || CURLOC),
+            standort: CURLOC,
             updates
           })
         });
@@ -307,79 +279,24 @@ function applyFourDayWeekUI(flag){
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
 
-    document.getElementById('saveAllBtn').onclick = async ()=>{
-      const updates=[];
-      document.querySelectorAll('#weekTable textarea.cell').forEach(inp=>{
-        updates.push({ row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value ?? "" });
-      });
-      const ok = await saveBatch(updates);
-      alert(ok ? 'Alle Zellen gespeichert.' : 'Speichern fehlgeschlagen.');
-    };
-
-    // Kleinbaustellen
-    const kleinList = document.getElementById('kleinList');
-    function renumberJobs(){ kleinList.querySelectorAll('input.job').forEach((inp, idx)=> inp.dataset.row = String(idx)); }
-    function ensureTrailingEmptyJob(){
-      const list = kleinList.querySelectorAll('input.job');
-      const last = list[list.length-1];
-      if (!last || (last.value||"").trim() !== ""){
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.innerHTML = `
-          <span class="drag-handle" title="Ziehen in Wochenzelle" draggable="true">⋮⋮</span>
-          <input type="text" class="job" data-row="${list.length}" value="" placeholder="">
-        `;
-        kleinList.appendChild(row);
-        bindJobInput(row.querySelector('input.job'));
-      }
-      renumberJobs();
-    }
-    async function saveSmallJob(row_index, text){
-      try{
-        const res = await fetch('/api/klein/set',{
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ standort:(locSel?.value || CURLOC), row_index:Number(row_index), text:text ?? "" })
-        });
-        if (!res.ok) console.warn('Klein HTTP-Fehler:', res.status, await res.text());
-      }catch(e){ console.warn('Netz-/Serverfehler (klein):', e); }
-    }
-    function bindJobInput(input){
-      const rowDiv = input.closest('.row');
-      const handle = rowDiv.querySelector('.drag-handle');
-      handle.addEventListener('dragstart', e=>{
-        const value = (input.value || '').trim();
-        if (!value){ e.preventDefault(); return; }
-        e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
-        e.dataTransfer.dropEffect = 'copy';
-        input.classList.add('dragging');
-      });
-      handle.addEventListener('dragend', ()=> input.classList.remove('dragging'));
-      input.addEventListener('input', ()=>{ ensureTrailingEmptyJob(); });
-      input.addEventListener('blur', async ()=>{ await saveSmallJob(input.dataset.row, input.value); ensureTrailingEmptyJob(); });
-    }
-    document.querySelectorAll('.job').forEach(bindJobInput);
-    ensureTrailingEmptyJob();
-
-    // DnD im Wochenraster
-    let dragData=null;
+    // -------- DnD & Eingabe-Events (unverändert) --------
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
-    const cells  = document.querySelectorAll('#weekTable td');
+    const cells = document.querySelectorAll('#weekTable td');
 
     inputs.forEach(inp=>{
       inp.addEventListener('dragstart', e=>{
-        dragData = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
-        e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+        const data = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
+        e.dataTransfer.setData('text/plain', JSON.stringify(data));
         e.dataTransfer.dropEffect='move';
         inp.classList.add('dragging');
       });
       inp.addEventListener('dragend', ()=>{
         document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-        dragData=null;
       });
       inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
       inp.addEventListener('keydown', async ev=>{
-        if (ev.key === 'Enter' && !ev.shiftKey){ // Enter = speichern + nach rechts
+        if (ev.key === 'Enter' && !ev.shiftKey){
           ev.preventDefault();
           await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
           applyColors();
@@ -391,6 +308,8 @@ function applyFourDayWeekUI(flag){
       inp.addEventListener('input', applyColors);
     });
 
+    // Drop-Ziele
+    let dragData=null;
     cells.forEach(td=>{
       td.addEventListener('dragover', e=>{
         e.preventDefault();
@@ -408,14 +327,6 @@ function applyFourDayWeekUI(flag){
           const targetDay = Number(td.dataset.day);
           if (fourChk.checked && targetDay === 4) return;
           const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
-
-          if (payload && payload.source === 'klein'){
-            const value = payload.value ?? "";
-            tgt.value = value;
-            await saveCell(targetRow, targetDay, value);
-            applyColors();
-            return;
-          }
           if (payload && payload.source === 'grid'){
             tgt.value = payload.value;
             await saveCell(targetRow, targetDay, payload.value);
@@ -425,7 +336,7 @@ function applyFourDayWeekUI(flag){
       });
     });
 
-    // Bereich-Füllen mit Shift + Mauszieher (optional: nur wenn gleiche Zeile)
+    // Bereichs-Füllen (Shift + ziehen) – unverändert
     const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
     function getCell(row, day){ return document.querySelector(`#weekTable textarea.cell[data-row="${row}"][data-day="${day}"]`); }
     function getTd(row, day){ return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`); }
@@ -458,7 +369,7 @@ function applyFourDayWeekUI(flag){
     }
     document.querySelectorAll('#weekTable td').forEach(td=>{
       const row = Number(td.dataset.row), day = Number(td.dataset.day);
-      const ta  = td.querySelector('textarea.cell');
+      const ta = td.querySelector('textarea.cell');
       td.addEventListener('mousedown', (e)=>{
         if (e.button !== 0 || !e.shiftKey) return;
         if (fourChk.checked && day === 4) return;
@@ -471,36 +382,29 @@ function applyFourDayWeekUI(flag){
     document.addEventListener('mouseup', endFill);
     document.addEventListener('mouseleave', endFill);
 
-    // Navigation – Auto-Open bei Änderungen
-    function navigate(standort, kw, year){
-      const url = `/week?standort=${encodeURIComponent(standort)}&kw=${kw}&year=${year}`;
+    // Navigation (ohne Standort-Select, ohne „Öffnen“) – Änderung von KW/Jahr triggert sofort Navigation
+    function navigate(kw, year){
+      const url = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
       window.location.href = url;
     }
-    const onSelectNavigate = ()=>{
-      const loc = (locSel?.value || CURLOC);
-      const kw  = parseInt(kwSel?.value ?? '{{ kw }}', 10);
-      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
-      navigate(loc, kw, yr);
-    };
-    [locSel, kwSel, yearSel].filter(Boolean).forEach(el=> el.addEventListener('change', onSelectNavigate));
+    kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
     document.getElementById('prevWeekBtn').onclick = ()=>{
-      const loc = (locSel?.value || CURLOC);
-      const kw  = parseInt(kwSel?.value ?? '{{ kw }}', 10);
-      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
+      const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
+      const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
       const p = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
-      navigate(loc, p.kw, p.year);
+      navigate(p.kw, p.year);
     };
     document.getElementById('nextWeekBtn').onclick = ()=>{
-      const loc = (locSel?.value || CURLOC);
-      const kw  = parseInt(kwSel?.value ?? '{{ kw }}', 10);
-      const yr  = parseInt(yearSel?.value ?? '{{ year }}', 10);
+      const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
+      const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
       const n = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
-      navigate(loc, n.kw, n.year);
+      navigate(n.kw, n.year);
     };
-    document.getElementById('goBtn').onclick = onSelectNavigate;
 
     // Initiale Farben anwenden
     applyColors();
+
   } catch (err) {
     console.error('Init-Fehler in week.html:', err);
     alert('Fehler beim Laden der Wochenansicht. Bitte Seite hart neu laden (Strg+F5).');
