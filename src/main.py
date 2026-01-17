@@ -1,5 +1,4 @@
 
-# src/main.py
 from fastapi import FastAPI, Request, Body, Query
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -109,7 +108,7 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
     return "engelbrechts"
 
 def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
-    """Viewer: Normal = aktuelle ISO-KW; ab Fr 12:00 & Sa/So -> nächste KW."""
+    # Viewer: Normal = aktuelle ISO-KW; ab Fr 12:00 & Sa/So -> nächste KW.
     now = now or datetime.now()
     y, w, wd = now.isocalendar()
     if (wd == 5 and now.hour >= 12) or (wd >= 6):
@@ -124,7 +123,7 @@ def _pint(v):
     except Exception: return None
 
 def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]:
-    """KW/Jahr robust ermitteln: 1) Body, 2) Referer (/week?kw&year), 3) auto_view_target()."""
+    # KW/Jahr robust: 1) Body, 2) Referer (/week?kw&year), 3) auto_view_target()
     y = _pint(data.get("year")); w = _pint(data.get("kw"))
     if y is not None and w is not None:
         return y, w
@@ -192,7 +191,7 @@ def build_week_context(year: int, kw: int, standort: str):
 # ---------------- Root/Health/Admin ----------------
 @app.get("/")
 def root():
-    # 200 OK (kein 30x) -> Render-Healthcheck ist happy; Meta-Refresh zur View
+    # 200 OK (kein 30x). Meta-Refresh führt zur View.
     html = """
     <!doctype html><html lang="de"><head>
       <meta charset="utf-8">
@@ -288,7 +287,6 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
             {"request": request, "standort": st, "employees": employees}
         )
     except Exception:
-        # Fallback, falls Template fehlt — damit kein 404 entsteht
         return HTMLResponse("<h1>Mitarbeiter</h1><p>Template fehlt.</p>", status_code=200)
     finally:
         conn.close()
@@ -298,14 +296,15 @@ async def settings_employees_save(request: Request):
     form = await request.form()
     def _collect_names(f):
         vals = []
-        # unterstützt emp_name_new[] mehrfach
         for key in ("emp_name_new[]", "emp_name_new"):
             if hasattr(f, "getlist"):
                 vals += [v for v in f.getlist(key) if (v or "").strip()]
-        # Fallback: iterate all
-        for k, v in getattr(f, "multi_items", lambda: [])():
-            if k in ("emp_name_new[]", "emp_name_new") and (v or "").strip():
-                vals.append(v)
+        try:
+            for k, v in f.multi_items():
+                if k in ("emp_name_new[]", "emp_name_new") and (v or "").strip():
+                    vals.append(v)
+        except Exception:
+            pass
         return [v.strip() for v in vals if (v or "").strip()]
     new_names = _collect_names(form)
     st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
@@ -336,11 +335,9 @@ async def settings_employees_delete(request: Request):
         if emp_id:
             cur.execute("DELETE FROM employees WHERE id=?", (emp_id,))
             conn.commit()
-        # zurück zur Liste
-        return HTMLResponse(
-            f'<meta http-equiv="refresh" content="0; url=/settings/employees?standort={canon_standort(st)}" />',
-            status_code=200
-        )
+        # zurück zur Liste (200 OK, kein 30x nötig)
+        html = f'<meta http-equiv="refresh" content="0; url=/settings/employees?standort={canon_standort(st)}" />'
+        return HTMLResponse(html, status_code=200)
     finally:
         conn.close()
 
@@ -443,7 +440,7 @@ async def save_batch(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-# ---------------- Kleinbaustellen (robust: JSON/Form/Text + Alias) ----------------
+# ---------------- Kleinbaustellen (robust) ----------------
 def _save_klein(standort: str, row_index: int, text: str):
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -466,7 +463,7 @@ def _coalesce(*vals):
     return None
 
 async def _parse_klein_payload(request: Request, data_hint: dict | None = None) -> dict:
-    """Akzeptiert JSON, Form und Text; versteht row_index|row, text|value."""
+    # Akzeptiert JSON, Form und Text; versteht row_index|row, text|value.
     if isinstance(data_hint, dict) and data_hint:
         raw = data_hint
     else:
@@ -512,7 +509,7 @@ async def klein_set(request: Request, data: dict | None = Body(None)):
     _save_klein(payload["standort"], payload["row_index"], payload["text"])
     return {"ok": True, **payload}
 
-@app.post("/api/klein/set-cell")  # Alias
+@app.post("/api/klein/set-cell")
 async def klein_set_cell(request: Request, data: dict | None = Body(None)):
     payload = await _parse_klein_payload(request, data)
     _save_klein(payload["standort"], payload["row_index"], payload["text"])
@@ -576,4 +573,3 @@ def view_week(
         )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-``
