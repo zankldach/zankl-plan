@@ -188,9 +188,13 @@ def build_week_context(year: int, kw: int, standort: str):
 # ------------------------------------
 # Admin/Debug/Health
 # ------------------------------------
+@app.get("/")
+def root():
+    # Komfort: Root führt zur View
+    return RedirectResponse(url="/view", status_code=307)
+
 @app.get("/admin/routes")
 def admin_routes():
-    """Schnell prüfen, ob /view und /view/week registriert sind."""
     return {"routes": sorted([r.path for r in app.routes])}
 
 @app.get("/admin/peek-week")
@@ -214,11 +218,66 @@ def admin_peek_week(standort: str, year: int, kw: int):
     finally:
         conn.close()
 
+@app.get("/admin/seed-week")
+def admin_seed_week(standort: str = "engelbrechts", year: int = None, kw: int = None):
+    """
+    Seedet Employees (falls leer), legt den Plan an und schreibt Beispiel-Zellen.
+    Aufruf: /admin/seed-week?standort=engelbrechts&year=2026&kw=3
+    """
+    if year is None or kw is None:
+        y, w = date.today().isocalendar()[:2]
+        year = year or int(y)
+        kw = kw or int(w)
+
+    st = canon_standort(standort)
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        # Employees: falls leer, drei Demo-Einträge
+        cur.execute("SELECT COUNT(*) AS n FROM employees WHERE standort=?", (st,))
+        if cur.fetchone()["n"] == 0:
+            cur.executemany(
+                "INSERT INTO employees(name, standort) VALUES(?, ?)",
+                [("Team A", st), ("Team B", st), ("Leihkraft 1", st)]
+            )
+
+        # Plan sicherstellen
+        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, st))
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                "INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
+                (year, kw, st, 5)
+            )
+            plan_id = cur.lastrowid
+        else:
+            plan_id = row["id"]
+
+        # Ein paar Cells füllen (nur wenn leer)
+        cur.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (plan_id,))
+        if cur.fetchone()["n"] == 0:
+            demo = [
+                (0, 0, "Sanierung Hauptplatz"),
+                (0, 2, "Dachfenster Müller"),
+                (1, 1, "Kleinbaustellen"),
+                (1, 3, "Fassade Huber"),
+            ]
+            for r, d, txt in demo:
+                cur.execute("""
+                    INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
+                    VALUES(?,?,?,?)
+                    ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
+                """, (plan_id, r, d, txt))
+        conn.commit()
+        return {"ok": True, "standort": st, "year": year, "kw": kw, "plan_id": plan_id}
+    except Exception:
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+    finally:
+        conn.close()
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# sauberes Favicon (nicht zwingend, aber vermeidet 404-Rauschen)
 @app.get("/favicon.ico")
 def favicon():
     return Response(status_code=204)
