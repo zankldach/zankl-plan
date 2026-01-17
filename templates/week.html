@@ -53,11 +53,15 @@
     color:#111 !important; background:#fff !important;
   }
 
-  /* Neu: Visuelle Markierung für ausgewählte (doppelt geklickte) Zelle */
-  td.cell-selected {
-    outline:2px solid #fb923c; /* orange */
-    outline-offset:-4px;
+  /* Ausgewählte (Doppelklick) Zelle im Grid */
+  td.cell-selected { outline:2px solid #fb923c; outline-offset:-4px; background:#fff7ed !important; }
+
+  /* Neu: Ausgewählte (Doppelklick) Kleinbaustellen-Zeile */
+  .side .row.klein-selected {
+    outline:2px solid #fb923c;
+    outline-offset:-3px;
     background:#fff7ed !important;
+    border-radius:6px;
   }
 </style>
 {% endblock %}
@@ -159,7 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const yearSel = document.getElementById('yearSelect');
     const fourChk = document.getElementById('fourDayChk');
 
-    // ===== KW/Jahr füllen =====
+    /* =======================
+       KW/Jahr füllen
+       ======================= */
     (function initSelectors(){
       if (kwSel && kwSel.options.length === 0) {
         for (let w=1; w<=MAX_WEEKS; w++){
@@ -177,7 +183,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })();
 
-    // ===== 4‑Tage‑Woche UI =====
+    /* =======================
+       4‑Tage‑Woche UI
+       ======================= */
     function cacheFridayTexts(){
       const vals = Array.from(document.querySelectorAll('#weekTable td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
       localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
@@ -223,15 +231,16 @@ document.addEventListener('DOMContentLoaded', () => {
     applyFourDayWeekUI(FOUR_DAY);
     if (FOUR_DAY) restoreFridayFromCache();
 
-    // ===== Farben =====
+    /* =======================
+       Farben
+       ======================= */
     const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx","x","xx"]);
     const norm = s => (s||"").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
     function colorFor(text){
       const n = norm(text); if (!n) return null;
       if (RESERVED_RED.has(n)) return { bg:"hsla(0, 85%, 67%, 0.70)", border:"hsl(0, 82%, 42%)" };
-      let h = hashCode(n) % 360;
-      if (h <= 20 || h >= 340) h = (h + 40) % 360;
+      let h = hashCode(n) % 360; if (h <= 20 || h >= 340) h = (h + 40) % 360;
       const s=70, l=80;
       return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)` };
     }
@@ -243,7 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ===== Speichern (Zellen) =====
+    /* =======================
+       Speichern (Zellen)
+       ======================= */
     async function saveCell(row, day, value){
       if (Number(day) === 4) cacheFridayTexts();
       if (fourChk.checked && Number(day) === 4) return true;
@@ -283,7 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
 
-    // ===== Bereichs-Füllen (Shift + ziehen) =====
+    /* =======================
+       Bereichs-Füllen (Shift)
+       ======================= */
     const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
     function getCell(row, day){ return document.querySelector(`#weekTable textarea.cell[data-row="${row}"][data-day="${day}"]`); }
     function getTd(row, day){ return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`); }
@@ -315,13 +328,14 @@ document.addEventListener('DOMContentLoaded', () => {
       fillState.active=false; fillState.row=null; fillState.startDay=null; fillState.lastDay=null; fillState.value="";
     }
 
-    // ===== DnD & Eingabe-Events im Grid =====
+    /* =======================
+       DnD & Eingabe-Events im Grid
+       ======================= */
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
     const cells  = document.querySelectorAll('#weekTable td');
 
-    // Copy/Move (nur Grid→Grid). Klein→Grid immer Copy.
-    let DND_COPY = false;
-    let DND_FROM = null; // 'grid' | 'klein' | null
+    let DND_COPY = false;   // nur für grid→grid
+    let DND_FROM = null;    // 'grid' | 'klein' | null
 
     inputs.forEach(inp=>{
       inp.addEventListener('dragstart', e=>{
@@ -341,19 +355,17 @@ document.addEventListener('DOMContentLoaded', () => {
         DND_FROM = null;
       });
 
-      // Doppelklick: ganze Zelle "markieren"
-      inp.addEventListener('dblclick', (ev)=>{
+      // Doppelklick: Zelle markieren + Text selektieren
+      inp.addEventListener('dblclick', ()=>{
         const td = inp.closest('td');
         clearSelected();
         td.classList.add('cell-selected');
         SELECTED.row = Number(inp.dataset.row);
         SELECTED.day = Number(inp.dataset.day);
-        // Fokus + gesamten Text selektieren
-        inp.focus();
-        inp.select();
+        inp.focus(); inp.select();
       });
 
-      // normale Eingabe-Events
+      // Speichern bei Blur/Enter
       inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
       inp.addEventListener('keydown', async ev=>{
         if (ev.key === 'Enter' && !ev.shiftKey){
@@ -368,22 +380,18 @@ document.addEventListener('DOMContentLoaded', () => {
       inp.addEventListener('input', applyColors);
     });
 
-    // Mousedown/Mouseenter für Paint-Select (Shift)
+    // Paint-Select Interaktion
     document.querySelectorAll('#weekTable td').forEach(td=>{
       const row = Number(td.dataset.row), day = Number(td.dataset.day);
       const ta = td.querySelector('textarea.cell');
-
       td.addEventListener('mousedown', (e)=>{
         if (e.button !== 0) return;
-        // Klick in andere Zelle hebt Selektion auf (außer bei Shift-Füllen)
-        if (!e.shiftKey) { clearSelected(); }
-        if (!e.shiftKey) return; // nur Shift startet das Paint-Select hier
+        if (!e.shiftKey) { clearSelected(); return; }
         if (fourChk.checked && day === 4) return;
         e.preventDefault();
         const startValue = (ta?.value ?? "");
         startFill(row, day, startValue);
       });
-
       td.addEventListener('mouseenter', ()=>{ if (fillState.active && row === fillState.row) updateFill(day); });
     });
     document.addEventListener('mouseup', endFill);
@@ -422,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
           if (fourChk.checked && targetDay === 4) return;
           const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
 
-          // GRID → GRID
           if (payload && payload.source === 'grid'){
             const text  = (payload.value || '');
             const srcR  = Number(payload.row);
@@ -443,7 +450,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
 
-          // KLEIN → GRID (immer Copy)
           if (payload && payload.source === 'klein'){
             const text = (payload.value || '').trim();
             tgt.value = text;
@@ -455,13 +461,15 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // ===== Navigation =====
+    /* =======================
+       Navigation
+       ======================= */
     function navigate(kw, year){
       const url = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
       window.location.href = url;
     }
     kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
-    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+    yearSel?.addEventListener('change', ()=> navigate(parseInt(yearSel.value,10), parseInt(yearSel.value,10)));
     document.getElementById('prevWeekBtn').onclick = ()=>{
       const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
       const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
@@ -475,13 +483,47 @@ document.addEventListener('DOMContentLoaded', () => {
       navigate(n.kw, n.year);
     };
 
-    // ===== Farben initial =====
+    // ======= Farben initial =======
     applyColors();
 
-    /* ===== Kleinbaustellen speichern ===== */
+    /* =======================
+       Kleinbaustellen: Speichern + Auto-Zeile + DnD + NEU: Doppelklick/Löschen
+       ======================= */
     (function () {
+      const LIST = document.getElementById('kleinList');
       const JOB_SELECTOR = '#kleinList input.job';
+
+      // --- Auswahlstatus für Klein ---
+      let SELECTED_KLEIN = { rowIndex: null };
+      function clearSelectedKlein(){
+        LIST.querySelectorAll('.row.klein-selected').forEach(r => r.classList.remove('klein-selected'));
+        SELECTED_KLEIN = { rowIndex:null };
+      }
+
+      // Globale Delete/Esc für Klein
+      document.addEventListener('keydown', async (ev)=>{
+        if (SELECTED_KLEIN.rowIndex === null) return;
+        if (ev.key === 'Delete' || ev.key === 'Backspace') {
+          ev.preventDefault();
+          const inp = LIST.querySelector(`input.job[data-row="${SELECTED_KLEIN.rowIndex}"]`);
+          if (inp) {
+            inp.value = '';
+            await saveKlein(inp.dataset.row, '');
+            ensureTrailingEmpty();
+          }
+          clearSelectedKlein();
+        } else if (ev.key === 'Escape') {
+          ev.preventDefault();
+          clearSelectedKlein();
+        }
+      });
+      // Klick außerhalb der Liste → Auswahl aufheben
+      document.addEventListener('mousedown', (e)=>{
+        if (!LIST.contains(e.target)) clearSelectedKlein();
+      });
+
       function debounce(fn, wait) { let t=null; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait);} }
+
       async function saveKlein(rowIndex, text) {
         try {
           const payload = { standort: CURLOC, row_index: Number(rowIndex||0), text: (text||'').trim() };
@@ -489,77 +531,104 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!res.ok) console.warn('Kleinbaustellen-HTTP-Fehler:', res.status);
         } catch (e) { console.warn('Netz-/Serverfehler Kleinbaustellen:', e); }
       }
-      function wireKleinInputs(root=document){
-        const inputs = root.querySelectorAll(JOB_SELECTOR);
-        const debouncedSave = debounce((inp)=>{ const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value); }, 400);
-        inputs.forEach(inp=>{
-          inp.addEventListener('blur', ()=>{ const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value); });
-          inp.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0'; saveKlein(idx, inp.value);} });
-          inp.addEventListener('input', ()=> debouncedSave(inp));
+
+      // ---- neue Zeile erzeugen (inkl. Verkabelung) ----
+      function makeRow(idx, value="") {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `
+          <span class="drag-handle" title="Ziehen in Wochenzelle" draggable="true">⋮⋮</span>
+          <input type="text" class="job" data-row="${idx}" value="${(value||'').replace(/"/g,'&quot;')}" placeholder="">
+        `;
+        LIST.appendChild(row);
+        wireRow(row); // Events + DnD + Doppelklick setzen
+        return row;
+      }
+
+      // ---- immer eine leere Zeile am Ende ----
+      function ensureTrailingEmpty() {
+        const inputs = Array.from(LIST.querySelectorAll('input.job'));
+        const last = inputs[inputs.length - 1];
+        if (!last) { makeRow(0, ""); return; }
+        if ((last.value || '').trim() !== '') {
+          const nextIdx = Math.max(...inputs.map(i => Number(i.dataset.row)||0), -1) + 1;
+          makeRow(nextIdx, "");
+        }
+      }
+
+      // ---- Einzelzeile verkabeln ----
+      function wireRow(rowEl) {
+        const handle = rowEl.querySelector('.drag-handle');
+        const inp    = rowEl.querySelector('input.job');
+        const debouncedSave = debounce(() => { saveKlein(inp.dataset.row, inp.value); }, 400);
+
+        // Speichern
+        inp.addEventListener('blur',     () => saveKlein(inp.dataset.row, inp.value));
+        inp.addEventListener('keydown',  (ev)=>{ if (ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); saveKlein(inp.dataset.row, inp.value);} });
+        inp.addEventListener('input',    ()=>{ debouncedSave(); ensureTrailingEmpty(); });
+
+        // NEU: Doppelklick → Zeile markieren (für Delete/Backspace)
+        inp.addEventListener('dblclick', ()=>{
+          clearSelected();            // Grid-Auswahl aufheben (falls aktiv)
+          clearSelectedKlein();       // existierende Klein-Auswahl aufheben
+          rowEl.classList.add('klein-selected');
+          SELECTED_KLEIN.rowIndex = Number(inp.dataset.row);
+          inp.focus(); inp.select();
+        });
+
+        // DnD (immer COPY von rechts)
+        function setDragPayload(dt, obj){
+          const s = JSON.stringify(obj || {});
+          try{ dt.setData('application/json', s); }catch(_){}
+          try{ dt.setData('text/plain', s); }catch(_){}
+          try{ dt.setData('text', s); }catch(_){}
+        }
+        [handle, inp].forEach(draggable=>{
+          draggable.setAttribute('draggable','true');
+          draggable.addEventListener('dragstart', (e)=>{
+            const value = (inp.value || '').trim();
+            setDragPayload(e.dataTransfer, { source:'klein', value });
+            e.dataTransfer.effectAllowed = 'copy';
+            draggable.classList.add('dragging');
+            DND_FROM = 'klein';
+          });
+          draggable.addEventListener('dragend', ()=>{
+            draggable.classList.remove('dragging');
+            DND_FROM = null;
+          });
         });
       }
-      wireKleinInputs(document);
+
+      // Initial alle vorhandenen Zeilen verkabeln + leere Endzeile sicherstellen
+      LIST.querySelectorAll('.row').forEach(wireRow);
+      ensureTrailingEmpty();
+
+      // Exponiere für andere Handler (optional)
+      window._kleinEnsureTrailingEmpty = ensureTrailingEmpty;
     })();
 
-    /* ===== Klein → Grid (immer Copy) ===== */
+    /* =======================
+       Klein → Grid (immer Copy) – DnD_FROM wird oben gesetzt
+       ======================= */
     (function () {
       const LIST = document.getElementById('kleinList');
       if (!LIST) return;
-
-      function setDragPayload(dt, obj){
-        const s = JSON.stringify(obj || {});
-        try{ dt.setData('application/json', s); }catch(_){}
-        try{ dt.setData('text/plain', s); }catch(_){}
-        try{ dt.setData('text', s); }catch(_){}
-      }
-
-      LIST.querySelectorAll('.row .drag-handle').forEach(handle=>{
-        handle.setAttribute('draggable','true');
-        handle.addEventListener('dragstart', (e)=>{
-          const rowEl = handle.closest('.row');
-          const inp = rowEl?.querySelector('input.job');
-          const value = (inp?.value || '').trim();
-          setDragPayload(e.dataTransfer, { source:'klein', value });
-          e.dataTransfer.effectAllowed = 'copy';
-          handle.classList.add('dragging');
-          DND_FROM = 'klein';
-        });
-        handle.addEventListener('dragend', ()=> {
-          handle.classList.remove('dragging');
-          DND_FROM = null;
-        });
-      });
-
-      LIST.querySelectorAll('input.job').forEach(inp=>{
-        inp.setAttribute('draggable','true');
-        inp.addEventListener('dragstart', (e)=>{
-          const value = (inp.value || '').trim();
-          setDragPayload(e.dataTransfer, { source:'klein', value });
-          e.dataTransfer.effectAllowed = 'copy';
-          inp.classList.add('dragging');
-          DND_FROM = 'klein';
-        });
-        inp.addEventListener('dragend', ()=> {
-          inp.classList.remove('dragging');
-          DND_FROM = null;
-        });
-      });
+      // keine zusätzliche Logik notwendig
     })();
 
-    /* ===== Neu: Doppelklick markieren & Entf/Backspace leeren ===== */
+    /* =======================
+       Doppelklick-Markierung & Leeren per Entf/Backspace (Grid)
+       ======================= */
     let SELECTED = { row: null, day: null };
     function clearSelected(){
       document.querySelectorAll('#weekTable td.cell-selected').forEach(td => td.classList.remove('cell-selected'));
       SELECTED = { row:null, day:null };
     }
     document.addEventListener('keydown', async (ev)=>{
-      // wenn eine Zelle selektiert ist: Delete/Backspace leeren, Esc aufheben
       if (SELECTED.row === null || SELECTED.day === null) return;
-
       if (ev.key === 'Delete' || ev.key === 'Backspace'){
         ev.preventDefault();
-        // Freitagsschutz
-        if (fourChk.checked && Number(SELECTED.day) === 4) return;
+        if (FOUR_DAY && Number(SELECTED.day) === 4) return;
         const ta = document.querySelector(`#weekTable textarea.cell[data-row="${SELECTED.row}"][data-day="${SELECTED.day}"]`);
         if (ta){
           ta.value = '';
