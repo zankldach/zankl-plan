@@ -110,7 +110,7 @@
     </table>
   </div>
 
-  <!-- Sidebar: Kleinbaustellen (unverändert) -->
+  <!-- Sidebar: Kleinbaustellen -->
   <div>
     <div class="side">
       <header>Kleinbaustellen</header>
@@ -148,13 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAN_KEY = (loc, kw, year)=> `${loc}|${kw}|${year}`;
     const planKey = PLAN_KEY(CURLOC, KW, YEAR);
 
-    // Selektoren (ohne Standort-Select, ohne "Öffnen", ohne "Alles speichern")
     const kwSel = document.getElementById('kwSelect');
     const yearSel = document.getElementById('yearSelect');
     const fourChk = document.getElementById('fourDayChk');
 
-    // KW/Jahr füllen
-    function initSelectors(){
+    // ===== KW/Jahr füllen =====
+    (function initSelectors(){
       if (kwSel && kwSel.options.length === 0) {
         for (let w=1; w<=MAX_WEEKS; w++){
           const opt = document.createElement('option');
@@ -169,10 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
           yearSel.appendChild(opt);
         });
       }
-    }
-    initSelectors();
+    })();
 
-    // 4‑Tage‑Woche UI
+    // ===== 4‑Tage‑Woche UI =====
     function cacheFridayTexts(){
       const vals = Array.from(document.querySelectorAll('#weekTable td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
       localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
@@ -218,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyFourDayWeekUI(FOUR_DAY);
     if (FOUR_DAY) restoreFridayFromCache();
 
-    // -------- Farben --------
+    // ===== Farben =====
     const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx","x","xx"]);
     const norm = s => (s||"").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
@@ -238,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // -------- Speichern (per Zelle / Batch intern genutzt) --------
+    // ===== Speichern (Zellen) =====
     async function saveCell(row, day, value){
       if (Number(day) === 4) cacheFridayTexts();
       if (fourChk.checked && Number(day) === 4) return true;
@@ -278,20 +276,28 @@ document.addEventListener('DOMContentLoaded', () => {
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
 
-    // -------- DnD & Eingabe-Events (unverändert) --------
+    // ===== DnD & Eingabe-Events im Grid =====
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
     const cells = document.querySelectorAll('#weekTable td');
 
+    // Status, ob Copy (Strg/Cmd) aktiv ist – wird in dragover aktualisiert
+    let DND_COPY = false;
+    // Quelle für grid→grid Move/Copy
+    const GRID_SRC = { row: null, day: null };
+
     inputs.forEach(inp=>{
       inp.addEventListener('dragstart', e=>{
-        const data = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value };
-        e.dataTransfer.setData('text/plain', JSON.stringify(data));
-        e.dataTransfer.dropEffect='move';
+        const payload = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value || '' };
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        e.dataTransfer.effectAllowed = 'copyMove'; // im Ziel setzen wir dropEffect
         inp.classList.add('dragging');
+        GRID_SRC.row = Number(inp.dataset.row);
+        GRID_SRC.day = Number(inp.dataset.day);
       });
       inp.addEventListener('dragend', ()=>{
         document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+        // Quelle bleibt belegt; wird auf Drop ausgewertet
       });
       inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
       inp.addEventListener('keydown', async ev=>{
@@ -307,10 +313,13 @@ document.addEventListener('DOMContentLoaded', () => {
       inp.addEventListener('input', applyColors);
     });
 
-    // Drop-Ziele
-    let dragData=null;
     cells.forEach(td=>{
       td.addEventListener('dragover', e=>{
+        // Modifier (Strg/Cmd) bestimmen Copy/Move
+        DND_COPY = !!(e.ctrlKey || e.metaKey);
+        e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
+
+        // Default verhindern und Ziel markieren
         e.preventDefault();
         const targetDay = Number(td.dataset.day);
         if (fourChk.checked && targetDay === 4) return;
@@ -321,67 +330,49 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         td.classList.remove('drag-over');
         try{
-          const payload = dragData || JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+          const payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
           const targetRow = Number(td.dataset.row);
           const targetDay = Number(td.dataset.day);
           if (fourChk.checked && targetDay === 4) return;
           const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
+
+          // Quelle: Grid → Grid (MOVE default, COPY bei Strg/Cmd)
           if (payload && payload.source === 'grid'){
-            tgt.value = payload.value;
-            await saveCell(targetRow, targetDay, payload.value);
+            const text = (payload.value || '');
+            const srcRow = Number(payload.row);
+            const srcDay = Number(payload.day);
+
+            // Ziel überschreiben & speichern
+            tgt.value = text;
+            await saveCell(targetRow, targetDay, text);
             applyColors();
+
+            // Bei MOVE (ohne Strg/Cmd) und wenn Quelle != Ziel → Quelle leeren & speichern
+            if (!DND_COPY && (srcRow !== targetRow || srcDay !== targetDay)) {
+              const srcTa = document.querySelector(`#weekTable textarea.cell[data-row="${srcRow}"][data-day="${srcDay}"]`);
+              if (srcTa) {
+                srcTa.value = '';
+                await saveCell(srcRow, srcDay, '');
+                applyColors();
+              }
+            }
+            return;
           }
+
+          // Quelle: Kleinbaustellen → Grid (immer COPY)
+          if (payload && payload.source === 'klein'){
+            const text = (payload.value || '').trim();
+            tgt.value = text;
+            await saveCell(targetRow, targetDay, text);
+            applyColors();
+            return;
+          }
+
         }catch(err){ console.warn('Drop-Fehler:', err); }
       });
     });
 
-    // Bereichs-Füllen (Shift + ziehen)
-    const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
-    function getCell(row, day){ return document.querySelector(`#weekTable textarea.cell[data-row="${row}"][data-day="${day}"]`); }
-    function getTd(row, day){ return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`); }
-    function paintRange(row, d1, d2, on=true){
-      const [from,to] = d1<=d2 ? [d1,d2] : [d2,d1];
-      for (let d=from; d<=to; d++){
-        if (fourChk.checked && d===4) continue;
-        const td = getTd(row, d); if (!td) continue;
-        td.classList.toggle('paint-select', on);
-      }
-    }
-    function startFill(row, day, value){ fillState.active=true; fillState.row=row; fillState.startDay=day; fillState.lastDay=day; fillState.value=value||""; paintRange(row, day, day, true); }
-    function updateFill(day){ if (!fillState.active) return; paintRange(fillState.row, fillState.startDay, fillState.lastDay, false); fillState.lastDay=day; paintRange(fillState.row, fillState.startDay, fillState.lastDay, true); }
-    async function endFill(){
-      if (!fillState.active) return;
-      const row = fillState.row;
-      const d1 = Math.min(fillState.startDay, fillState.lastDay);
-      const d2 = Math.max(fillState.startDay, fillState.lastDay);
-      let updates = [];
-      for (let d=d1; d<=d2; d++){
-        if (fourChk.checked && d===4) continue;
-        const ta = getCell(row, d); if (!ta) continue;
-        ta.value = fillState.value;
-        updates.push({ row, day:d, value: fillState.value });
-      }
-      await saveBatch(updates);
-      applyColors();
-      paintRange(row, d1, d2, false);
-      fillState.active=false; fillState.row=null; fillState.startDay=null; fillState.lastDay=null; fillState.value="";
-    }
-    document.querySelectorAll('#weekTable td').forEach(td=>{
-      const row = Number(td.dataset.row), day = Number(td.dataset.day);
-      const ta = td.querySelector('textarea.cell');
-      td.addEventListener('mousedown', (e)=>{
-        if (e.button !== 0 || !e.shiftKey) return;
-        if (fourChk.checked && day === 4) return;
-        e.preventDefault();
-        const startValue = (ta?.value ?? "");
-        startFill(row, day, startValue);
-      });
-      td.addEventListener('mouseenter', ()=>{ if (fillState.active && row === fillState.row) updateFill(day); });
-    });
-    document.addEventListener('mouseup', endFill);
-    document.addEventListener('mouseleave', endFill);
-
-    // Navigation (ohne Standort-Select, ohne „Öffnen“)
+    // ===== Navigation =====
     function navigate(kw, year){
       const url = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
       window.location.href = url;
@@ -401,11 +392,11 @@ document.addEventListener('DOMContentLoaded', () => {
       navigate(n.kw, n.year);
     };
 
-    // Initiale Farben anwenden
+    // ===== Farben initial =====
     applyColors();
 
     /* =======================
-       Kleinbaustellen speichern
+       Kleinbaustellen speichern (Blur, Enter, Debounce)
        ======================= */
     (function () {
       const JOB_SELECTOR = '#kleinList input.job';
@@ -430,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          // still akzeptieren (Server kann {ok:true} oder leeren Body liefern)
           if (!res.ok) console.warn('Kleinbaustellen-HTTP-Fehler:', res.status);
         } catch (e) {
           console.warn('Netz-/Serverfehler Kleinbaustellen:', e);
@@ -445,13 +435,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 400);
 
         inputs.forEach(inp => {
-          // Blur → sofort speichern
           inp.addEventListener('blur', () => {
             const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
             saveKlein(idx, inp.value);
           });
 
-          // Enter (ohne Shift) → sofort speichern
           inp.addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter' && !ev.shiftKey) {
               ev.preventDefault();
@@ -460,13 +448,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
 
-          // Tippen → debounced speichern
           inp.addEventListener('input', () => debouncedSave(inp));
         });
       }
 
-      // beim Laden verkabeln
       wireKleinInputs(document);
+    })();
+
+    /* =======================
+       Kleinbaustellen → Drag & Drop (COPY)
+       ======================= */
+    (function () {
+      const LIST = document.getElementById('kleinList');
+      if (!LIST) return;
+
+      // Drag-Start am Griff (⋮⋮)
+      LIST.querySelectorAll('.row .drag-handle').forEach(handle=>{
+        handle.setAttribute('draggable','true');
+        handle.addEventListener('dragstart', (e)=>{
+          const rowEl = handle.closest('.row');
+          const inp = rowEl?.querySelector('input.job');
+          const value = (inp?.value || '').trim();
+          e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
+          e.dataTransfer.effectAllowed = 'copy';
+          handle.classList.add('dragging');
+        });
+        handle.addEventListener('dragend', ()=> handle.classList.remove('dragging'));
+      });
+
+      // Optional: Drag auch direkt vom Eingabefeld
+      LIST.querySelectorAll('input.job').forEach(inp=>{
+        inp.setAttribute('draggable','true');
+        inp.addEventListener('dragstart', (e)=>{
+          const value = (inp.value || '').trim();
+          e.dataTransfer.setData('text/plain', JSON.stringify({ source:'klein', value }));
+          e.dataTransfer.effectAllowed = 'copy';
+          inp.classList.add('dragging');
+        });
+        inp.addEventListener('dragend', ()=> inp.classList.remove('dragging'));
+      });
     })();
 
   } catch (err) {
