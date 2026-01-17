@@ -38,7 +38,7 @@
   .paint-select { outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
 
   /* Freitag in 4‑Tage‑Woche: etwas dunkler */
-  td.cell-friday-locked { background:#e2e8f0 !important; }     /* vorher #f1f5f9 */
+  td.cell-friday-locked { background:#e2e8f0 !important; }
   td.cell-friday-locked textarea.cell { color:#475569; }
 
   /* Sidebar Kleinbaustellen (optisch unverändert) */
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const hint = td.querySelector('.hint');
         if (flag) {
           td.classList.add('cell-friday-locked');
-          if (ta) ta.readOnly = true;  // Text sichtbar, nicht editierbar
+          if (ta) ta.readOnly = true;
           if (hint) hint.textContent = "";
         } else {
           td.classList.remove('cell-friday-locked');
@@ -212,14 +212,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const flag = fourChk.checked;
       cacheFridayTexts();
       applyFourDayWeekUI(flag);
-      applyColors();  // Farben neu anwenden
+      applyColors();
       await setFourDayWeek(flag);
     });
     applyFourDayWeekUI(FOUR_DAY);
     if (FOUR_DAY) restoreFridayFromCache();
 
     // -------- Farben --------
-    // Erweiterte Rot-Liste inkl. x, xx
     const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx","x","xx"]);
     const norm = s => (s||"").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
@@ -336,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Bereichs-Füllen (Shift + ziehen) – unverändert
+    // Bereichs-Füllen (Shift + ziehen)
     const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
     function getCell(row, day){ return document.querySelector(`#weekTable textarea.cell[data-row="${row}"][data-day="${day}"]`); }
     function getTd(row, day){ return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`); }
@@ -382,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('mouseup', endFill);
     document.addEventListener('mouseleave', endFill);
 
-    // Navigation (ohne Standort-Select, ohne „Öffnen“) – Änderung von KW/Jahr triggert sofort Navigation
+    // Navigation (ohne Standort-Select, ohne „Öffnen“)
     function navigate(kw, year){
       const url = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
       window.location.href = url;
@@ -404,6 +403,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initiale Farben anwenden
     applyColors();
+
+    /* =======================
+       Kleinbaustellen speichern
+       ======================= */
+    (function () {
+      const JOB_SELECTOR = '#kleinList input.job';
+
+      function debounce(fn, wait) {
+        let t = null;
+        return function(...args) {
+          clearTimeout(t);
+          t = setTimeout(() => fn.apply(this, args), wait);
+        };
+      }
+
+      async function saveKlein(rowIndex, text) {
+        try {
+          const payload = {
+            standort: CURLOC,
+            row_index: Number(rowIndex || 0),
+            text: (text || '').trim()
+          };
+          const res = await fetch('/api/klein/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          // still akzeptieren (Server kann {ok:true} oder leeren Body liefern)
+          if (!res.ok) console.warn('Kleinbaustellen-HTTP-Fehler:', res.status);
+        } catch (e) {
+          console.warn('Netz-/Serverfehler Kleinbaustellen:', e);
+        }
+      }
+
+      function wireKleinInputs(root = document) {
+        const inputs = root.querySelectorAll(JOB_SELECTOR);
+        const debouncedSave = debounce((inp) => {
+          const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
+          saveKlein(idx, inp.value);
+        }, 400);
+
+        inputs.forEach(inp => {
+          // Blur → sofort speichern
+          inp.addEventListener('blur', () => {
+            const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
+            saveKlein(idx, inp.value);
+          });
+
+          // Enter (ohne Shift) → sofort speichern
+          inp.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' && !ev.shiftKey) {
+              ev.preventDefault();
+              const idx = inp.getAttribute('data-row') ?? inp.dataset.row ?? '0';
+              saveKlein(idx, inp.value);
+            }
+          });
+
+          // Tippen → debounced speichern
+          inp.addEventListener('input', () => debouncedSave(inp));
+        });
+      }
+
+      // beim Laden verkabeln
+      wireKleinInputs(document);
+    })();
 
   } catch (err) {
     console.error('Init-Fehler in week.html:', err);
