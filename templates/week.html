@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyFourDayWeekUI(flag){
       document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
         const ta = td.querySelector('textarea.cell');
-        const hint = td.querySelector('.hint');
+        const hint = td.querySelector('span.hint');
         if (flag) {
           td.classList.add('cell-friday-locked');
           if (ta) ta.readOnly = true;
@@ -312,12 +312,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
     const cells  = document.querySelectorAll('#weekTable td');
 
-    // Copy/Move je nach Strg/Cmd (nur Grid→Grid)
+    // Copy/Move nur für Grid→Grid (Strg/Cmd). Klein→Grid immer Copy.
     let DND_COPY = false;
+    let DND_FROM = null; // 'grid' | 'klein' | null
 
     inputs.forEach(inp=>{
-      // WICHTIG: Dragstart bei Shift (Bereichs-Füllen) verhindern
       inp.addEventListener('dragstart', e=>{
+        // Bei aktivem Shift-Füllen kein Drag auslösen
         if (e.shiftKey || fillState.active) { e.preventDefault(); return; }
         const payload = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value || '' };
         const s = JSON.stringify(payload);
@@ -326,13 +327,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try{ e.dataTransfer.setData('text', s); }catch(_){}
         e.dataTransfer.effectAllowed = 'copyMove';
         inp.classList.add('dragging');
+        DND_FROM = 'grid';
       });
       inp.addEventListener('dragend', ()=>{
         document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+        DND_FROM = null;
       });
 
-      // normale Eingabe-Events
       inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
       inp.addEventListener('keydown', async ev=>{
         if (ev.key === 'Enter' && !ev.shiftKey){
@@ -351,11 +353,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#weekTable td').forEach(td=>{
       const row = Number(td.dataset.row), day = Number(td.dataset.day);
       const ta = td.querySelector('textarea.cell');
-
       td.addEventListener('mousedown', (e)=>{
         if (e.button !== 0 || !e.shiftKey) return;
         if (fourChk.checked && day === 4) return;
-        e.preventDefault(); // verhindert Start eines Textarea-Drags
+        e.preventDefault();
         const startValue = (ta?.value ?? "");
         startFill(row, day, startValue);
       });
@@ -367,10 +368,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Drop-Ziele
     cells.forEach(td=>{
       td.addEventListener('dragover', e=>{
-        // während Paint-Select keine DnD-Überlagerung
-        if (fillState.active) return;
-        DND_COPY = !!(e.ctrlKey || e.metaKey);
-        e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
+        if (fillState.active) return; // nicht während Paint-Select
+        // >>> Änderung: Wenn Quelle 'klein' ist, immer copy anzeigen (ohne Strg)
+        if (DND_FROM === 'klein') {
+          e.dataTransfer.dropEffect = 'copy';
+        } else {
+          DND_COPY = !!(e.ctrlKey || e.metaKey);
+          e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
+        }
         e.preventDefault();
         const targetDay = Number(td.dataset.day);
         if (fourChk.checked && targetDay === 4) return;
@@ -379,7 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
       td.addEventListener('dragleave', ()=> td.classList.remove('drag-over'));
       td.addEventListener('drop', async e=>{
         td.classList.remove('drag-over');
-        // während Paint-Select kein Drop
         if (fillState.active) return;
         e.preventDefault();
         try{
@@ -474,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wireKleinInputs(document);
     })();
 
-    /* ===== Kleinbaustellen → DnD (COPY, robuster Payload) ===== */
+    /* ===== Kleinbaustellen → DnD (immer COPY, robuster Payload) ===== */
     (function () {
       const LIST = document.getElementById('kleinList');
       if (!LIST) return;
@@ -495,8 +499,12 @@ document.addEventListener('DOMContentLoaded', () => {
           setDragPayload(e.dataTransfer, { source:'klein', value });
           e.dataTransfer.effectAllowed = 'copy'; // immer COPY von rechts
           handle.classList.add('dragging');
+          DND_FROM = 'klein'; // <<<<<< setzt Quelle global
         });
-        handle.addEventListener('dragend', ()=> handle.classList.remove('dragging'));
+        handle.addEventListener('dragend', ()=> {
+          handle.classList.remove('dragging');
+          DND_FROM = null; // zurücksetzen
+        });
       });
 
       LIST.querySelectorAll('input.job').forEach(inp=>{
@@ -504,10 +512,14 @@ document.addEventListener('DOMContentLoaded', () => {
         inp.addEventListener('dragstart', (e)=>{
           const value = (inp.value || '').trim();
           setDragPayload(e.dataTransfer, { source:'klein', value });
-          e.dataTransfer.effectAllowed = 'copy'; // immer COPY
+          e.dataTransfer.effectAllowed = 'copy';
           inp.classList.add('dragging');
+          DND_FROM = 'klein';
         });
-        inp.addEventListener('dragend', ()=> inp.classList.remove('dragging'));
+        inp.addEventListener('dragend', ()=> {
+          inp.classList.remove('dragging');
+          DND_FROM = null;
+        });
       });
     })();
 
