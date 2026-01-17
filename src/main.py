@@ -33,8 +33,7 @@ def column_exists(cur, table: str, column: str) -> bool:
 
 def init_db():
     conn = get_conn(); cur = conn.cursor()
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           year INTEGER,
@@ -44,13 +43,11 @@ def init_db():
           four_day_week INTEGER DEFAULT 1,
           UNIQUE(year, kw, standort)
         )
-        """
-    )
+    """)
     if not column_exists(cur, "week_plans", "four_day_week"):
         cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
 
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           week_plan_id INTEGER,
@@ -59,21 +56,17 @@ def init_db():
           text TEXT,
           UNIQUE(week_plan_id, row_index, day_index)
         )
-        """
-    )
+    """)
 
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS employees(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT,
           standort TEXT
         )
-        """
-    )
+    """)
 
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS global_small_jobs(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           standort TEXT,
@@ -81,8 +74,7 @@ def init_db():
           text TEXT,
           UNIQUE(standort, row_index)
         )
-        """
-    )
+    """)
 
     conn.commit(); conn.close()
 
@@ -292,14 +284,11 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
         if four_flag and day == 4:
             return {"ok": True, "skipped": True}
 
-        cur.execute(
-            """
+        cur.execute("""
             INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
             VALUES(?,?,?,?)
             ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-            """,
-            (plan_id, row, day, val)
-        )
+        """, (plan_id, row, day, val))
         conn.commit()
         return {"ok": True, "standort": standort}
     except Exception:
@@ -322,14 +311,11 @@ async def save_batch(data: dict = Body(...)):
             if four_flag and day == 4:
                 continue
             val = u.get("value") or ""
-            cur.execute(
-                """
+            cur.execute("""
                 INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
                 VALUES(?,?,?,?)
                 ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-                """,
-                (plan_id, row, day, val)
-            )
+            """, (plan_id, row, day, val))
         conn.commit()
         return {"ok": True, "count": len(updates)}
     except Exception:
@@ -367,14 +353,11 @@ async def klein_set(data: dict = Body(...)):
         standort = canon_standort(data.get("standort") or "engelbrechts")
         row_index = int(data.get("row_index") or 0)
         text = (data.get("text") or "").strip()
-        cur.execute(
-            """
+        cur.execute("""
             INSERT INTO global_small_jobs(standort,row_index,text)
             VALUES(?,?,?)
             ON CONFLICT(standort,row_index) DO UPDATE SET text=excluded.text
-            """,
-            (standort, row_index, text)
-        )
+        """, (standort, row_index, text))
         conn.commit()
         return {"ok": True}
     except Exception:
@@ -454,6 +437,39 @@ async def settings_employees_delete(request: Request):
 # ------------------------------------
 # VIEW (read-only)
 # ------------------------------------
+@app.get("/view", response_class=HTMLResponse)
+def view_shortcut(
+    request: Request,
+    standort: str = "engelbrechts",
+    year: int | None = None,
+    kw: int | None = None
+):
+    """
+    Neuer Short-Viewer: /view[?standort=...&year=...&kw=...]
+    Rendert die selbe View wie /view/week, ohne Redirect.
+    """
+    try:
+        if year is None or kw is None:
+            year, kw = auto_view_target()
+        else:
+            year, kw = int(year), int(kw)
+        ctx = build_week_context(year, kw, standort)
+        return templates.TemplateResponse(
+            "week_view.html",
+            {
+                "request": request,
+                "year": year,
+                "kw": kw,
+                "standort": ctx["standort"],
+                "grid": ctx["grid"],
+                "employees": ctx["employees"],
+                "four_day_week": ctx["four_day_week"],
+                "days": ctx["days"],
+            }
+        )
+    except Exception:
+        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+
 @app.get("/view/week", response_class=HTMLResponse)
 def view_week(
     request: Request,
