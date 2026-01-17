@@ -43,7 +43,6 @@ def init_db():
     """)
     if not column_exists(cur, "week_plans", "four_day_week"):
         cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +72,7 @@ def init_db():
     conn.commit(); conn.close()
 init_db()
 
-# --------------- Helpers ---------------
+# ---------------- Helpers ----------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
@@ -121,19 +120,13 @@ def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
     return int(y), int(w)
 
 def _pint(v):
-    try:
-        return int(v)
-    except Exception:
-        return None
+    try: return int(v)
+    except Exception: return None
 
 def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]:
-    """
-    KW/Jahr robust ermitteln:
-    1) aus Body (falls gültig), 2) Referer-URL (/week?kw=..&year=..), 3) auto_view_target().
-    """
+    """1) Body, 2) Referer (/week?kw&year), 3) auto_view_target"""
     y = _pint(data.get("year")); w = _pint(data.get("kw"))
-    if y is not None and w is not None:
-        return y, w
+    if y is not None and w is not None: return y, w
     ref = request.headers.get("referer") or request.headers.get("Referer") or ""
     try:
         qs = parse_qs(urlparse(ref).query)
@@ -141,12 +134,11 @@ def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]
         if w is None: w = _pint((qs.get("kw") or [""])[0])
     except Exception:
         pass
-    if y is not None and w is not None:
-        return y, w
+    if y is not None and w is not None: return y, w
     ay, aw = auto_view_target()
     return int(y or ay), int(w or aw)
 
-# --------------- zentrale Week-Logik ---------------
+# ---------------- zentrale Week-Logik ----------------
 def build_week_context(year: int, kw: int, standort: str):
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
@@ -198,7 +190,7 @@ def build_week_context(year: int, kw: int, standort: str):
 # ---------------- Admin/Debug/Health ----------------
 @app.get("/")
 def root():
-    # Root liefert 200 OK (kein Redirect-Status) → verhindert Deploy-Timeouts beim Healthcheck auf "/"
+    # 200 OK (kein 30x) -> Render-Healthcheck ist happy; Meta-Refresh sendet zur View
     html = """
     <!doctype html><html lang="de"><head>
       <meta charset="utf-8">
@@ -237,49 +229,13 @@ def admin_peek_week(standort: str, year: int, kw: int):
     finally:
         conn.close()
 
-@app.get("/admin/seed-week")
-def admin_seed_week(standort: str = "engelbrechts", year: int = None, kw: int = None):
-    if year is None or kw is None:
-        y, w = date.today().isocalendar()[:2]
-        year = year or int(y)
-        kw = kw or int(w)
+@app.get("/admin/peek-klein")
+def admin_peek_klein(standort: str = "engelbrechts"):
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT COUNT(*) AS n FROM employees WHERE standort=?", (st,))
-        if cur.fetchone()["n"] == 0:
-            cur.executemany(
-                "INSERT INTO employees(name, standort) VALUES(?, ?)",
-                [("Team A", st), ("Team B", st), ("Leihkraft 1", st)]
-            )
-        cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, st))
-        row = cur.fetchone()
-        if not row:
-            cur.execute(
-                "INSERT INTO week_plans(year,kw,standort,row_count,four_day_week) VALUES(?,?,?,?,1)",
-                (year, kw, st, 5)
-            )
-            plan_id = cur.lastrowid
-        else:
-            plan_id = row["id"]
-        cur.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (plan_id,))
-        if cur.fetchone()["n"] == 0:
-            demo = [
-                (0, 0, "Sanierung Hauptplatz"),
-                (0, 2, "Dachfenster Müller"),
-                (1, 1, "Kleinbaustellen"),
-                (1, 3, "Fassade Huber"),
-            ]
-            for r, d, txt in demo:
-                cur.execute("""
-                    INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
-                    VALUES(?,?,?,?)
-                    ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
-                """, (plan_id, r, d, txt))
-        conn.commit()
-        return {"ok": True, "standort": st, "year": year, "kw": kw, "plan_id": plan_id}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+        cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (st,))
+        return {"standort": st, "items": [dict(r) for r in cur.fetchall()]}
     finally:
         conn.close()
 
@@ -291,6 +247,36 @@ def health():
 def favicon():
     return Response(status_code=204)
 
+# ---------------- Einstellungen (Not Found vermeiden) ----------------
+@app.get("/settings", response_class=HTMLResponse)
+def settings_root():
+    html = """
+    <h1>Einstellungen</h1>
+    <ul>
+      <li>/settings/employeesMitarbeiter verwalten</a></li>
+      <li>/settings/usersBenutzer-Zuordnung (Viewer → Standort)</a></li>
+      <li>/bedienungBedienung / Hilfe</a></li>
+    </ul>
+    """
+    return HTMLResponse(html, status_code=200)
+
+@app.get("/settings/users", response_class=HTMLResponse)
+def settings_users_placeholder():
+    html = """
+    <h1>Benutzer-Zuordnung</h1>
+    <p>Platzhalter-Seite. (Später: Viewer → Standort)</p>
+    <p>/settingsZurück zu Einstellungen</a></p>
+    """
+    return HTMLResponse(html, status_code=200)
+
+@app.get("/bedienung", response_class=HTMLResponse)
+def bedienung_page():
+    html = """
+    <h1>Bedienung</h1>
+    <p>Kurzbeschreibung folgt. Für jetzt: Navigation über die Leiste oben.</p>
+    """
+    return HTMLResponse(html, status_code=200)
+
 # ---------------- WEEK – Edit ----------------
 @app.get("/week", response_class=HTMLResponse)
 def week(
@@ -299,12 +285,10 @@ def week(
     year: int | None = None,
     standort: str = "engelbrechts"
 ):
-    # Ohne Parameter: aktuelle ISO-KW/Jahr (nicht die Freitag-12-Regel!)
+    # Ohne Parameter: aktuelle ISO-KW/Jahr (nicht die Freitag-12-Regel)
     if year is None or kw is None:
-        today = date.today()
-        iso = today.isocalendar()  # (year, week, weekday)
-        year = int(year or iso[0])
-        kw = int(kw or iso[1])
+        today = date.today(); iso = today.isocalendar()
+        year = int(year or iso[0]); kw = int(kw or iso[1])
 
     standort = canon_standort(standort)
     try:
@@ -377,10 +361,8 @@ async def save_batch(request: Request, data: dict = Body(...)):
         plan_id, four_flag = _ensure_plan(cur, year, kw, standort)
         for u in updates:
             row = _pint(u.get("row")); day = _pint(u.get("day"))
-            if row is None or day is None:
-                continue
-            if four_flag and day == 4:
-                continue
+            if row is None or day is None: continue
+            if four_flag and day == 4: continue
             val = (u.get("value") or "")
             cur.execute("""
                 INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
@@ -394,41 +376,41 @@ async def save_batch(request: Request, data: dict = Body(...)):
     finally:
         conn.close()
 
-@app.post("/api/week/options")
-async def set_four_day(request: Request, data: dict = Body(...)):
+# ---------------- Kleinbaustellen (fix: 2 Endpunkte + flexible Felder) ----------------
+def _save_klein(standort: str, row_index: int, text: str):
     conn = get_conn(); cur = conn.cursor()
     try:
-        year, kw = derive_year_kw_from_request(request, data)
-        standort = canon_standort(data.get("standort") or resolve_standort(request, None, None))
-        value = 1 if bool(data.get("four_day_week") or data.get("value")) else 0
-        plan_id, _ = _ensure_plan(cur, year, kw, standort)
-        cur.execute("UPDATE week_plans SET four_day_week=? WHERE id=?", (value, plan_id))
-        conn.commit()
-        return {"ok": True, "four_day_week": bool(value), "year": year, "kw": kw}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-    finally:
-        conn.close()
-
-# ---------------- Kleinbaustellen ----------------
-@app.post("/api/klein/set")
-async def klein_set(data: dict = Body(...)):
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        standort = canon_standort(data.get("standort") or "engelbrechts")
-        row_index = _pint(data.get("row_index")) or 0
-        text = (data.get("text") or "").strip()
         cur.execute("""
             INSERT INTO global_small_jobs(standort,row_index,text)
             VALUES(?,?,?)
             ON CONFLICT(standort,row_index) DO UPDATE SET text=excluded.text
         """, (standort, row_index, text))
         conn.commit()
-        return {"ok": True}
-    except Exception:
-        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
+
+def _row_index_from_payload(d: dict) -> int:
+    # akzeptiere row_index ODER row
+    ri = _pint(d.get("row_index"))
+    if ri is None:
+        ri = _pint(d.get("row"))
+    return int(ri or 0)
+
+@app.post("/api/klein/set")
+async def klein_set(data: dict = Body(...)):
+    st = canon_standort(data.get("standort") or "engelbrechts")
+    ri = _row_index_from_payload(data)
+    txt = (data.get("text") or "").strip()
+    _save_klein(st, ri, txt)
+    return {"ok": True}
+
+@app.post("/api/klein/set-cell")  # Alias für ältere/neue Frontends
+async def klein_set_cell(data: dict = Body(...)):
+    st = canon_standort(data.get("standort") or "engelbrechts")
+    ri = _row_index_from_payload(data)
+    txt = (data.get("text") or "").strip()
+    _save_klein(st, ri, txt)
+    return {"ok": True}
 
 # ---------------- VIEW (read-only) ----------------
 @app.get("/view", response_class=HTMLResponse)
