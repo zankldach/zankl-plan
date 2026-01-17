@@ -15,13 +15,10 @@ BASE_DIR = Path(__file__).resolve().parent  # src/
 ROOT_DIR = BASE_DIR.parent                  # project root
 DB_PATH = BASE_DIR / "zankl.db"
 
-# Templates & Static
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
 
-# ------------------------------------
-# DB
-# ------------------------------------
+# ---------------- DB ----------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -57,7 +54,6 @@ def init_db():
           UNIQUE(week_plan_id, row_index, day_index)
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +61,6 @@ def init_db():
           standort TEXT
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS global_small_jobs(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,14 +70,10 @@ def init_db():
           UNIQUE(standort, row_index)
         )
     """)
-
     conn.commit(); conn.close()
-
 init_db()
 
-# ------------------------------------
-# Helpers (Standort/KW/Days)
-# ------------------------------------
+# --------------- Helpers ---------------
 def build_days(year: int, kw: int):
     kw = max(1, min(kw, 53))
     start = date.fromisocalendar(year, kw, 1)  # Montag
@@ -93,8 +84,7 @@ def canon_standort(s: str | None) -> str:
     s = (s or "").strip()
     if not s:
         return "engelbrechts"
-    s_low = " ".join(s.lower().split())
-    s_low = s_low.replace("ß", "ss").replace("_", "-")
+    s_low = " ".join(s.lower().split()).replace("ß", "ss").replace("_", "-")
     aliases = {
         "engelbrechts": "engelbrechts", "eng": "engelbrechts", "e": "engelbrechts",
         "gross gerungs": "gross-gerungs", "gross-gerungs": "gross-gerungs",
@@ -130,14 +120,37 @@ def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
         return int(y2), int(w2)
     return int(y), int(w)
 
-# ------------------------------------
-# zentrale Week-Logik
-# ------------------------------------
+def _pint(v):
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+def derive_year_kw_from_request(request: Request, data: dict) -> tuple[int, int]:
+    """
+    KW/Jahr robust ermitteln:
+    1) aus Body (falls gültig), 2) Referer-URL (/week?kw=..&year=..), 3) auto_view_target().
+    """
+    y = _pint(data.get("year")); w = _pint(data.get("kw"))
+    if y is not None and w is not None:
+        return y, w
+    ref = request.headers.get("referer") or request.headers.get("Referer") or ""
+    try:
+        qs = parse_qs(urlparse(ref).query)
+        if y is None: y = _pint((qs.get("year") or [""])[0])
+        if w is None: w = _pint((qs.get("kw") or [""])[0])
+    except Exception:
+        pass
+    if y is not None and w is not None:
+        return y, w
+    ay, aw = auto_view_target()
+    return int(y or ay), int(w or aw)
+
+# --------------- zentrale Week-Logik ---------------
 def build_week_context(year: int, kw: int, standort: str):
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        # Plan holen/erzeugen
         cur.execute("SELECT id,row_count,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, st))
         plan = cur.fetchone()
         if not plan:
@@ -150,13 +163,11 @@ def build_week_context(year: int, kw: int, standort: str):
         else:
             plan_id, rows, four = plan["id"], plan["row_count"], plan["four_day_week"]
 
-        # Mitarbeiter
         cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
         employees = [{"id": e["id"], "name": e["name"]} for e in cur.fetchall()]
         if employees:
             rows = max(rows, len(employees))
 
-        # Grid
         grid = [[{"text": ""} for _ in range(5)] for _ in range(rows)]
         cur.execute("SELECT row_index,day_index,text FROM week_cells WHERE week_plan_id=?", (plan_id,))
         for r in cur.fetchall():
@@ -164,7 +175,6 @@ def build_week_context(year: int, kw: int, standort: str):
             if 0 <= ri < rows and 0 <= di < 5:
                 grid[ri][di]["text"] = r["text"] or ""
 
-        # Kleinbaustellen (Liste)
         cur.execute("SELECT row_index,text FROM global_small_jobs WHERE standort=? ORDER BY row_index", (st,))
         small_jobs = [{"row_index": s["row_index"], "text": s["text"] or ""} for s in cur.fetchall()]
         max_idx = max([x["row_index"] for x in small_jobs], default=-1)
@@ -185,13 +195,22 @@ def build_week_context(year: int, kw: int, standort: str):
     finally:
         conn.close()
 
-# ------------------------------------
-# Admin/Debug/Health
-# ------------------------------------
+# ---------------- Admin/Debug/Health ----------------
 @app.get("/")
 def root():
-    # Komfort: Root führt zur View
-    return RedirectResponse(url="/view", status_code=307)
+    # Root liefert 200 OK (kein Redirect-Status) → verhindert Deploy-Timeouts beim Healthcheck auf "/"
+    html = """
+    <!doctype html><html lang="de"><head>
+      <meta charset="utf-8">
+      <meta http-equiv="refresh" content="0; url=/view">
+      <title>Zankl-Plan</title>
+      <style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;padding:24px;color:#0f172a}</style>
+    </head><body>
+      <h1>Zankl-Plan</h1>
+      <p>Weiterleitung zur Ansicht… Falls nichts passiert, /viewhier klicken</a>.</p>
+    </body></html>
+    """
+    return HTMLResponse(html, status_code=200)
 
 @app.get("/admin/routes")
 def admin_routes():
@@ -220,27 +239,19 @@ def admin_peek_week(standort: str, year: int, kw: int):
 
 @app.get("/admin/seed-week")
 def admin_seed_week(standort: str = "engelbrechts", year: int = None, kw: int = None):
-    """
-    Seedet Employees (falls leer), legt den Plan an und schreibt Beispiel-Zellen.
-    Aufruf: /admin/seed-week?standort=engelbrechts&year=2026&kw=3
-    """
     if year is None or kw is None:
         y, w = date.today().isocalendar()[:2]
         year = year or int(y)
         kw = kw or int(w)
-
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
-        # Employees: falls leer, drei Demo-Einträge
         cur.execute("SELECT COUNT(*) AS n FROM employees WHERE standort=?", (st,))
         if cur.fetchone()["n"] == 0:
             cur.executemany(
                 "INSERT INTO employees(name, standort) VALUES(?, ?)",
                 [("Team A", st), ("Team B", st), ("Leihkraft 1", st)]
             )
-
-        # Plan sicherstellen
         cur.execute("SELECT id FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, st))
         row = cur.fetchone()
         if not row:
@@ -251,8 +262,6 @@ def admin_seed_week(standort: str = "engelbrechts", year: int = None, kw: int = 
             plan_id = cur.lastrowid
         else:
             plan_id = row["id"]
-
-        # Ein paar Cells füllen (nur wenn leer)
         cur.execute("SELECT COUNT(*) AS n FROM week_cells WHERE week_plan_id=?", (plan_id,))
         if cur.fetchone()["n"] == 0:
             demo = [
@@ -282,11 +291,21 @@ def health():
 def favicon():
     return Response(status_code=204)
 
-# ------------------------------------
-# WEEK – Edit Seite
-# ------------------------------------
+# ---------------- WEEK – Edit ----------------
 @app.get("/week", response_class=HTMLResponse)
-def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engelbrechts"):
+def week(
+    request: Request,
+    kw: int | None = None,
+    year: int | None = None,
+    standort: str = "engelbrechts"
+):
+    # Ohne Parameter: aktuelle ISO-KW/Jahr (nicht die Freitag-12-Regel!)
+    if year is None or kw is None:
+        today = date.today()
+        iso = today.isocalendar()  # (year, week, weekday)
+        year = int(year or iso[0])
+        kw = int(kw or iso[1])
+
     standort = canon_standort(standort)
     try:
         ctx = build_week_context(year, kw, standort)
@@ -308,11 +327,8 @@ def week(request: Request, kw: int = 1, year: int = 2025, standort: str = "engel
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
 
-# ------------------------------------
-# WEEK API (UPSERT, Plan auto-ensure)
-# ------------------------------------
+# ---------------- WEEK API (robust) ----------------
 def _ensure_plan(cur, year: int, kw: int, standort: str) -> tuple[int, int]:
-    """Plan holen oder anlegen. Gibt (plan_id, four_day_week) zurück."""
     cur.execute("SELECT id,four_day_week FROM week_plans WHERE year=? AND kw=? AND standort=?", (year, kw, standort))
     p = cur.fetchone()
     if p:
@@ -327,9 +343,12 @@ def _ensure_plan(cur, year: int, kw: int, standort: str) -> tuple[int, int]:
 async def set_cell(request: Request, data: dict = Body(...), standort_q: str | None = Query(None, alias="standort")):
     conn = get_conn(); cur = conn.cursor()
     try:
-        year = int(data.get("year")); kw = int(data.get("kw"))
+        year, kw = derive_year_kw_from_request(request, data)
         standort = resolve_standort(request, data.get("standort"), standort_q)
-        row = int(data.get("row")); day = int(data.get("day")); val = data.get("value") or ""
+        row = _pint(data.get("row")); day = _pint(data.get("day"))
+        if row is None or day is None:
+            return JSONResponse({"ok": False, "error": "row/day invalid"}, status_code=400)
+        val = (data.get("value") or "")
 
         plan_id, four_flag = _ensure_plan(cur, year, kw, standort)
         if four_flag and day == 4:
@@ -341,68 +360,63 @@ async def set_cell(request: Request, data: dict = Body(...), standort_q: str | N
             ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
         """, (plan_id, row, day, val))
         conn.commit()
-        return {"ok": True, "standort": standort}
+        return {"ok": True, "standort": standort, "year": year, "kw": kw}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
 @app.post("/api/week/batch")
-async def save_batch(data: dict = Body(...)):
+async def save_batch(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
     try:
-        year = int(data.get("year")); kw = int(data.get("kw"))
-        standort = canon_standort(data.get("standort") or "engelbrechts")
+        year, kw = derive_year_kw_from_request(request, data)
+        standort = canon_standort(data.get("standort") or resolve_standort(request, None, None))
         updates = data.get("updates") or []
 
         plan_id, four_flag = _ensure_plan(cur, year, kw, standort)
-
         for u in updates:
-            row = int(u.get("row")); day = int(u.get("day"))
+            row = _pint(u.get("row")); day = _pint(u.get("day"))
+            if row is None or day is None:
+                continue
             if four_flag and day == 4:
                 continue
-            val = u.get("value") or ""
+            val = (u.get("value") or "")
             cur.execute("""
                 INSERT INTO week_cells(week_plan_id,row_index,day_index,text)
                 VALUES(?,?,?,?)
                 ON CONFLICT(week_plan_id,row_index,day_index) DO UPDATE SET text=excluded.text
             """, (plan_id, row, day, val))
         conn.commit()
-        return {"ok": True, "count": len(updates)}
+        return {"ok": True, "count": len(updates), "year": year, "kw": kw}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
 @app.post("/api/week/options")
-async def set_four_day(data: dict = Body(...)):
+async def set_four_day(request: Request, data: dict = Body(...)):
     conn = get_conn(); cur = conn.cursor()
     try:
-        year = int(data.get("year")); kw = int(data.get("kw"))
-        standort = canon_standort(data.get("standort") or "engelbrechts")
+        year, kw = derive_year_kw_from_request(request, data)
+        standort = canon_standort(data.get("standort") or resolve_standort(request, None, None))
         value = 1 if bool(data.get("four_day_week") or data.get("value")) else 0
         plan_id, _ = _ensure_plan(cur, year, kw, standort)
         cur.execute("UPDATE week_plans SET four_day_week=? WHERE id=?", (value, plan_id))
         conn.commit()
-        return {"ok": True, "four_day_week": bool(value)}
+        return {"ok": True, "four_day_week": bool(value), "year": year, "kw": kw}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
-# ------------------------------------
-# Kleinbaustellen (standortweit)
-# ------------------------------------
+# ---------------- Kleinbaustellen ----------------
 @app.post("/api/klein/set")
 async def klein_set(data: dict = Body(...)):
-    """
-    Speichert eine Kleinbaustellen-Zeile standortweit (nicht wochenbezogen).
-    Body: { standort: str, row_index: int, text: str }
-    """
     conn = get_conn(); cur = conn.cursor()
     try:
         standort = canon_standort(data.get("standort") or "engelbrechts")
-        row_index = int(data.get("row_index") or 0)
+        row_index = _pint(data.get("row_index")) or 0
         text = (data.get("text") or "").strip()
         cur.execute("""
             INSERT INTO global_small_jobs(standort,row_index,text)
@@ -416,78 +430,7 @@ async def klein_set(data: dict = Body(...)):
     finally:
         conn.close()
 
-# ------------------------------------
-# Einstellungen: Mitarbeiter
-# ------------------------------------
-@app.get("/settings/employees", response_class=HTMLResponse)
-def settings_employees_page(request: Request, standort: str = "engelbrechts"):
-    st = canon_standort(standort)
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees}
-        )
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-    finally:
-        conn.close()
-
-@app.post("/settings/employees", response_class=HTMLResponse)
-async def settings_employees_save(request: Request):
-    form = await request.form()
-    new_list = []
-    try:
-        if hasattr(form, "getlist"):
-            for v in form.getlist("emp_name_new[]"):
-                t = (v or "").strip()
-                if t:
-                    new_list.append(t)
-        else:
-            for k, v in form.multi_items():
-                if k == "emp_name_new[]":
-                    t = (v or "").strip()
-                    if t:
-                        new_list.append(t)
-    except Exception:
-        pass
-    st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
-
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        for n in new_list:
-            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
-        conn.commit()
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees, "saved": True}
-        )
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
-    finally:
-        conn.close()
-
-@app.post("/settings/employees/delete")
-async def settings_employees_delete(request: Request):
-    form = await request.form()
-    emp_id = int((form.get("emp_id") or "0") or 0)
-    st = form.get("standort") or request.query_params.get("standort") or "engelbrechts"
-    conn = get_conn(); cur = conn.cursor()
-    try:
-        if emp_id:
-            cur.execute("DELETE FROM employees WHERE id=?", (emp_id,))
-            conn.commit()
-        return RedirectResponse(url=f"/settings/employees?standort={canon_standort(st)}", status_code=303)
-    finally:
-        conn.close()
-
-# ------------------------------------
-# VIEW (read-only)
-# ------------------------------------
+# ---------------- VIEW (read-only) ----------------
 @app.get("/view", response_class=HTMLResponse)
 def view_shortcut(
     request: Request,
