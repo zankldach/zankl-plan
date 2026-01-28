@@ -1,21 +1,16 @@
-
-from fastapi import FastAPI, Request, Body, Query, Depends
+from fastapi import FastAPI, Request, Body, Query
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
 import sqlite3
 from pathlib import Path
 from datetime import date, timedelta, datetime
 import traceback
 from urllib.parse import urlparse, parse_qs
-from passlib.hash import bcrypt
 
 app = FastAPI(title="Zankl-Plan MVP")
-app.add_middleware(SessionMiddleware, secret_key="CHANGE_ME_SECRET")
-
-BASE_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BASE_DIR.parent
+BASE_DIR = Path(__file__).resolve().parent  # src/
+ROOT_DIR = BASE_DIR.parent                  # project root
 DB_PATH = BASE_DIR / "zankl.db"
 
 templates = Jinja2Templates(directory=str(ROOT_DIR / "templates"))
@@ -33,8 +28,6 @@ def column_exists(cur, table: str, column: str) -> bool:
 
 def init_db():
     conn = get_conn(); cur = conn.cursor()
-
-    # bestehende Tabellen
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +41,6 @@ def init_db():
     """)
     if not column_exists(cur, "week_plans", "four_day_week"):
         cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +51,6 @@ def init_db():
           UNIQUE(week_plan_id, row_index, day_index)
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +58,6 @@ def init_db():
           standort TEXT
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS global_small_jobs(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,68 +67,8 @@ def init_db():
           UNIQUE(standort, row_index)
         )
     """)
-
-    # 🔐 NEU: Users
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          username TEXT UNIQUE,
-          password_hash TEXT,
-          role TEXT CHECK(role IN ('admin','viewer')),
-          standort TEXT
-        )
-    """)
-
     conn.commit(); conn.close()
-
 init_db()
-
-# ---------------- Auth Helper ----------------
-def get_user(request: Request):
-    return request.session.get("user")
-
-def require_login(request: Request):
-    user = get_user(request)
-    if not user:
-        raise RedirectResponse("/login", status_code=303)
-    return user
-
-def require_admin(user=Depends(require_login)):
-    if user["role"] != "admin":
-        raise RedirectResponse("/view/week", status_code=303)
-    return user
-
-# ---------------- Login ----------------
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
-
-@app.post("/login")
-async def login(request: Request):
-    form = await request.form()
-    username = (form.get("username") or "").strip()
-    password = form.get("password") or ""
-
-    conn = get_conn(); cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username=?", (username,))
-    u = cur.fetchone()
-    conn.close()
-
-    if not u or not bcrypt.verify(password, u["password_hash"]):
-        return RedirectResponse("/login?error=1", status_code=303)
-
-    request.session["user"] = {
-        "id": u["id"],
-        "username": u["username"],
-        "role": u["role"],
-        "standort": u["standort"],
-    }
-    return RedirectResponse("/week", status_code=303)
-
-@app.get("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=303)
 
 # ---------------- Helpers ----------------
 def build_days(year: int, kw: int):
