@@ -506,7 +506,7 @@ def view_week(
   kw: int | None = None,
   standort: str = "engelbrechts"
 ):
-        if not request.session.get("user"):
+    if not request.session.get("user"):
         return RedirectResponse("/login", status_code=303)
     try:
         if year is None or kw is None:
