@@ -344,6 +344,27 @@ def admin_peek_klein(standort: str = "engelbrechts"):
         return {"standort": st, "items": [dict(r) for r in cur.fetchall()]}
     finally:
         conn.close()
+@app.get("/admin/debug-login")
+def admin_debug_login():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, username, password_hash, role, standort FROM users WHERE username=?", ("admin",))
+        row = cur.fetchone()
+        if not row:
+            return {"found": False}
+        return {
+            "found": True,
+            "user": {
+                "id": row["id"],
+                "username": row["username"],
+                "role": row["role"],
+                "standort": row["standort"],
+                "password_hash_prefix": (row["password_hash"] or "")[:12]
+            }
+        }
+    finally:
+        conn.close()
+
 
 # ---------------- Einstellungen: Mitarbeiter (unverändert) ----------------
 @app.get("/settings/employees", response_class=HTMLResponse)
