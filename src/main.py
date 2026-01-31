@@ -513,6 +513,11 @@ def view_week(
 ):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=303)
+
+    user = request.session.get("user")
+    if user and user.get("role") == "viewer":
+        standort = user.get("standort") or standort
+
     try:
         if year is None or kw is None:
             year, kw = auto_view_target()
