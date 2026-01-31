@@ -9,7 +9,6 @@ from pathlib import Path
 from datetime import date, timedelta, datetime
 import traceback
 from urllib.parse import urlparse, parse_qs
-from starlette.middleware.sessions import SessionMiddleware
 import hashlib
 import hmac
 
@@ -314,8 +313,6 @@ def seed_admin():
         return {"ok": True, "note": "admin created"}
     finally:
         conn.close()
-
-    return {"routes": sorted([r.path for r in app.routes])}
 
 @app.get("/admin/peek-week")
 def admin_peek_week(standort: str, year: int, kw: int):
