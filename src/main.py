@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, Request, Body, Query
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +14,10 @@ import hashlib
 import hmac
 
 app = FastAPI(title="Zankl-Plan MVP")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="zankl-plan-secret-change-me"
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key="CHANGE_ME_SUPER_SECRET_KEY"
@@ -252,7 +257,10 @@ def logout(request: Request):
 
 # ---------------- Root/Health/Admin ----------------
 @app.get("/")
-def root():
+def root(request: Request):
+    if request.session.get("user"):
+        return RedirectResponse("/view/week", status_code=303)
+    return RedirectResponse("/login", status_code=303)
     # 200 OK + Meta-Refresh → verhindert Render-Healthcheck-Probleme
     html = """
     <!doctype html><html lang="de"><head>
@@ -547,3 +555,35 @@ async def klein_set(data: dict = Body(...)):
         return {"ok": True}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+# ---------------- LOGIN (Block 1 – Dummy) ----------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": None}
+    )
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request):
+    form = await request.form()
+    username = (form.get("username") or "").strip()
+    password = (form.get("password") or "").strip()
+
+    # TEMPORÄR: Test-Login
+    if username == "admin" and password == "admin":
+        request.session["user"] = {
+            "name": "Admin",
+            "role": "admin"
+        }
+        return RedirectResponse("/view/week", status_code=303)
+
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": "Login fehlgeschlagen"}
+    )
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
