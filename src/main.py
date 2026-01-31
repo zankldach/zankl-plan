@@ -244,7 +244,10 @@ async def login(request: Request):
         "standort": user["standort"],
     }
 
-    return RedirectResponse("/week", status_code=303)
+    if user["role"] == "admin":
+        return RedirectResponse("/week?standort=engelbrechts", status_code=303)
+    return RedirectResponse("/view/week", status_code=303)
+
 
 @app.get("/logout")
 def logout(request: Request):
