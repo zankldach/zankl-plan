@@ -128,7 +128,16 @@ def resolve_standort(request: Request, body_standort: str | None, query_standort
     return "engelbrechts"
 
 def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
-    # ---------------- Auth / Password ----------------
+    # Viewer: Normal = aktuelle ISO-KW; ab Fr 12:00 & Sa/So -> nächste KW
+    now = now or datetime.now()
+    y, w, wd = now.isocalendar()
+    if (wd == 5 and now.hour >= 12) or (wd >= 6):
+        monday = date.fromisocalendar(y, w, 1)
+        next_monday = monday + timedelta(days=7)
+        y2, w2 = next_monday.isocalendar()[:2]
+        return int(y2), int(w2)
+    return int(y), int(w)
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
