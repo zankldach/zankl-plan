@@ -279,9 +279,13 @@ def health():
 def favicon():
     return Response(status_code=204)
 
+
 @app.get("/admin/routes")
 def admin_routes():
-    @app.get("/admin/users")
+    return {"routes": sorted([r.path for r in app.routes])}
+
+
+@app.get("/admin/users")
 def admin_users():
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -289,6 +293,7 @@ def admin_users():
         return {"users": [dict(r) for r in cur.fetchall()]}
     finally:
         conn.close()
+
 @app.get("/admin/seed-admin")
 def seed_admin():
     conn = get_conn(); cur = conn.cursor()
