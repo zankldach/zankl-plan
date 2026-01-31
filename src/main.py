@@ -18,10 +18,6 @@ app.add_middleware(
     SessionMiddleware,
     secret_key="zankl-plan-secret-change-me"
 )
-app.add_middleware(
-    SessionMiddleware,
-    secret_key="CHANGE_ME_SUPER_SECRET_KEY"
-)
 BASE_DIR = Path(__file__).resolve().parent  # src/
 
 ROOT_DIR = BASE_DIR.parent                  # project root
@@ -510,6 +506,8 @@ def view_week(
   kw: int | None = None,
   standort: str = "engelbrechts"
 ):
+        if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=303)
     try:
         if year is None or kw is None:
             year, kw = auto_view_target()
@@ -555,35 +553,3 @@ async def klein_set(data: dict = Body(...)):
         return {"ok": True}
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
-# ---------------- LOGIN (Block 1 – Dummy) ----------------
-
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": None}
-    )
-
-@app.post("/login", response_class=HTMLResponse)
-async def login_submit(request: Request):
-    form = await request.form()
-    username = (form.get("username") or "").strip()
-    password = (form.get("password") or "").strip()
-
-    # TEMPORÄR: Test-Login
-    if username == "admin" and password == "admin":
-        request.session["user"] = {
-            "name": "Admin",
-            "role": "admin"
-        }
-        return RedirectResponse("/view/week", status_code=303)
-
-    return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": "Login fehlgeschlagen"}
-    )
-
-@app.get("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=303)
