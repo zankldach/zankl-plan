@@ -281,6 +281,32 @@ def favicon():
 
 @app.get("/admin/routes")
 def admin_routes():
+    @app.get("/admin/users")
+def admin_users():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, username, role, standort FROM users ORDER BY id")
+        return {"users": [dict(r) for r in cur.fetchall()]}
+    finally:
+        conn.close()
+@app.get("/admin/seed-admin")
+def seed_admin():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        # Admin-User: admin / admin (nur initial)
+        cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
+        if cur.fetchone():
+            return {"ok": True, "note": "admin exists"}
+
+        cur.execute(
+            "INSERT INTO users(username, password_hash, role, standort) VALUES(?,?,?,?)",
+            ("admin", hash_password("admin"), "admin", "engelbrechts")
+        )
+        conn.commit()
+        return {"ok": True, "note": "admin created"}
+    finally:
+        conn.close()
+
     return {"routes": sorted([r.path for r in app.routes])}
 
 @app.get("/admin/peek-week")
