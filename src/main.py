@@ -399,7 +399,12 @@ def week(
 
     standort = canon_standort(standort)
     try:
-        ctx = build_week_context(year, kw, standort)
+user = request.session.get("user")
+
+if user and user.get("role") == "viewer":
+    standort = user.get("standort")
+
+ctx = build_week_context(year, kw, standort)
         return templates.TemplateResponse(
             "week.html",
             {
