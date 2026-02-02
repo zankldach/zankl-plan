@@ -158,6 +158,13 @@ def verify_password(password: str, password_hash: str) -> bool:
     )
 def get_current_user(request: Request):
     return request.session.get("user")
+def require_write(request: Request):
+    u = request.session.get("user")
+    if not u:
+        return RedirectResponse("/login", status_code=303)
+    if not u.get("is_write"):
+        return RedirectResponse("/view/week", status_code=303)
+    return None
 
 
 # ---------------- zentrale Week-Logik ----------------
@@ -398,6 +405,10 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     form = await request.form()
     new_list = []
     try:
@@ -455,6 +466,10 @@ def week(
     year: int | None = Query(None),
     standort: str = "engelbrechts"
 ):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     if year is None or kw is None:
         iso = _date.today().isocalendar()  # (year, week, weekday)
         if year is None:
