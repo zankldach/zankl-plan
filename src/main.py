@@ -468,7 +468,7 @@ def admin_debug_login(request: Request):
 # ---------------- Einstellungen: Mitarbeiter (unverändert) ----------------
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
-        guard = require_write(request)
+    guard = require_write(request)
     if guard:
         return guard
     st = canon_standort(standort)
@@ -487,14 +487,10 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
-        guard = require_write(request)
-    if guard:
-        return guard
     guard = require_write(request)
     if guard:
         return guard
-
-    form = await request.form()
+        form = await request.form()
     new_list = []
     try:
         if hasattr(form, "getlist"):
