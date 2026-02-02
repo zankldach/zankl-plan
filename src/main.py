@@ -300,12 +300,20 @@ def favicon():
 
 
 @app.get("/admin/routes")
-def admin_routes():
+def admin_routes(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+        
     return {"routes": sorted([r.path for r in app.routes])}
 
 
 @app.get("/admin/users")
-def admin_users():
+def admin_users(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id, username, is_write, can_view_eb, can_view_gg FROM users ORDER BY id")
@@ -314,7 +322,11 @@ def admin_users():
         conn.close()
 
 @app.get("/admin/seed-admin")
-def seed_admin():
+def seed_admin(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     conn = get_conn(); cur = conn.cursor()
     try:
         # Admin-User: admin / admin (nur initial)
@@ -332,7 +344,10 @@ def seed_admin():
     finally:
         conn.close()
 @app.get("/admin/seed-viewer-eb")
-def seed_viewer_eb():
+def seed_viewer_eb(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id FROM users WHERE username=?", ("viewer_eb",))
@@ -350,7 +365,11 @@ def seed_viewer_eb():
 
 
 @app.get("/admin/seed-viewer-gg")
-def seed_viewer_gg():
+def seed_viewer_gg(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id FROM users WHERE username=?", ("viewer_gg",))
@@ -368,7 +387,11 @@ def seed_viewer_gg():
 
 
 @app.get("/admin/seed-viewer-both")
-def seed_viewer_both():
+def seed_viewer_both(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id FROM users WHERE username=?", ("viewer_both",))
@@ -416,7 +439,11 @@ def admin_peek_klein(standort: str = "engelbrechts"):
     finally:
         conn.close()
 @app.get("/admin/debug-login")
-def admin_debug_login():
+def admin_debug_login(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
     conn = get_conn(); cur = conn.cursor()
     try:
         cur.execute("SELECT id, username, password_hash, is_write, can_view_eb, can_view_gg FROM users WHERE username=?", ("admin",))
@@ -441,6 +468,9 @@ def admin_debug_login():
 # ---------------- Einstellungen: Mitarbeiter (unverändert) ----------------
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
+        guard = require_write(request)
+    if guard:
+        return guard
     st = canon_standort(standort)
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -457,6 +487,9 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
 
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
+        guard = require_write(request)
+    if guard:
+        return guard
     guard = require_write(request)
     if guard:
         return guard
@@ -496,6 +529,9 @@ async def settings_employees_save(request: Request):
 
 @app.post("/settings/employees/delete")
 async def settings_employees_delete(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
     form = await request.form()
     emp_id = int(((form.get("emp_id") or "0") or 0))
     st = form.get("standort") or request.query_params.get("standort") or "engelbrechts"
