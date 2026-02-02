@@ -76,7 +76,7 @@ def init_db():
           UNIQUE(standort, row_index)
         )
     """)
-        # ---- Users / Login ----
+    # ---- Users / Login ----
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,15 +149,6 @@ def verify_password(password: str, password_hash: str) -> bool:
 def get_current_user(request: Request):
     return request.session.get("user")
 
-    # Viewer: Normal = aktuelle ISO-KW; ab Fr 12:00 & Sa/So -> nächste KW
-    now = now or datetime.now()
-    y, w, wd = now.isocalendar()
-    if (wd == 5 and now.hour >= 12) or (wd >= 6):
-        monday = date.fromisocalendar(y, w, 1)
-        next_monday = monday + timedelta(days=7)
-        y2, w2 = next_monday.isocalendar()[:2]
-        return int(y2), int(w2)
-    return int(y), int(w)
 
 # ---------------- zentrale Week-Logik ----------------
 def build_week_context(year: int, kw: int, standort: str):
