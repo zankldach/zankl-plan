@@ -148,16 +148,36 @@ def auto_view_target(now: datetime | None = None) -> tuple[int, int]:
         return int(y2), int(w2)
     return int(y), int(w)
 
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
 
 def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(
         hashlib.sha256(password.encode("utf-8")).hexdigest(),
         password_hash
     )
+
+
+# 👉 GENAU HIER EINFÜGEN
+def password_ok(pw: str) -> bool:
+    if pw is None:
+        return False
+    pw = str(pw)
+    if len(pw) < 8:
+        return False
+    has_letter = any(c.isalpha() for c in pw)
+    has_digit = any(c.isdigit() for c in pw)
+    has_special = any(not c.isalnum() for c in pw)
+    return has_letter and has_digit and has_special
+# 👈 BIS HIER
+
+
 def get_current_user(request: Request):
     return request.session.get("user")
+
+
 def require_write(request: Request):
     u = request.session.get("user")
     if not u:
@@ -165,6 +185,7 @@ def require_write(request: Request):
     if not u.get("is_write"):
         return RedirectResponse("/view/week", status_code=303)
     return None
+
 
 
 # ---------------- zentrale Week-Logik ----------------
@@ -466,6 +487,23 @@ def admin_debug_login(request: Request):
 
 
 # ---------------- Einstellungen: Mitarbeiter (unverändert) ----------------
+@app.get("/settings/users", response_class=HTMLResponse)
+def settings_users_page(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, username, is_write, can_view_eb, can_view_gg FROM users ORDER BY username")
+        users = [dict(r) for r in cur.fetchall()]
+        return templates.TemplateResponse(
+            "settings_users.html",
+            {"request": request, "users": users}
+        )
+    finally:
+        conn.close()
+
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
     guard = require_write(request)
