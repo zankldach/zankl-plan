@@ -82,10 +82,20 @@ def init_db():
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT UNIQUE,
           password_hash TEXT,
-          role TEXT CHECK(role IN ('admin','viewer')),
-          standort TEXT
+          is_write INTEGER NOT NULL DEFAULT 0,
+          can_view_eb INTEGER NOT NULL DEFAULT 0,
+          can_view_gg INTEGER NOT NULL DEFAULT 0
         )
     """)
+
+    # Migration: falls alte Spalten fehlen → hinzufügen
+    if not column_exists(cur, "users", "is_write"):
+        cur.execute("ALTER TABLE users ADD COLUMN is_write INTEGER NOT NULL DEFAULT 0")
+    if not column_exists(cur, "users", "can_view_eb"):
+        cur.execute("ALTER TABLE users ADD COLUMN can_view_eb INTEGER NOT NULL DEFAULT 0")
+    if not column_exists(cur, "users", "can_view_gg"):
+        cur.execute("ALTER TABLE users ADD COLUMN can_view_gg INTEGER NOT NULL DEFAULT 0")
+
 
     conn.commit(); conn.close()
 init_db()
@@ -282,7 +292,7 @@ def admin_routes():
 def admin_users():
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id, username, role, standort FROM users ORDER BY id")
+        cur.execute("SELECT id, username, is_write, can_view_eb, can_view_gg FROM users ORDER BY id")
         return {"users": [dict(r) for r in cur.fetchall()]}
     finally:
         conn.close()
@@ -296,10 +306,11 @@ def seed_admin():
         if cur.fetchone():
             return {"ok": True, "note": "admin exists"}
 
-        cur.execute(
-            "INSERT INTO users(username, password_hash, role, standort) VALUES(?,?,?,?)",
-            ("admin", hash_password("admin"), "admin", "engelbrechts")
-        )
+cur.execute(
+    "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+    ("admin", hash_password("admin"), 1, 1, 1)
+)
+
         conn.commit()
         return {"ok": True, "note": "admin created"}
     finally:
@@ -339,7 +350,7 @@ def admin_peek_klein(standort: str = "engelbrechts"):
 def admin_debug_login():
     conn = get_conn(); cur = conn.cursor()
     try:
-        cur.execute("SELECT id, username, password_hash, role, standort FROM users WHERE username=?", ("admin",))
+        cur.execute("SELECT id, username, password_hash, is_write, can_view_eb, can_view_gg FROM users WHERE username=?", ("admin",))
         row = cur.fetchone()
         if not row:
             return {"found": False}
@@ -348,8 +359,9 @@ def admin_debug_login():
             "user": {
                 "id": row["id"],
                 "username": row["username"],
-                "role": row["role"],
-                "standort": row["standort"],
+                "is_write": row["is_write"],
+                "can_view_eb": row["can_view_eb"],
+                "can_view_gg": row["can_view_gg"],
                 "password_hash_prefix": (row["password_hash"] or "")[:12]
             }
         }
