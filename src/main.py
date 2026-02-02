@@ -503,6 +503,69 @@ def settings_users_page(request: Request):
         )
     finally:
         conn.close()
+@app.post("/settings/users/create")
+async def settings_users_create(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
+    form = await request.form()
+    username = (form.get("username") or "").strip()
+    password = form.get("password") or ""
+
+    is_write = 1 if form.get("is_write") else 0
+    can_view_eb = 1 if form.get("can_view_eb") else 0
+    can_view_gg = 1 if form.get("can_view_gg") else 0
+
+    if not username:
+        return RedirectResponse("/settings/users?error=1", status_code=303)
+
+    if not password_ok(password):
+        return RedirectResponse("/settings/users?pw=bad", status_code=303)
+
+    # write darf immer beide Views
+    if is_write:
+        can_view_eb, can_view_gg = 1, 1
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", (username,))
+        if cur.fetchone():
+            return RedirectResponse("/settings/users?exists=1", status_code=303)
+
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+            (username, hash_password(password), is_write, can_view_eb, can_view_gg)
+        )
+        conn.commit()
+        return RedirectResponse("/settings/users?created=1", status_code=303)
+    finally:
+        conn.close()
+
+
+@app.post("/settings/users/delete")
+async def settings_users_delete(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
+    form = await request.form()
+    user_id = int(form.get("user_id") or "0")
+
+    # Safety: nicht sich selbst löschen
+    me = request.session.get("user") or {}
+    if me.get("id") == user_id:
+        return RedirectResponse("/settings/users?self=1", status_code=303)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        if user_id:
+            cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+            conn.commit()
+        return RedirectResponse("/settings/users?deleted=1", status_code=303)
+    finally:
+        conn.close()
+
 
 @app.get("/settings/employees", response_class=HTMLResponse)
 def settings_employees_page(request: Request, standort: str = "engelbrechts"):
@@ -528,10 +591,10 @@ async def settings_employees_save(request: Request):
     guard = require_write(request)
     if guard:
         return guard
-        form = await request.form()
+
+    form = await request.form()
     new_list = []
-    try:
-        if hasattr(form, "getlist"):
+
             for v in form.getlist("emp_name_new[]"):
                 t = (v or "").strip()
                 if t:
