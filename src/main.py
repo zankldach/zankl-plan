@@ -595,6 +595,8 @@ async def settings_employees_save(request: Request):
     form = await request.form()
     new_list = []
 
+    try:
+        if hasattr(form, "getlist"):
             for v in form.getlist("emp_name_new[]"):
                 t = (v or "").strip()
                 if t:
@@ -607,6 +609,7 @@ async def settings_employees_save(request: Request):
                         new_list.append(t)
     except Exception:
         pass
+
     st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
     conn = get_conn(); cur = conn.cursor()
     try:
@@ -623,6 +626,7 @@ async def settings_employees_save(request: Request):
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
+
 
 @app.post("/settings/employees/delete")
 async def settings_employees_delete(request: Request):
