@@ -331,6 +331,58 @@ def seed_admin():
         return {"ok": True, "note": "admin created"}
     finally:
         conn.close()
+@app.get("/admin/seed-viewer-eb")
+def seed_viewer_eb():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", ("viewer_eb",))
+        if cur.fetchone():
+            return {"ok": True, "note": "viewer_eb exists"}
+
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+            ("viewer_eb", hash_password("viewer_eb!1"), 0, 1, 0)
+        )
+        conn.commit()
+        return {"ok": True, "note": "viewer_eb created (viewer_eb / viewer_eb!1)"}
+    finally:
+        conn.close()
+
+
+@app.get("/admin/seed-viewer-gg")
+def seed_viewer_gg():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", ("viewer_gg",))
+        if cur.fetchone():
+            return {"ok": True, "note": "viewer_gg exists"}
+
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+            ("viewer_gg", hash_password("viewer_gg!1"), 0, 0, 1)
+        )
+        conn.commit()
+        return {"ok": True, "note": "viewer_gg created (viewer_gg / viewer_gg!1)"}
+    finally:
+        conn.close()
+
+
+@app.get("/admin/seed-viewer-both")
+def seed_viewer_both():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", ("viewer_both",))
+        if cur.fetchone():
+            return {"ok": True, "note": "viewer_both exists"}
+
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+            ("viewer_both", hash_password("viewer_both!1"), 0, 1, 1)
+        )
+        conn.commit()
+        return {"ok": True, "note": "viewer_both created (viewer_both / viewer_both!1)"}
+    finally:
+        conn.close()
 
 
 @app.get("/admin/peek-week")
