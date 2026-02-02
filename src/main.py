@@ -585,7 +585,6 @@ def settings_employees_page(request: Request, standort: str = "engelbrechts"):
         return HTMLResponse("<h1>Mitarbeiter</h1><p>Template fehlt.</p>", status_code=200)
     finally:
         conn.close()
-
 @app.post("/settings/employees", response_class=HTMLResponse)
 async def settings_employees_save(request: Request):
     guard = require_write(request)
@@ -610,24 +609,28 @@ async def settings_employees_save(request: Request):
     except Exception:
         pass
 
-    st = resolve_standort(request, form.get("standort"), request.query_params.get("standort"))
+    st = resolve_standort(
+        request,
+        form.get("standort"),
+        request.query_params.get("standort")
+    )
+
     conn = get_conn(); cur = conn.cursor()
     try:
         for n in new_list:
-            cur.execute("INSERT INTO employees(name, standort) VALUES(?, ?)", (n, st))
+            cur.execute(
+                "INSERT INTO employees(name, standort) VALUES(?, ?)",
+                (n, st)
+            )
         conn.commit()
-        cur.execute("SELECT id,name FROM employees WHERE standort=? ORDER BY id", (st,))
-        employees = [{"id": r["id"], "name": r["name"]} for r in cur.fetchall()]
-        return templates.TemplateResponse(
-            "settings_employees.html",
-            {"request": request, "standort": st, "employees": employees, "saved": True}
+        return RedirectResponse(
+            f"/settings/employees?standort={st}&saved=1",
+            status_code=303
         )
-    except Exception:
-        return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
     finally:
         conn.close()
 
-
+                 
 @app.post("/settings/employees/delete")
 async def settings_employees_delete(request: Request):
     guard = require_write(request)
