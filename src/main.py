@@ -306,15 +306,16 @@ def seed_admin():
         if cur.fetchone():
             return {"ok": True, "note": "admin exists"}
 
-cur.execute(
-    "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
-    ("admin", hash_password("admin"), 1, 1, 1)
-)
+        cur.execute(
+            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+            ("admin", hash_password("admin"), 1, 1, 1)
+        )
 
         conn.commit()
         return {"ok": True, "note": "admin created"}
     finally:
         conn.close()
+
 
 @app.get("/admin/peek-week")
 def admin_peek_week(standort: str, year: int, kw: int):
