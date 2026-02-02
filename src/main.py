@@ -240,13 +240,22 @@ async def login(request: Request):
     request.session["user"] = {
         "id": user["id"],
         "username": user["username"],
-        "role": user["role"],
-        "standort": user["standort"],
+        "is_write": int(user["is_write"]),
+        "can_view_eb": int(user["can_view_eb"]),
+        "can_view_gg": int(user["can_view_gg"]),
     }
 
-    if user["role"] == "admin":
+    # write/admin → Edit
+    if int(user["is_write"]) == 1:
         return RedirectResponse("/week?standort=engelbrechts", status_code=303)
-    return RedirectResponse("/view/week", status_code=303)
+
+    # viewer → bevorzugter Standort
+    if int(user["can_view_eb"]) == 1:
+        return RedirectResponse("/view/week?standort=engelbrechts", status_code=303)
+    if int(user["can_view_gg"]) == 1:
+        return RedirectResponse("/view/week?standort=gross-gerungs", status_code=303)
+
+    return RedirectResponse("/login?error=1", status_code=303)
 
 
 @app.get("/logout")
@@ -564,10 +573,21 @@ def view_week(
 ):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=303)
+    user = request.session.get("user") or {}
 
-    user = request.session.get("user")
-    if user and user.get("role") == "viewer":
-        standort = user.get("standort") or standort
+    # write sieht alles
+    if not user.get("is_write"):
+        st = canon_standort(standort)
+        if st == "engelbrechts" and not user.get("can_view_eb"):
+            # wenn er GG darf, dorthin
+            if user.get("can_view_gg"):
+                return RedirectResponse("/view/week?standort=gross-gerungs", status_code=303)
+            return RedirectResponse("/login?error=1", status_code=303)
+
+        if st == "gross-gerungs" and not user.get("can_view_gg"):
+            if user.get("can_view_eb"):
+                return RedirectResponse("/view/week?standort=engelbrechts", status_code=303)
+            return RedirectResponse("/login?error=1", status_code=303)
 
     try:
         if year is None or kw is None:
