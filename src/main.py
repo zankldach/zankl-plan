@@ -182,9 +182,13 @@ def require_write(request: Request):
     u = request.session.get("user")
     if not u:
         return RedirectResponse("/login", status_code=303)
-    if not u.get("is_write"):
+
+    # write oder admin dürfen schreiben / admin-pages sehen
+    if u.get("role") not in ("write", "admin"):
         return RedirectResponse("/view/week", status_code=303)
+
     return None
+
 
 
 
