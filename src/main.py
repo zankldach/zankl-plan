@@ -190,6 +190,13 @@ def require_write(request: Request):
     return None
 
 
+def require_admin(request: Request):
+    u = request.session.get("user")
+    if not u:
+        return RedirectResponse("/login", status_code=303)
+    if u.get("role") != "admin":
+        return RedirectResponse("/view/week", status_code=303)
+    return None
 
 
 # ---------------- zentrale Week-Logik ----------------
