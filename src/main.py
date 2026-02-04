@@ -679,6 +679,7 @@ def week(
                 "grid": ctx["grid"],
                 "employees": ctx["employees"],
                 "kw": kw,
+                "allow_next": allow_next,
                 "year": year,
                 "days": ctx["days"],
                 "standort": standort,
@@ -801,6 +802,21 @@ def view_week(
             year, kw = auto_view_target()
         else:
             year, kw = int(year), int(kw)
+        # --- Navigation: nur aktuelle + 1 Woche erlauben ---
+        now = datetime.now()
+        cur_year, cur_kw = auto_view_target(now)
+
+        # ISO-Wochen sauber vergleichen
+        max_year, max_kw = cur_year, cur_kw + 1
+        if max_kw > 53:
+            max_kw = 1
+            max_year += 1
+
+        allow_next = (
+            year < max_year
+            or (year == max_year and kw <= max_kw)
+        )
+
         ctx = build_week_context(year, kw, standort)
         return templates.TemplateResponse(
             "week_view.html",
