@@ -1,6 +1,7 @@
 # src/db.py
 import sqlite3
 from pathlib import Path
+from .auth import hash_password
 
 # --------------------------------------------------
 # Datenbank-Pfad
@@ -26,6 +27,29 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
+# --------------------------------------------------
+# SEED: Admin-User (einmalig)
+# --------------------------------------------------
+def seed_admin():
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM users WHERE username = ?", ("admin",))
+    if c.fetchone():
+        conn.close()
+        return
+
+    c.execute(
+        "INSERT INTO users (username, password_hash, role, standort_id) VALUES (?, ?, ?, NULL)",
+        ("admin", hash_password("admin"), "admin")
+    )
+
+    conn.commit()
+    conn.close()
+
+
+init_db()
+seed_admin()
 
     # --------------------------------------------------
     # Standorte
@@ -147,36 +171,6 @@ def init_db():
                 (gr_id, f"Mitarbeiter {i}", i)
             )
         conn.commit()
-# --------------------------------------------------
-# SEED: Admin-User (einmalig)
-# --------------------------------------------------
-def seed_admin():
-    conn = get_conn()
-    c = conn.cursor()
 
-    c.execute(
-        "SELECT id FROM users WHERE username = ?",
-        ("admin",)
-    )
-    if c.fetchone():
-        conn.close()
-        return
 
-    c.execute(
-        """
-        INSERT INTO users (username, password_hash, role, standort_id)
-        VALUES (?, ?, ?, NULL)
-        """,
-        (
-            "admin",
-            hash_password("admin"),
-            "admin"
-        )
-    )
 
-    conn.commit()
-    conn.close()
-
-seed_admin()
-
-    conn.close()
