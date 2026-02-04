@@ -38,6 +38,27 @@
   Wochenplan · {{ standort|capitalize }}
   <small style="color:#64748b;">KW {{ kw }} / {{ year }}</small>
 </h1>
+<div style="display:flex; gap:14px; align-items:center; margin:10px 0 14px 0;">
+
+  <!-- vorige Woche -->
+  <a href="/view/week?year={{ year }}&kw={{ kw - 1 }}&standort={{ standort }}"
+     style="text-decoration:none;">
+    ◀ Vorige Woche
+  </a>
+
+  <span style="color:#64748b;">
+    KW {{ kw }} / {{ year }}
+  </span>
+
+  <!-- nächste Woche (nur wenn erlaubt) -->
+  {% if allow_next %}
+    <a href="/view/week?year={{ year }}&kw={{ kw + 1 }}&standort={{ standort }}"
+       style="text-decoration:none;">
+      Nächste Woche ▶
+    </a>
+  {% endif %}
+
+</div>
 
 <table id="weekTable">
   <thead>
