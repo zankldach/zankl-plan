@@ -182,21 +182,10 @@ def require_write(request: Request):
     u = request.session.get("user")
     if not u:
         return RedirectResponse("/login", status_code=303)
-
-    # write oder admin dürfen schreiben / admin-pages sehen
-    if u.get("role") not in ("write", "admin"):
-        return RedirectResponse("/view/week", status_code=303)
-
-    return None
-
-
-def require_admin(request: Request):
-    u = request.session.get("user")
-    if not u:
-        return RedirectResponse("/login", status_code=303)
-    if u.get("role") != "admin":
+    if not u.get("is_write"):
         return RedirectResponse("/view/week", status_code=303)
     return None
+
 
 
 # ---------------- zentrale Week-Logik ----------------
