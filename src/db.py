@@ -120,6 +120,7 @@ def init_db():
             c.execute(
                 """
                 INSERT INTO mitarbeiter (standort_id, name, sort_order)
+                
                 VALUES (?, ?, ?)
                 """,
                 (engelbrechts_id, f"Mitarbeiter {i}", i)
@@ -146,5 +147,36 @@ def init_db():
                 (gr_id, f"Mitarbeiter {i}", i)
             )
         conn.commit()
+# --------------------------------------------------
+# SEED: Admin-User (einmalig)
+# --------------------------------------------------
+def seed_admin():
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute(
+        "SELECT id FROM users WHERE username = ?",
+        ("admin",)
+    )
+    if c.fetchone():
+        conn.close()
+        return
+
+    c.execute(
+        """
+        INSERT INTO users (username, password_hash, role, standort_id)
+        VALUES (?, ?, ?, NULL)
+        """,
+        (
+            "admin",
+            hash_password("admin"),
+            "admin"
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+seed_admin()
 
     conn.close()
