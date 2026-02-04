@@ -27,29 +27,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
-# --------------------------------------------------
-# SEED: Admin-User (einmalig)
-# --------------------------------------------------
-def seed_admin():
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT id FROM users WHERE username = ?", ("admin",))
-    if c.fetchone():
-        conn.close()
-        return
-
-    c.execute(
-        "INSERT INTO users (username, password_hash, role, standort_id) VALUES (?, ?, ?, NULL)",
-        ("admin", hash_password("admin"), "admin")
-    )
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-seed_admin()
 
     # --------------------------------------------------
     # Standorte
@@ -135,18 +112,11 @@ seed_admin()
     c.execute("SELECT id FROM standorte WHERE name='Engelbrechts'")
     engelbrechts_id = c.fetchone()["id"]
 
-    c.execute(
-        "SELECT COUNT(*) AS n FROM mitarbeiter WHERE standort_id=?",
-        (engelbrechts_id,)
-    )
+    c.execute("SELECT COUNT(*) AS n FROM mitarbeiter WHERE standort_id=?", (engelbrechts_id,))
     if c.fetchone()["n"] == 0:
         for i in range(1, 11):
             c.execute(
-                """
-                INSERT INTO mitarbeiter (standort_id, name, sort_order)
-                
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO mitarbeiter (standort_id, name, sort_order) VALUES (?, ?, ?)",
                 (engelbrechts_id, f"Mitarbeiter {i}", i)
             )
         conn.commit()
@@ -157,20 +127,38 @@ seed_admin()
     c.execute("SELECT id FROM standorte WHERE name='Groß Gerungs'")
     gr_id = c.fetchone()["id"]
 
-    c.execute(
-        "SELECT COUNT(*) AS n FROM mitarbeiter WHERE standort_id=?",
-        (gr_id,)
-    )
+    c.execute("SELECT COUNT(*) AS n FROM mitarbeiter WHERE standort_id=?", (gr_id,))
     if c.fetchone()["n"] == 0:
         for i in range(1, 11):
             c.execute(
-                """
-                INSERT INTO mitarbeiter (standort_id, name, sort_order)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO mitarbeiter (standort_id, name, sort_order) VALUES (?, ?, ?)",
                 (gr_id, f"Mitarbeiter {i}", i)
             )
         conn.commit()
 
+    conn.close()
 
 
+# --------------------------------------------------
+# SEED: Admin-User (einmalig)
+# --------------------------------------------------
+def seed_admin():
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM users WHERE username = ?", ("admin",))
+    if c.fetchone():
+        conn.close()
+        return
+
+    c.execute(
+        "INSERT INTO users (username, password_hash, role, standort_id) VALUES (?, ?, ?, NULL)",
+        ("admin", hash_password("admin"), "admin")
+    )
+    conn.commit()
+    conn.close()
+
+
+# Beim Import der App ausführen
+init_db()
+seed_admin()
