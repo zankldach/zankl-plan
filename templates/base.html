@@ -60,25 +60,60 @@
 
 <header class="site">
   <strong>Zankl-Plan</strong>
-  <span>⚙️</span>
+
+  <div>
+    {% set u = request.session.get("user") %}
+    {% if u %}
+      <span style="margin-right:10px;">👤 {{ u.username }}</span>
+      <a href="/logout" style="color:white;">Logout</a>
+    {% endif %}
+  </div>
 </header>
 
 <nav class="site">
-  <!-- Arbeitsansicht -->
-  <a href="/week?standort=engelbrechts">Engelbrechts</a>
-  <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
 
-  <span class="sep"></span>
+  {% set u = request.session.get("user") %}
 
-  <!-- Viewer -->
-  <a href="/view/week?standort=engelbrechts">View EB</a>
-  <a href="/view/week?standort=gross-gerungs">View GG</a>
+  {% if u %}
 
-  <span class="sep"></span>
+    <!-- ================= WRITE / ADMIN ================= -->
+    {% if u.is_write %}
 
-  <!-- Sonstiges -->
-  <a href="/settings/employees">Einstellungen</a>
-  <a href="/bedienung">Bedienung</a>
+      <!-- Arbeitsansicht -->
+      <a href="/week?standort=engelbrechts">Engelbrechts</a>
+      <a href="/week?standort=gross-gerungs">Groß Gerungs</a>
+
+      <span class="sep"></span>
+
+      <!-- Viewer -->
+      <a href="/view/week?standort=engelbrechts">View EB</a>
+      <a href="/view/week?standort=gross-gerungs">View GG</a>
+
+      <span class="sep"></span>
+
+      <!-- Einstellungen -->
+      <a href="/settings/employees">Mitarbeiter</a>
+      <a href="/settings/users">Benutzer</a>
+
+    <!-- ================= VIEWER ================= -->
+    {% else %}
+
+      {% if u.can_view_eb %}
+        <a href="/view/week?standort=engelbrechts">View EB</a>
+      {% endif %}
+
+      {% if u.can_view_gg %}
+        <a href="/view/week?standort=gross-gerungs">View GG</a>
+      {% endif %}
+
+    {% endif %}
+
+    <span class="sep"></span>
+
+    <a href="/bedienung">Bedienung</a>
+
+  {% endif %}
+
 </nav>
 
 <main>
