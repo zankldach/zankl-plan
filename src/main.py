@@ -98,8 +98,11 @@ def init_db():
 
 
 
-    conn.commit(); conn.close()
+conn.commit(); conn.close()
+
 init_db()
+ensure_admin_user()
+
 
 # ---------------- Helpers ----------------
 def build_days(year: int, kw: int):
