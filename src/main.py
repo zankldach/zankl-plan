@@ -36,7 +36,9 @@ def column_exists(cur, table: str, column: str) -> bool:
     return any(r[1] == column for r in cur.fetchall())
 
 def init_db():
-    conn = get_conn(); cur = conn.cursor()
+    conn = get_conn()
+    cur = conn.cursor()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,8 +50,10 @@ def init_db():
           UNIQUE(year, kw, standort)
         )
     """)
+
     if not column_exists(cur, "week_plans", "four_day_week"):
         cur.execute("ALTER TABLE week_plans ADD COLUMN four_day_week INTEGER DEFAULT 1")
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_cells(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +64,7 @@ def init_db():
           UNIQUE(week_plan_id, row_index, day_index)
         )
     """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS employees(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +72,7 @@ def init_db():
           standort TEXT
         )
     """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS global_small_jobs(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +82,7 @@ def init_db():
           UNIQUE(standort, row_index)
         )
     """)
+
     # ---- Users / Login ----
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users(
@@ -88,19 +95,51 @@ def init_db():
         )
     """)
 
-    # Migration: falls alte Spalten fehlen → hinzufügen
+    # Migration
     if not column_exists(cur, "users", "is_write"):
         cur.execute("ALTER TABLE users ADD COLUMN is_write INTEGER NOT NULL DEFAULT 0")
+
     if not column_exists(cur, "users", "can_view_eb"):
         cur.execute("ALTER TABLE users ADD COLUMN can_view_eb INTEGER NOT NULL DEFAULT 0")
+
     if not column_exists(cur, "users", "can_view_gg"):
         cur.execute("ALTER TABLE users ADD COLUMN can_view_gg INTEGER NOT NULL DEFAULT 0")
 
     conn.commit()
     conn.close()
 
+
+# -------- Passwort Hash (muss vor ensure_admin_user stehen!)
+def hash_password(password: str) -> str:
+    import hashlib
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+# -------- Admin automatisch anlegen
+def ensure_admin_user():
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+                ("admin", hash_password("admin"), 1, 1, 1)
+            )
+        else:
+            # repariert Passwort + Rechte falls nötig
+            cur.execute(
+                "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
+                (hash_password("admin"), "admin")
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 init_db()
 ensure_admin_user()
+
 
 
 # ---------------- Helpers ----------------
