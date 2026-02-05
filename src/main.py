@@ -96,9 +96,8 @@ def init_db():
     if not column_exists(cur, "users", "can_view_gg"):
         cur.execute("ALTER TABLE users ADD COLUMN can_view_gg INTEGER NOT NULL DEFAULT 0")
 
-
-
-conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
 
 init_db()
 ensure_admin_user()
