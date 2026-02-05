@@ -96,20 +96,7 @@ def init_db():
     if not column_exists(cur, "users", "can_view_gg"):
         cur.execute("ALTER TABLE users ADD COLUMN can_view_gg INTEGER NOT NULL DEFAULT 0")
 
-    # ---- SEED/FIX: Admin-User sicherstellen ----
-    cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
-    row = cur.fetchone()
-    if not row:
-        cur.execute(
-            "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
-            ("admin", hash_password("admin"), 1, 1, 1)
-        )
-    else:
-        # falls schon vorhanden, aber falsches PW/Flags → reparieren
-        cur.execute(
-            "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
-            (hash_password("admin"), "admin")
-        )
+
 
     conn.commit(); conn.close()
 init_db()
@@ -173,6 +160,24 @@ def verify_password(password: str, password_hash: str) -> bool:
         password_hash
     )
 
+def ensure_admin_user():
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
+                ("admin", hash_password("admin"), 1, 1, 1)
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
+                (hash_password("admin"), "admin")
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 # 👉 GENAU HIER EINFÜGEN
 def password_ok(pw: str) -> bool:
