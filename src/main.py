@@ -136,10 +136,10 @@ def ensure_admin_user():
     finally:
         conn.close()
 
-
-init_db()
-ensure_admin_user()
-
+@app.on_event("startup")
+def _startup():
+    init_db()
+    ensure_admin_user()
 
 
 # ---------------- Helpers ----------------
