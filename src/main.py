@@ -168,33 +168,6 @@ def init_db():
     conn.close()
 
 
-# -------- Passwort Hash (muss vor ensure_admin_user stehen!)
-def hash_password(password: str) -> str:
-    import hashlib
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-# -------- Admin automatisch anlegen
-def ensure_admin_user():
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO users(username, password_hash, is_write, can_view_eb, can_view_gg) VALUES(?,?,?,?,?)",
-                ("admin", hash_password("admin"), 1, 1, 1)
-            )
-        else:
-            # repariert Passwort + Rechte falls nötig
-            cur.execute(
-                "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
-                (hash_password("admin"), "admin")
-            )
-        conn.commit()
-    finally:
-        conn.close()
-
 @app.on_event("startup")
 def _startup():
     init_db()
@@ -259,6 +232,7 @@ def verify_password(password: str, password_hash: str) -> bool:
         hashlib.sha256(password.encode("utf-8")).hexdigest(),
         password_hash
     )
+def ensure_admin_user():
 
 def ensure_admin_user():
     conn = get_conn(); cur = conn.cursor()
@@ -372,10 +346,6 @@ def build_year_days(cur, center: date) -> list[dict]:
 
     return days
 
-        
-        conn.commit()
-    finally:
-        conn.close()
 
 # 👉 GENAU HIER EINFÜGEN
 def password_ok(pw: str) -> bool:
@@ -563,7 +533,7 @@ async def api_year_create_job(request: Request, data: dict = Body(...)):
     try:
         cur.execute("""
             INSERT INTO year_jobs(title,start_date,duration_days,height_rows,section,row_index,color,note)
-            VALUES(?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?)
         """, (title, start_date, duration_days, height_rows, section, row_index, color, note or None))
         conn.commit()
         return {"ok": True}
