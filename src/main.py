@@ -275,6 +275,100 @@ def ensure_admin_user():
                 "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
                 (hash_password("admin"), "admin")
             )
+
+# ---------------- YEAR helpers ----------------
+def iso_monday(year: int, kw: int) -> date:
+    return date.fromisocalendar(year, kw, 1)
+
+def parse_ymd(s: str) -> date:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+def fmt_ymd(d: date) -> str:
+    return d.strftime("%Y-%m-%d")
+
+def is_holiday(cur, d: date) -> bool:
+    cur.execute("SELECT 1 FROM year_holidays WHERE day=?", (fmt_ymd(d),))
+    return cur.fetchone() is not None
+
+def get_friday_override(cur, year: int, kw: int) -> int | None:
+    cur.execute("SELECT show_friday FROM year_week_overrides WHERE year=? AND kw=?", (year, kw))
+    r = cur.fetchone()
+    if not r:
+        return None
+    return int(r["show_friday"])
+
+def should_show_friday(cur, year: int, kw: int) -> bool:
+    """
+    Default-Regel:
+      - Sommer (KW 14..42): Fr AUS (4-Tage)
+      - Winter (KW 43..13): Fr AN
+    Override pro KW in year_week_overrides hat Vorrang.
+    """
+    ov = get_friday_override(cur, year, kw)
+    if ov is not None:
+        return bool(ov)
+
+    if 14 <= int(kw) <= 42:
+        return False
+    return True
+
+def is_workday(cur, d: date) -> bool:
+    # nur Mo–Fr, Fr evtl. ausgeblendet
+    wd = d.isoweekday()  # 1..7
+    if wd >= 6:
+        return False
+    if is_holiday(cur, d):
+        return False
+    if wd == 5:
+        y, w, _ = d.isocalendar()
+        return should_show_friday(cur, int(y), int(w))
+    return True
+
+def add_workdays(cur, start: date, workdays: int) -> date:
+    """
+    Gibt das Enddatum zurück (exklusiv gedacht),
+    indem workdays Arbeitstage ab start gezählt werden.
+    """
+    d = start
+    remaining = int(workdays)
+    while remaining > 0:
+        if is_workday(cur, d):
+            remaining -= 1
+        d = d + timedelta(days=1)
+    return d  # Tag NACH dem letzten gezählten Arbeitstag
+
+def build_year_days(cur, center: date) -> list[dict]:
+    """
+    Sichtbereich ~ 3 Wochen (ca. 15 Arbeitstage).
+    Wir zeigen: 15 Arbeitstage, so dass center ungefähr in der Mitte liegt.
+    """
+    # wir gehen 7 Arbeitstage zurück
+    d = center
+    back = 7
+    while back > 0:
+        d -= timedelta(days=1)
+        if is_workday(cur, d):
+            back -= 1
+
+    days = []
+    d2 = d
+    want = 15
+    while len(days) < want:
+        if is_workday(cur, d2):
+            y, w, _ = d2.isocalendar()
+            days.append({
+                "ymd": fmt_ymd(d2),
+                "label": ["Mo", "Di", "Mi", "Do", "Fr"][d2.isoweekday()-1],
+                "date": d2.strftime("%d.%m."),
+                "year": int(y),
+                "kw": int(w),
+                "is_friday": (d2.isoweekday() == 5),
+            })
+        d2 += timedelta(days=1)
+
+    return days
+
+        
         conn.commit()
     finally:
         conn.close()
@@ -305,6 +399,193 @@ def require_write(request: Request):
         return RedirectResponse("/view/week", status_code=303)
     return None
 
+# ---------------- YEAR – Jahresplanung ----------------
+@app.get("/year", response_class=HTMLResponse)
+def year_page(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
+    today = date.today()
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        days = build_year_days(cur, today)
+
+        # rows
+        cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
+        rows_all = [dict(r) for r in cur.fetchall()]
+
+        # section split
+        rows = {"eb": [], "res": [], "gg": []}
+        for r in rows_all:
+            rows[r["section"]].append(r)
+
+        # jobs
+        cur.execute("SELECT * FROM year_jobs ORDER BY start_date")
+        jobs_db = [dict(r) for r in cur.fetchall()]
+
+        # map day -> col index
+        day_to_col = {d["ymd"]: i for i, d in enumerate(days)}
+
+        # build jobs for view (position + span)
+        jobs = []
+        for j in jobs_db:
+            try:
+                start = parse_ymd(j["start_date"])
+            except Exception:
+                continue
+
+            end_excl = add_workdays(cur, start, int(j["duration_days"]))
+
+            # find first visible workday col >= start
+            # and last visible workday col < end_excl
+            visible_cols = []
+            for d in days:
+                dd = parse_ymd(d["ymd"])
+                if dd >= start and dd < end_excl:
+                    visible_cols.append(day_to_col[d["ymd"]])
+
+            if not visible_cols:
+                continue
+
+            col_start = min(visible_cols)
+            col_end = max(visible_cols)
+            col_span = (col_end - col_start + 1)
+
+            jobs.append({
+                **j,
+                "col_start": col_start,
+                "col_span": col_span,
+                "row_index": int(j["row_index"]),
+                "height_rows": int(j["height_rows"]),
+            })
+
+        # friday visibility map per KW (für Checkboxen im Header)
+        kw_map = {}
+        for d in days:
+            key = f'{d["year"]}-KW{d["kw"]}'
+            if key not in kw_map:
+                kw_map[key] = {
+                    "year": d["year"],
+                    "kw": d["kw"],
+                    "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
+                }
+
+        return templates.TemplateResponse(
+            "year.html",
+            {
+                "request": request,
+                "days": days,
+                "kw_map": list(kw_map.values()),
+                "rows": rows,
+                "jobs": jobs,
+            }
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/year/toggle-holiday")
+async def api_year_toggle_holiday(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    day = (data.get("day") or "").strip()  # 'YYYY-MM-DD'
+    label = (data.get("label") or "").strip()
+
+    if not day:
+        return JSONResponse({"ok": False, "error": "missing day"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM year_holidays WHERE day=?", (day,))
+        r = cur.fetchone()
+        if r:
+            cur.execute("DELETE FROM year_holidays WHERE day=?", (day,))
+            conn.commit()
+            return {"ok": True, "holiday": False}
+        else:
+            cur.execute("INSERT INTO year_holidays(day,label) VALUES(?,?)", (day, label or None))
+            conn.commit()
+            return {"ok": True, "holiday": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/year/set-friday")
+async def api_year_set_friday(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    year = int(data.get("year"))
+    kw = int(data.get("kw"))
+    show = 1 if bool(data.get("show_friday")) else 0
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO year_week_overrides(year,kw,show_friday)
+            VALUES(?,?,?)
+            ON CONFLICT(year,kw) DO UPDATE SET show_friday=excluded.show_friday
+        """, (year, kw, show))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/year/create-job")
+async def api_year_create_job(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    title = (data.get("title") or "").strip()
+    start_date = (data.get("start_date") or "").strip()  # YYYY-MM-DD
+    duration_days = int(data.get("duration_days") or 1)
+    height_rows = int(data.get("height_rows") or 1)
+    section = (data.get("section") or "eb").strip()
+    row_index = int(data.get("row_index") or 0)
+    color = (data.get("color") or "yellow").strip()
+    note = (data.get("note") or "").strip()
+
+    if not title or not start_date:
+        return JSONResponse({"ok": False, "error": "missing title/start_date"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO year_jobs(title,start_date,duration_days,height_rows,section,row_index,color,note)
+            VALUES(?,?,?,?,?,?,?,?,?)
+        """, (title, start_date, duration_days, height_rows, section, row_index, color, note or None))
+        conn.commit()
+        return {"ok": True}
+    except sqlite3.IntegrityError as e:
+        return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
+    finally:
+        conn.close()
+
+
+@app.post("/api/year/delete-job")
+async def api_year_delete_job(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    job_id = int(data.get("id") or 0)
+    if not job_id:
+        return JSONResponse({"ok": False, "error": "missing id"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM year_jobs WHERE id=?", (job_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
 
 
 # ---------------- zentrale Week-Logik ----------------
