@@ -601,6 +601,69 @@ async def settings_users_create(request: Request):
         return RedirectResponse("/settings/users?created=1", status_code=303)
     finally:
         conn.close()
+@app.post("/settings/users/update")
+async def settings_users_update(request: Request):
+    guard = require_write(request)
+    if guard:
+        return guard
+
+    form = await request.form()
+    user_id = int(form.get("user_id") or "0")
+
+    # Checkboxen
+    is_write = 1 if form.get("is_write") else 0
+    can_view_eb = 1 if form.get("can_view_eb") else 0
+    can_view_gg = 1 if form.get("can_view_gg") else 0
+
+    # write darf immer beide Views
+    if is_write:
+        can_view_eb, can_view_gg = 1, 1
+
+    # Optional: Passwort ändern
+    new_pw = (form.get("new_password") or "").strip()
+    new_pw2 = (form.get("new_password2") or "").strip()
+
+    # Safety: nicht selbst aussperren (wenn du dich selbst editierst)
+    me = request.session.get("user") or {}
+    if me.get("id") == user_id and is_write == 0:
+        return RedirectResponse("/settings/users?self_lock=1", status_code=303)
+
+    if new_pw or new_pw2:
+        if new_pw != new_pw2:
+            return RedirectResponse("/settings/users?pw=mismatch", status_code=303)
+        if not password_ok(new_pw):
+            return RedirectResponse("/settings/users?pw=bad", status_code=303)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        # existiert der User?
+        cur.execute("SELECT id FROM users WHERE id=?", (user_id,))
+        if not cur.fetchone():
+            return RedirectResponse("/settings/users?missing=1", status_code=303)
+
+        if new_pw:
+            cur.execute(
+                "UPDATE users SET is_write=?, can_view_eb=?, can_view_gg=?, password_hash=? WHERE id=?",
+                (is_write, can_view_eb, can_view_gg, hash_password(new_pw), user_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET is_write=?, can_view_eb=?, can_view_gg=? WHERE id=?",
+                (is_write, can_view_eb, can_view_gg, user_id)
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Session aktualisieren, falls du dich selbst geändert hast (zB Views)
+    if me.get("id") == user_id:
+        me["is_write"] = is_write
+        me["can_view_eb"] = can_view_eb
+        me["can_view_gg"] = can_view_gg
+        request.session["user"] = me
+
+    return RedirectResponse("/settings/users?updated=1", status_code=303)
 
 
 @app.post("/settings/users/delete")
