@@ -275,6 +275,10 @@ def ensure_admin_user():
                 "UPDATE users SET password_hash=?, is_write=1, can_view_eb=1, can_view_gg=1 WHERE username=?",
                 (hash_password("admin"), "admin")
             )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 # ---------------- YEAR helpers ----------------
 def iso_monday(year: int, kw: int) -> date:
