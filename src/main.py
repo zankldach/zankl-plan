@@ -105,6 +105,65 @@ def init_db():
     if not column_exists(cur, "users", "can_view_gg"):
         cur.execute("ALTER TABLE users ADD COLUMN can_view_gg INTEGER NOT NULL DEFAULT 0")
 
+    # ---- YEAR PLAN (Jahresplanung) ----
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS year_rows(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          section TEXT NOT NULL,               -- 'eb' | 'res' | 'gg'
+          row_index INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          UNIQUE(section, row_index)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS year_jobs(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL UNIQUE,          -- "Name, Ort"
+          start_date TEXT NOT NULL,            -- 'YYYY-MM-DD'
+          duration_days INTEGER NOT NULL,      -- Arbeitstage
+          height_rows INTEGER NOT NULL,        -- Mitarbeiter/Zeilen-Höhe
+          section TEXT NOT NULL,               -- 'eb'|'res'|'gg'
+          row_index INTEGER NOT NULL,          -- Startzeile (0-basiert innerhalb section)
+          color TEXT NOT NULL,                 -- 'blue'|'yellow'|'red'|'green'
+          note TEXT
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS year_week_overrides(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          year INTEGER NOT NULL,
+          kw INTEGER NOT NULL,
+          show_friday INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(year, kw)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS year_holidays(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          day TEXT NOT NULL UNIQUE,            -- 'YYYY-MM-DD'
+          label TEXT
+        )
+    """)
+
+    # ---- SEED default row names (nur wenn leer) ----
+    def seed_rows(section: str, default_count: int, prefix: str):
+        cur.execute("SELECT COUNT(*) AS n FROM year_rows WHERE section=?", (section,))
+        if cur.fetchone()["n"] == 0:
+            for i in range(default_count):
+                name = f"{prefix} {i+1}"
+                cur.execute(
+                    "INSERT INTO year_rows(section,row_index,name) VALUES(?,?,?)",
+                    (section, i, name)
+                )
+
+    seed_rows("eb", 12, "Team EB")
+    seed_rows("gg", 12, "Team GG")
+    seed_rows("res", 8, "Ressource")
+
+    
     conn.commit()
     conn.close()
 
