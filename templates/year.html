@@ -1,279 +1,498 @@
+{# templates/year.html — AUSTAUSCHDATEI #}
 {% extends "base.html" %}
 {% block title %}Jahresplanung{% endblock %}
 
 {% block head %}
 <style>
-  .year-wrap { display:flex; flex-direction:column; gap:16px; }
-  .year-top { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  .btn { padding:8px 10px; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-weight:600; }
-  .btn:hover { background:#f8fafc; }
+  :root{
+    --dayw: 96px;
+    --leftw: 220px;
+    --rowh: 34px;
 
-  .legend { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; color:#334155; }
-  .dot { width:10px; height:10px; border-radius:999px; display:inline-block; border:1px solid rgba(0,0,0,.2); }
-  .c-blue{ background:#3b82f6; } .c-yellow{ background:#f59e0b; } .c-red{ background:#ef4444; } .c-green{ background:#22c55e; }
+    --border:#d9dee5;
+    --muted:#64748b;
+    --bg:#ffffff;
+    --soft:#f8fafc;
 
-  /* Bereich-Grid */
-  .section {
-    border:1px solid #d9dee5;
+    --cap:#e5e7eb;   /* Stammkapazität (grau unten) */
+    --capText:#334155;
+  }
+
+  h1{ margin:0 0 10px 0; }
+  .year-topbar{
+    display:flex; justify-content:space-between; align-items:center;
+    gap:12px; flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+
+  .btn{
+    border:1px solid var(--border);
     background:#fff;
-    border-radius:12px;
-    overflow:hidden;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+    border-radius:8px;
+    padding:8px 10px;
+    cursor:pointer;
+    font-weight:600;
   }
-  .section .title {
-    padding:10px 12px;
-    font-weight:800;
-    background:#f1f5f9;
-    border-bottom:1px solid #e2e8f0;
+  .btn:hover{ background:var(--soft); }
+
+  /* Horizontal scroll wrapper */
+  .year-scroll{
+    overflow-x:auto;
+    overflow-y:hidden;
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--bg);
   }
 
-  .grid {
+  /* This is what becomes wide and triggers scrollbar */
+  .year-grid{
+    min-width:max-content;
+  }
+
+  /* Global header */
+  .grid-header{
+    display:grid;
+    grid-template-columns: var(--leftw) repeat({{ days|length }}, var(--dayw));
+    position:sticky;
+    top:0;
+    z-index:5;
+    background:var(--bg);
+    border-bottom:1px solid var(--border);
+  }
+  .grid-header .corner{
+    padding:10px 10px;
+    font-weight:700;
+    border-right:1px solid var(--border);
+    background:linear-gradient(#fff, #fbfdff);
+  }
+  .day-head{
+    padding:8px 6px;
+    border-right:1px solid var(--border);
+    text-align:center;
+    user-select:none;
+    cursor:pointer;
+  }
+  .day-head:hover{ background:var(--soft); }
+  .day-head .dow{ font-weight:800; }
+  .day-head .dmy{
+    margin-top:2px;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  /* Sections stacked vertically */
+  .section{
+    border-top:1px solid var(--border);
+  }
+  .section:first-child{ border-top:0; }
+
+  .section-title{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px;
+    padding:10px 10px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(#fff, #fbfdff);
+  }
+  .section-title h2{
+    margin:0;
+    font-size:16px;
+  }
+
+  .rowcount{
+    display:flex; align-items:center; gap:8px;
+    font-weight:700;
+    color:#0f172a;
+  }
+  .rowcount button{
+    width:32px; height:28px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:#fff;
+    cursor:pointer;
+    font-weight:900;
+  }
+  .rowcount button:hover{ background:var(--soft); }
+  .rowcount .cnt{
+    min-width:34px;
+    text-align:center;
+  }
+
+  /* Only show friday controls in RES section (requested) */
+  .friday-panel{
+    padding:8px 10px 12px 10px;
+    border-top:1px dashed var(--border);
+    margin-top:8px;
+  }
+  .friday-panel b{ display:block; margin-bottom:6px; }
+  .friday-list{
+    display:flex; flex-wrap:wrap;
+    gap:10px 14px;
+    align-items:center;
+  }
+  .friday-item{
+    font-size:13px;
+    color:#0f172a;
+    background:var(--soft);
+    border:1px solid var(--border);
+    padding:6px 8px;
+    border-radius:999px;
+    user-select:none;
+  }
+
+  /* One section body: left labels + right grid */
+  .section-body{
     position:relative;
     display:grid;
-    grid-template-columns: 190px repeat({{ days|length }}, minmax(46px, 1fr));
-    grid-auto-rows: 28px;
+    grid-template-columns: var(--leftw) 1fr;
   }
 
-  .cell {
-    border-right:1px solid #eef2f7;
-    border-bottom:1px solid #eef2f7;
-    padding:6px 8px;
-    font-size:12px;
-    color:#0f172a;
+  .row-labels{
+    border-right:1px solid var(--border);
     background:#fff;
   }
-  .cell.header { position:sticky; top:0; z-index:3; background:#0b57d0; color:#fff; font-weight:800; }
-  .cell.header.left { left:0; z-index:4; position:sticky; }
-  .cell.left { position:sticky; left:0; z-index:2; background:#fff; font-weight:700; }
-  .cell.left.gray { background:#f3f4f6; color:#64748b; }
-  .cell.gray { background:#f8fafc; }
-
-  .holiday {
-    background: repeating-linear-gradient(
-      45deg,
-      rgba(239,68,68,0.12),
-      rgba(239,68,68,0.12) 6px,
-      rgba(255,255,255,0.0) 6px,
-      rgba(255,255,255,0.0) 12px
-    );
+  .row-label{
+    height:var(--rowh);
+    display:flex;
+    align-items:center;
+    padding:0 10px;
+    border-bottom:1px solid #eef2f6;
+    font-weight:600;
+    color:#0f172a;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
 
-  /* Job-Karten */
-  .job {
+  /* Stammkapazität: unterste 4 Zeilen grau */
+  .row-labels .row-label.cap{ background:var(--cap); color:var(--capText); }
+
+  .grid-cells{
+    position:relative;
+    background:#fff;
+  }
+
+  /* grid lines (columns) */
+  .grid-lines{
+    display:grid;
+    grid-template-columns: repeat({{ days|length }}, var(--dayw));
     position:absolute;
-    border:1px solid rgba(0,0,0,.25);
+    inset:0;
+    z-index:1;
+  }
+  .grid-lines .col{
+    border-right:1px solid #eef2f6;
+  }
+
+  /* row lines (horizontal) */
+  .row-lines{
+    position:absolute;
+    inset:0;
+    z-index:1;
+  }
+  .row-lines .rline{
+    height:var(--rowh);
+    border-bottom:1px solid #eef2f6;
+  }
+
+  /* job overlay */
+  .jobs-layer{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    pointer-events:none; /* UI-only for now */
+  }
+
+  .job-card{
+    position:absolute;
     border-radius:10px;
-    padding:6px 8px;
-    font-size:12px;
+    border:2px solid rgba(0,0,0,0.25);
+    box-shadow:0 4px 14px rgba(0,0,0,0.12);
+
+    /* CENTER TEXT (requested) */
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+
+    padding:6px 10px;
     font-weight:800;
     color:#0f172a;
+    line-height:1.15;
     overflow:hidden;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.10);
   }
-  .job.blue{ background:rgba(59,130,246,0.35); }
-  .job.yellow{ background:rgba(245,158,11,0.35); }
-  .job.red{ background:rgba(239,68,68,0.35); }
-  .job.green{ background:rgba(34,197,94,0.35); }
-
-  .job .note-dot {
-    position:absolute; right:6px; top:6px;
-    width:10px; height:10px; border-radius:999px;
-    background:#2563eb; border:1px solid rgba(0,0,0,.25);
-  }
-
-  .kwbar {
-    padding:10px 12px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    align-items:center;
-    border-top:1px solid #e2e8f0;
-    background:#fff;
-  }
-  .kwchip {
-    display:flex; align-items:center; gap:6px;
-    padding:6px 10px;
-    border:1px solid #e2e8f0;
+  .job-card .note-dot{
+    position:absolute;
+    top:6px; right:6px;
+    width:10px; height:10px;
     border-radius:999px;
-    background:#f8fafc;
-    font-size:12px;
+    background:#2563eb;
   }
 
-  .hint { font-size:12px; color:#475569; margin-top:-8px; }
+  /* color mapping */
+  .c-blue  { background:#bfdbfe; }
+  .c-yellow{ background:#fde68a; }
+  .c-red   { background:#fecaca; }
+  .c-green { background:#bbf7d0; }
+
+  .job-card small{
+    display:block;
+    font-weight:700;
+    opacity:.85;
+    margin-top:3px;
+  }
+
+  /* Footer help */
+  .hint{
+    margin-top:10px;
+    color:var(--muted);
+    font-size:13px;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="year-wrap">
-  <div class="year-top">
-    <h1 style="margin:0;">Jahresplanung</h1>
-    <button class="btn" id="btnNew">+ Neue Baustelle</button>
+<h1>Jahresplanung</h1>
 
-    <div class="legend">
-      <span><span class="dot c-blue"></span> Fix</span>
-      <span><span class="dot c-yellow"></span> Verschiebbar</span>
-      <span><span class="dot c-red"></span> Urlaub</span>
-      <span><span class="dot c-green"></span> Intern</span>
-      <span style="margin-left:10px;">Klick auf Tag im Header = Feiertag toggeln</span>
-    </div>
+<div class="year-topbar">
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    <button class="btn" id="btn-new">+ Neue Baustelle</button>
+    <button class="btn" id="btn-refresh" title="Neu laden">↻ Reload</button>
   </div>
 
   <div class="hint">
-    Sicht: ~3 Wochen (15 Arbeitstage). Freitag wird automatisch (Sommer/Winter) gesteuert – Overrides unten pro KW.
+    Tipp: Klick auf einen Tag oben → Feiertag an/aus (global). Freitag-Override ist global und wird unten bei „Ressourcen“ gesteuert.
   </div>
+</div>
 
-  {% macro render_section(sec_key, sec_title) %}
-  <div class="section" data-section="{{ sec_key }}">
-    <div class="title">{{ sec_title }}</div>
+<div class="year-scroll">
+  <div class="year-grid">
 
-    <div class="grid" id="grid-{{ sec_key }}">
-      <!-- Header row -->
-      <div class="cell header left">Ressource</div>
+    <!-- HEADER: days -->
+    <div class="grid-header">
+      <div class="corner">Ressourcen / Zeit</div>
+
       {% for d in days %}
-        <div class="cell header js-day"
-             data-day="{{ d.ymd }}"
-             title="Feiertag toggeln ({{ d.ymd }})">
-          {{ d.label }}<br>{{ d.date }}
+        {# dd.mm.yy requested (we use ymd split) #}
+        {% set yy = d.ymd[2:4] %}
+        {% set mm = d.ymd[5:7] %}
+        {% set dd = d.ymd[8:10] %}
+        <div class="day-head" data-day="{{ d.ymd }}">
+          <div class="dow">{{ d.label }}</div>
+          <div class="dmy">{{ dd }}.{{ mm }}.{{ yy }}</div>
         </div>
       {% endfor %}
+    </div>
 
-      <!-- Body rows -->
-      {% set rcount = rows[sec_key]|length %}
-      {% for r in rows[sec_key] %}
-        {% set is_gray = (loop.index0 >= (rcount - 4)) %}
-        <div class="cell left {{ 'gray' if is_gray else '' }}">{{ r.name }}</div>
-        {% for d in days %}
-          <div class="cell {{ 'gray' if is_gray else '' }}" data-row="{{ r.row_index }}" data-day="{{ d.ymd }}"></div>
-        {% endfor %}
-      {% endfor %}
+    {# helper macro: render a section #}
+    {% macro render_section(sec_key, title) %}
+      <div class="section" data-section="{{ sec_key }}">
+        <div class="section-title">
+          <div>
+            <h2>{{ title }}</h2>
 
-      <!-- Jobs as absolute overlays -->
-      {% for j in jobs %}
-        {% if j.section == sec_key %}
-          <div class="job {{ j.color }}"
-               data-id="{{ j.id }}"
-               style="
-                 left: calc(190px + ({{ j.col_start }} * (100% - 190px) / {{ days|length }}));
-                 width: calc({{ j.col_span }} * (100% - 190px) / {{ days|length }});
-                 top: calc(28px + ({{ j.row_index }} * 28px));
-                 height: calc({{ j.height_rows }} * 28px);
-               "
-               title="Rechtsklick: löschen (MVP)">
-            {{ j.title }}
-            {% if j.note %}<span class="note-dot" title="Notiz vorhanden"></span>{% endif %}
+            {% if sec_key == "res" %}
+              <!-- Friday panel ONLY here (requested) -->
+              <div class="friday-panel">
+                <b>Freitag je KW (global)</b>
+                <div class="friday-list">
+                  {% for k in kw_map %}
+                    <label class="friday-item">
+                      <input type="checkbox"
+                             data-year="{{ k.year }}"
+                             data-kw="{{ k.kw }}"
+                             {% if k.show_friday %}checked{% endif %}>
+                      KW {{ k.kw }}
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
           </div>
-        {% endif %}
-      {% endfor %}
-    </div>
 
-    <div class="kwbar">
-      {% for k in kw_map %}
-        <label class="kwchip">
-          <input type="checkbox" class="js-friday"
-                 data-year="{{ k.year }}" data-kw="{{ k.kw }}"
-                 {% if k.show_friday %}checked{% endif %}>
-          KW {{ k.kw }} ({{ k.year }}) – Freitag anzeigen
-        </label>
-      {% endfor %}
-    </div>
+          <div class="rowcount">
+            <button type="button" data-sec="{{ sec_key }}" data-delta="-1">−</button>
+            <span class="cnt" id="cnt-{{ sec_key }}">{{ rows[sec_key]|length }}</span>
+            <button type="button" data-sec="{{ sec_key }}" data-delta="1">+</button>
+          </div>
+        </div>
+
+        <div class="section-body">
+          <!-- left labels -->
+          <div class="row-labels">
+            {% set n = rows[sec_key]|length %}
+            {% for r in rows[sec_key] %}
+              {% set is_cap = (loop.index0 >= (n - 4)) %}
+              <div class="row-label {% if is_cap %}cap{% endif %}">
+                {{ r.name }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- right grid -->
+          <div class="grid-cells" style="height: calc({{ rows[sec_key]|length }} * var(--rowh));">
+            <!-- vertical lines -->
+            <div class="grid-lines">
+              {% for _ in days %}
+                <div class="col"></div>
+              {% endfor %}
+            </div>
+
+            <!-- horizontal lines -->
+            <div class="row-lines">
+              {% for _ in rows[sec_key] %}
+                <div class="rline"></div>
+              {% endfor %}
+            </div>
+
+            <!-- jobs -->
+            <div class="jobs-layer">
+              {% for j in jobs %}
+                {% if j.section == sec_key %}
+                  <div class="job-card c-{{ j.color }}"
+                       style="
+                         left: calc({{ j.col_start }} * var(--dayw) + 6px);
+                         top:  calc({{ j.row_index }} * var(--rowh) + 4px);
+                         width: calc({{ j.col_span }} * var(--dayw) - 12px);
+                         height: calc({{ j.height_rows }} * var(--rowh) - 8px);
+                       "
+                       title="{{ j.title }}{% if j.note %} — {{ j.note }}{% endif %}">
+                    {% if j.note %}
+                      <span class="note-dot"></span>
+                    {% endif %}
+                    <div>
+                      {{ j.title }}
+                      <small>{{ j.duration_days }} AT</small>
+                    </div>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endmacro %}
+
+    {{ render_section("eb", "Standort Engelbrechts") }}
+    {{ render_section("res", "Ressourcen") }}
+    {{ render_section("gg", "Standort Groß Gerungs") }}
+
   </div>
-  {% endmacro %}
-
-  {{ render_section('eb', 'Standort Engelbrechts') }}
-  {{ render_section('res', 'Ressourcen') }}
-  {{ render_section('gg', 'Standort Groß Gerungs') }}
-
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-async function postJSON(url, payload) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify(payload)
-  });
-  let data = {};
-  try { data = await res.json(); } catch(e) {}
-  if (!res.ok) throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
-  return data;
-}
+  // Reload
+  document.getElementById('btn-refresh')?.addEventListener('click', ()=>location.reload());
 
-// Feiertag toggeln (Header-Klick)
-document.querySelectorAll(".js-day").forEach(el => {
-  el.addEventListener("click", async () => {
-    const day = el.dataset.day;
-    try {
-      await postJSON("/api/year/toggle-holiday", {day});
-      location.reload();
-    } catch (e) {
-      alert("Fehler: " + e.message);
-    }
-  });
-});
+  // Toggle Holiday (click on day header)
+  document.querySelectorAll('.day-head').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const day = el.dataset.day;
+      if(!day) return;
 
-// Freitag Override
-document.querySelectorAll(".js-friday").forEach(cb => {
-  cb.addEventListener("change", async () => {
-    try {
-      await postJSON("/api/year/set-friday", {
-        year: parseInt(cb.dataset.year, 10),
-        kw: parseInt(cb.dataset.kw, 10),
-        show_friday: cb.checked ? 1 : 0
+      const res = await fetch('/api/year/toggle-holiday', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ day })
       });
+
+      if(!res.ok){
+        alert('Fehler beim Feiertag setzen');
+        return;
+      }
+      // Workday-logik beeinflusst Spalten → reload
       location.reload();
-    } catch (e) {
-      alert("Fehler: " + e.message);
-    }
-  });
-});
-
-// Neue Baustelle (MVP via prompt)
-document.getElementById("btnNew").addEventListener("click", async () => {
-  const title = (prompt("Titel (unique, z.B. 'Huber, Zwettl')") || "").trim();
-  if (!title) return;
-
-  const start_date = (prompt("Startdatum (YYYY-MM-DD)", new Date().toISOString().slice(0,10)) || "").trim();
-  if (!start_date) return;
-
-  const duration_days = parseInt(prompt("Dauer (Arbeitstage)", "5") || "5", 10);
-  const height_rows = parseInt(prompt("Anzahl Mitarbeiter (Höhe in Zeilen)", "1") || "1", 10);
-
-  const section = (prompt("Bereich: eb / res / gg", "eb") || "eb").trim();
-  const row_index = parseInt(prompt("Startzeile (0-basiert innerhalb Bereich)", "0") || "0", 10);
-
-  const color = (prompt("Art: blue (Fix) / yellow (Verschiebbar) / red (Urlaub) / green (Intern)", "yellow") || "yellow").trim();
-  const note = (prompt("Zusatzinfo (optional)") || "").trim();
-
-  try {
-    await postJSON("/api/year/create-job", {
-      title, start_date,
-      duration_days: isNaN(duration_days) ? 1 : duration_days,
-      height_rows: isNaN(height_rows) ? 1 : height_rows,
-      section, row_index,
-      color, note
     });
-    location.reload();
-  } catch (e) {
-    alert("Fehler: " + e.message);
-  }
-});
-
-// Rechtsklick auf Job: löschen (MVP)
-document.querySelectorAll(".job").forEach(j => {
-  j.addEventListener("contextmenu", async (ev) => {
-    ev.preventDefault();
-    const id = parseInt(j.dataset.id, 10);
-    if (!id) return;
-    if (!confirm("Baustelle löschen?")) return;
-    try {
-      await postJSON("/api/year/delete-job", {id});
-      location.reload();
-    } catch (e) {
-      alert("Fehler: " + e.message);
-    }
   });
-});
+
+  // Friday override (ONLY in resources panel)
+  document.querySelectorAll('.friday-panel input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      const year = parseInt(cb.dataset.year, 10);
+      const kw = parseInt(cb.dataset.kw, 10);
+      const show = cb.checked;
+
+      const res = await fetch('/api/year/set-friday', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ year, kw, show_friday: show })
+      });
+
+      if(!res.ok){
+        alert('Fehler beim Speichern der Freitag-Einstellung');
+        cb.checked = !show;
+        return;
+      }
+      location.reload();
+    });
+  });
+
+  // Rowcount +/- (EB / RES / GG)
+  async function setRowCount(section, count){
+    const res = await fetch('/api/year/set-row-count', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ section, count })
+    });
+
+    let j = {};
+    try { j = await res.json(); } catch(e){}
+
+    if(!res.ok || !j.ok){
+      if(j && j.error === 'jobs_outside_range'){
+        alert('Kann nicht verkleinern: Es liegen Baustellen in Zeilen, die abgeschnitten würden.');
+      }else{
+        alert('Fehler beim Speichern der Zeilenanzahl.');
+      }
+      return false;
+    }
+    location.reload();
+    return true;
+  }
+
+  document.querySelectorAll('.rowcount button').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const sec = btn.dataset.sec;
+      const delta = parseInt(btn.dataset.delta, 10);
+      const cntEl = document.getElementById('cnt-'+sec);
+      const cur = parseInt(cntEl.textContent, 10) || 1;
+      const next = Math.max(1, cur + delta);
+      await setRowCount(sec, next);
+    });
+  });
+
+  // Minimal "Neue Baustelle" (prompt-basiert)
+  document.getElementById('btn-new')?.addEventListener('click', async ()=>{
+    const title = (prompt('Name, Ort (unique):', '') || '').trim();
+    if(!title) return;
+
+    const start_date = (prompt('Startdatum (YYYY-MM-DD):', new Date().toISOString().slice(0,10)) || '').trim();
+    if(!start_date) return;
+
+    const duration_days = parseInt(prompt('Dauer in Arbeitstagen:', '3') || '3', 10);
+    const height_rows = parseInt(prompt('Anzahl Mitarbeiter (Höhe in Zeilen):', '2') || '2', 10);
+
+    const section = (prompt("Bereich: eb / res / gg", "eb") || "eb").trim();
+    const row_index = parseInt(prompt("Startzeile (0 = ganz oben):", "0") || "0", 10);
+
+    const color = (prompt("Art/Farbe: blue (fix) / yellow (verschiebbar) / red (urlaub) / green (intern)", "yellow") || "yellow").trim();
+    const note = (prompt("Zusatzinfo (optional):", "") || "").trim();
+
+    const res = await fetch('/api/year/create-job', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ title, start_date, duration_days, height_rows, section, row_index, color, note })
+    });
+
+    const j = await res.json().catch(()=>({}));
+
+    if(!res.ok || !j.ok){
+      alert(j.error || 'Fehler beim Anlegen');
+      return;
+    }
+    location.reload();
+  });
 </script>
 {% endblock %}
