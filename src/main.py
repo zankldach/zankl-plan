@@ -234,8 +234,8 @@ def verify_password(password: str, password_hash: str) -> bool:
     )
 def ensure_admin_user():
 
-def ensure_admin_user():
-    conn = get_conn(); cur = conn.cursor()
+    conn = get_conn()
+    cur = conn.cursor()
     try:
         cur.execute("SELECT id FROM users WHERE username=?", ("admin",))
         row = cur.fetchone()
@@ -252,6 +252,7 @@ def ensure_admin_user():
         conn.commit()
     finally:
         conn.close()
+
 
 
 # ---------------- YEAR helpers ----------------
