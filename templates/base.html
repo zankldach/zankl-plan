@@ -41,6 +41,7 @@
       padding:6px 10px;
       border-radius:6px;
     }
+
     nav.site a:hover { background: rgba(255,255,255,0.15); }
     nav.site a.is-active { background: rgba(255,255,255,0.25); }
 
@@ -78,6 +79,11 @@
 
     <!-- ================= WRITE / ADMIN ================= -->
     {% if u.is_write %}
+
+      <!-- Jahresplanung GANZ LINKS -->
+      <a href="/year">Jahresplanung</a>
+
+      <span class="sep"></span>
 
       <!-- Arbeitsansicht -->
       <a href="/week?standort=engelbrechts">Engelbrechts</a>
