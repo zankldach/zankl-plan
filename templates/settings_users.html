@@ -4,29 +4,61 @@
 {% block content %}
 <h1>Benutzer verwalten</h1>
 
-<p style="margin-bottom:12px;">
-  <b>Hinweis:</b> Viewer sehen je nach Hakerl EB/GG die jeweilige View. Write darf alles (wie Admin).
+<p style="margin-bottom:16px;">
+  <b>Hinweis:</b> Write darf alles. Viewer sehen je nach Hakerl EB/GG die jeweilige View.
 </p>
 
-<table class="table" border="1" cellspacing="0" cellpadding="6" style="width:100%; margin-bottom:16px;">
-  <thead>
+<table border="1" cellspacing="0" cellpadding="6" style="width:100%; margin-bottom:24px;">
+  <thead style="background:#f1f5f9;">
     <tr>
-      <th style="width:220px;">Name (Login)</th>
+      <th style="width:200px;">Login</th>
       <th style="width:80px;">Write</th>
       <th style="width:80px;">EB</th>
       <th style="width:80px;">GG</th>
-      <th style="width:90px;"></th>
+      <th style="width:200px;">Neues Passwort</th>
+      <th style="width:200px;">Wiederholen</th>
+      <th style="width:140px;"></th>
+      <th style="width:80px;"></th>
     </tr>
   </thead>
   <tbody>
     {% for u in users %}
     <tr>
-      <td>{{ u.username }}</td>
-      <td style="text-align:center;">{{ "✅" if u.is_write else "—" }}</td>
-      <td style="text-align:center;">{{ "✅" if u.can_view_eb else "—" }}</td>
-      <td style="text-align:center;">{{ "✅" if u.can_view_gg else "—" }}</td>
+      <form method="post" action="/settings/users/update">
+        <td>
+          {{ u.username }}
+          <input type="hidden" name="user_id" value="{{ u.id }}">
+        </td>
+
+        <td style="text-align:center;">
+          <input type="checkbox" name="is_write" value="1" {% if u.is_write %}checked{% endif %}>
+        </td>
+
+        <td style="text-align:center;">
+          <input type="checkbox" name="can_view_eb" value="1" {% if u.can_view_eb %}checked{% endif %}>
+        </td>
+
+        <td style="text-align:center;">
+          <input type="checkbox" name="can_view_gg" value="1" {% if u.can_view_gg %}checked{% endif %}>
+        </td>
+
+        <td>
+          <input type="password" name="new_password" placeholder="neues Passwort" style="width:100%;">
+        </td>
+
+        <td>
+          <input type="password" name="new_password2" placeholder="wiederholen" style="width:100%;">
+        </td>
+
+        <td style="text-align:center;">
+          <button type="submit">💾 Speichern</button>
+        </td>
+      </form>
+
       <td style="text-align:center;">
-        <form method="post" action="/settings/users/delete" onsubmit="return confirm('Benutzer wirklich löschen?');" style="display:inline;">
+        <form method="post"
+              action="/settings/users/delete"
+              onsubmit="return confirm('Benutzer wirklich löschen?');">
           <input type="hidden" name="user_id" value="{{ u.id }}">
           <button type="submit">🗑️</button>
         </form>
@@ -36,34 +68,39 @@
   </tbody>
 </table>
 
+<hr style="margin:30px 0;">
+
 <h2>Neuen Benutzer anlegen</h2>
 
-<form method="post" action="/settings/users/create" style="border:1px solid #ddd; padding:12px; border-radius:8px; max-width:520px;">
-  <label style="display:block; margin-bottom:6px;">
-    Name (Login):
+<form method="post"
+      action="/settings/users/create"
+      style="border:1px solid #ddd; padding:16px; border-radius:8px; max-width:520px;">
+
+  <label style="display:block; margin-bottom:8px;">
+    Login:
     <input type="text" name="username" required style="width:100%; padding:6px;">
   </label>
 
-  <label style="display:block; margin-bottom:6px;">
+  <label style="display:block; margin-bottom:8px;">
     Passwort:
     <input type="password" name="password" required style="width:100%; padding:6px;">
   </label>
 
-  <div style="font-size:12px; color:#334155; margin:6px 0 12px;">
+  <div style="font-size:12px; color:#475569; margin-bottom:14px;">
     Passwort-Regel: mind. 8 Zeichen, mindestens 1 Buchstabe, 1 Zahl, 1 Sonderzeichen.
   </div>
 
-  <label style="display:block; margin-bottom:8px;">
+  <label style="display:block; margin-bottom:10px;">
     <input type="checkbox" name="is_write" value="1">
-    Write (darf alles, beide Standorte, inkl. Benutzer anlegen)
+    Write (darf alles inkl. Benutzerverwaltung)
   </label>
 
-  <div style="display:flex; gap:12px; margin-bottom:12px;">
+  <div style="display:flex; gap:16px; margin-bottom:16px;">
     <label><input type="checkbox" name="can_view_eb" value="1"> View EB</label>
     <label><input type="checkbox" name="can_view_gg" value="1"> View GG</label>
   </div>
 
-  <button type="submit">Benutzer anlegen</button>
+  <button type="submit">➕ Benutzer anlegen</button>
 </form>
 
 {% endblock %}
