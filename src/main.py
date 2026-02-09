@@ -413,6 +413,32 @@ def year_page(request: Request, year: int | None = Query(None)):
     conn = get_conn(); cur = conn.cursor()
     try:
         days = build_year_days_for_year(cur, year_sel)
+        # KW-Gruppen: 1 Header-Zelle pro ISO-KW mit colspan über die vorhandenen Arbeitstage
+        week_groups = []
+        if days:
+            cur_y = days[0]["year"]
+            cur_kw = days[0]["kw"]
+            span = 0
+            for d in days:
+                if d["year"] == cur_y and d["kw"] == cur_kw:
+                    span += 1
+                else:
+                    week_groups.append({
+                        "year": cur_y,
+                        "kw": cur_kw,
+                        "span": span,
+                        "show_friday": 1 if should_show_friday(cur, cur_y, cur_kw) else 0
+                    })
+                    cur_y = d["year"]
+                    cur_kw = d["kw"]
+                    span = 1
+            # letzte Gruppe
+            week_groups.append({
+                "year": cur_y,
+                "kw": cur_kw,
+                "span": span,
+                "show_friday": 1 if should_show_friday(cur, cur_y, cur_kw) else 0
+            })
 
         # rows
         cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
@@ -481,7 +507,7 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "request": request,
                 "year": year_sel,
                 "days": days,
-                "kw_map": list(kw_map.values()),
+                "week_groups": week_groups,
                 "rows": rows,
                 "jobs": jobs,
             }
