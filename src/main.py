@@ -541,7 +541,7 @@ def year_page(request: Request, year: int | None = Query(None)):
                 for cc in range(c0, c1 + 1):
                     occ.setdefault((sec, rr, cc), []).append(int(j["id"]))
 
-        conflict_ids = set()
+               conflict_ids = set()
         for ids in occ.values():
             if len(ids) > 1:
                 conflict_ids.update(ids)
@@ -549,16 +549,19 @@ def year_page(request: Request, year: int | None = Query(None)):
         for j in jobs:
             if int(j["id"]) in conflict_ids:
                 j["conflict"] = True
-                # --- conflict_cells: nur die echten überlappenden Zellen ---
-conflict_cells = []
-for (sec, rr, cc), ids in occ.items():
-    if len(ids) > 1:
-        if 0 <= cc < len(days):
-            conflict_cells.append({
-                "section": sec,
-                "row": int(rr),
-                "ymd": days[cc]["ymd"],
-            })
+
+        # --- conflict_cells: nur die echten überlappenden Zellen ---
+        conflict_cells = []
+        for (sec, rr, cc), ids in occ.items():
+            if len(ids) > 1:
+                # cc ist Spaltenindex -> auf ymd mappen
+                if 0 <= cc < len(days):
+                    conflict_cells.append({
+                        "section": sec,
+                        "row": int(rr),
+                        "col": int(cc),
+                        "ymd": days[cc]["ymd"],
+                    })
 
 
         return templates.TemplateResponse(
@@ -574,6 +577,7 @@ for (sec, rr, cc), ids in occ.items():
                 "row_counts": row_counts,
             }
         )
+
     finally:
         conn.close()
 
