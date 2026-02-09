@@ -39,6 +39,8 @@ def init_db():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
+    # --- YEAR row settings (Anzahl Zeilen pro Bereich) ---
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS year_row_settings(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           section TEXT NOT NULL UNIQUE,        -- 'eb' | 'res' | 'gg'
@@ -46,9 +48,9 @@ def init_db():
         )
     """)
 
-        # Seed default row settings (nur wenn noch nix drin)
+    # Seed default row settings (nur wenn noch nix drin)
     cur.execute("SELECT COUNT(*) AS n FROM year_row_settings")
-    if (cur.fetchone()["n"] or 0) == 0:
+    if int(cur.fetchone()["n"] or 0) == 0:
         for sec, cnt in [("eb", 12), ("res", 8), ("gg", 12)]:
             cur.execute(
                 "INSERT OR IGNORE INTO year_row_settings(section,row_count) VALUES(?,?)",
@@ -426,11 +428,11 @@ def year_page(request: Request, year: int | None = Query(None)):
 
     year_sel = int(year) if year else date.today().year
 
-
     conn = get_conn(); cur = conn.cursor()
     try:
         days = build_year_days_for_year(cur, year_sel)
-        # KW-Gruppen: 1 Header-Zelle pro ISO-KW mit colspan über die vorhandenen Arbeitstage
+
+        # KW-Gruppen: 1 Header-Zelle pro ISO-KW mit colspan über Arbeitstage
         week_groups = []
         if days:
             cur_y = days[0]["year"]
@@ -449,7 +451,6 @@ def year_page(request: Request, year: int | None = Query(None)):
                     cur_y = d["year"]
                     cur_kw = d["kw"]
                     span = 1
-            # letzte Gruppe
             week_groups.append({
                 "year": cur_y,
                 "kw": cur_kw,
@@ -457,47 +458,36 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "show_friday": 1 if should_show_friday(cur, cur_y, cur_kw) else 0
             })
 
-        # rows
-        cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
-        rows_all = [dict(r) for r in cur.fetchall()]
-       
-        # --- row_counts laden (wie viele Zeilen pro Bereich angezeigt werden sollen) ---
+        # --- row_counts laden ---
         cur.execute("SELECT section, row_count FROM year_row_settings")
         row_counts = {r["section"]: int(r["row_count"]) for r in cur.fetchall()}
-        for sec in ["eb", "res", "gg"]:
-            row_counts.setdefault(sec, 1)
+        for sec, default in [("eb", 12), ("res", 8), ("gg", 12)]:
+            row_counts.setdefault(sec, default)
 
-        # --- year_rows sicherstellen bis row_count (falls User erhöht) ---
-        # wir legen fehlende Zeilen in year_rows an
+        # --- ensure_rows: year_rows bis row_count auffüllen ---
         def ensure_rows(section: str, want: int, prefix: str):
             cur.execute("SELECT COUNT(*) AS n FROM year_rows WHERE section=?", (section,))
             have = int(cur.fetchone()["n"] or 0)
-            if have >= want:
-                return
-            # max row_index bestimmen
-            cur.execute("SELECT MAX(row_index) AS m FROM year_rows WHERE section=?", (section,))
-            m = cur.fetchone()["m"]
-            start_idx = int(m) + 1 if m is not None else 0
-            for i in range(have, want):
-                idx = start_idx + (i - have)
+            for idx in range(have, int(want)):
                 cur.execute(
                     "INSERT OR IGNORE INTO year_rows(section,row_index,name) VALUES(?,?,?)",
                     (section, idx, f"{prefix} {idx+1}")
                 )
 
         ensure_rows("eb", row_counts["eb"], "Team EB")
-        ensure_rows("gg", row_counts["gg"], "Team GG")
         ensure_rows("res", row_counts["res"], "Ressource")
+        ensure_rows("gg", row_counts["gg"], "Team GG")
         conn.commit()
 
-        
-        # section split
+        # rows neu laden (wichtig!)
+        cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
+        rows_all = [dict(r) for r in cur.fetchall()]
+
         rows = {"eb": [], "res": [], "gg": []}
         for r in rows_all:
-            rows[r["section"]].append(r)
-        # auf row_counts begrenzen (nur row_index < row_count)
-        for sec in ["eb", "res", "gg"]:
-            rows[sec] = [r for r in rows[sec] if int(r["row_index"]) < int(row_counts[sec])]
+            sec = r["section"]
+            if sec in rows and int(r["row_index"]) < int(row_counts[sec]):
+                rows[sec].append(r)
 
         # jobs
         cur.execute("SELECT * FROM year_jobs ORDER BY start_date")
@@ -516,8 +506,6 @@ def year_page(request: Request, year: int | None = Query(None)):
 
             end_excl = add_workdays(cur, start, int(j["duration_days"]))
 
-            # find first visible workday col >= start
-            # and last visible workday col < end_excl
             visible_cols = []
             for d in days:
                 dd = parse_ymd(d["ymd"])
@@ -537,19 +525,30 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "col_span": col_span,
                 "row_index": int(j["row_index"]),
                 "height_rows": int(j["height_rows"]),
+                "conflict": False,
             })
 
-        # friday visibility map per KW (für Checkboxen im Header)
-        kw_map = {}
-        for d in days:
-            if d.get("label") != "Mo":
-                continue
-            key = f'{d["year"]}-KW{d["kw"]}'
-            kw_map[key] = {
-                "year": d["year"],
-                "kw": d["kw"],
-                "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
-            }
+        # --- Overlap Detection (Konflikte schwarz markieren) ---
+        # Wir prüfen pro (section, row) über die Spalten [col_start .. col_start+col_span-1]
+        occ = {}  # key: (section,row,col) -> list[job_id]
+        for j in jobs:
+            sec = j["section"]
+            r0 = int(j["row_index"])
+            h = max(1, int(j.get("height_rows") or 1))
+            c0 = int(j["col_start"])
+            c1 = c0 + int(j["col_span"]) - 1
+            for rr in range(r0, r0 + h):
+                for cc in range(c0, c1 + 1):
+                    occ.setdefault((sec, rr, cc), []).append(int(j["id"]))
+
+        conflict_ids = set()
+        for ids in occ.values():
+            if len(ids) > 1:
+                conflict_ids.update(ids)
+
+        for j in jobs:
+            if int(j["id"]) in conflict_ids:
+                j["conflict"] = True
 
         return templates.TemplateResponse(
             "year.html",
@@ -561,13 +560,11 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "rows": rows,
                 "jobs": jobs,
                 "row_counts": row_counts,
-
             }
         )
-
-
     finally:
         conn.close()
+
 
 
 @app.post("/api/year/toggle-holiday")
