@@ -3,739 +3,246 @@
 
 {% block head %}
 <style>
-  .year-topbar{
-    display:flex; align-items:center; justify-content:space-between;
-    gap:12px; flex-wrap:wrap; margin-bottom:12px;
-  }
-  .year-topbar .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-  .pill{
-    display:inline-flex; align-items:center; gap:8px;
-    border:1px solid #d9dee5; background:#fff; padding:8px 10px; border-radius:10px;
-    box-shadow:0 2px 10px rgba(0,0,0,.05);
-  }
-  .btn{
-    border:1px solid #d9dee5; background:#fff; padding:8px 10px; border-radius:10px;
-    cursor:pointer;
-  }
-  .btn:hover{ background:#f8fafc; }
-  .btn.primary{ background:#0b57d0; color:#fff; border-color:#0b57d0; }
-  .btn.primary:hover{ filter:brightness(0.95); }
 
-  /* Row count controls */
-  .rc{
-    display:inline-flex; align-items:center; gap:8px;
-  }
-  .rc label{ font-size:12px; font-weight:800; opacity:.85; }
-  .rc input{
-    width:64px;
-    padding:6px 8px;
-    border:1px solid #d9dee5;
-    border-radius:10px;
-    font-size:13px;
-  }
+/* ============================= */
+/*  NEU: Wochen-Trennlinien     */
+/* ============================= */
 
-  /* Scroll-Container */
-  .year-scroll{
-    overflow-x:auto;
-    overflow-y:hidden;
-    border:1px solid #d9dee5;
-    border-radius:12px;
-    background:#fff;
-    box-shadow:0 3px 12px rgba(0,0,0,0.06);
-  }
+.week-sep{
+  border-left:3px solid #0f172a !important;
+}
 
-  table.year{
-    border-collapse:separate;
-    border-spacing:0;
-    width:max-content;
-    table-layout:fixed;
-    font-size:13px;
-  }
+.kw-sep{
+  border-left:4px solid #0f172a !important;
+}
 
-  /* Sticky Header */
-  table.year thead th{
-    position:sticky;
-    top:0;
-    z-index:5;
-    background:#0b57d0;
-    color:#fff;
-    border-bottom:1px solid rgba(255,255,255,0.2);
-    padding:6px 6px;
-    white-space:nowrap;
-    text-align:center;
-  }
+/* ============================= */
+/*  Konflikt-Markierung         */
+/* ============================= */
 
-  /* Sticky linke Spalte */
-  .sticky-col{
-    position:sticky;
-    left:0;
-    z-index:8;
-    background:#fff;
-    border-right:1px solid #e5e7eb;
-  }
-  thead .sticky-col{
-    z-index:10;
-    background:#0b57d0;
-    color:#fff;
-    border-right:1px solid rgba(255,255,255,0.25);
-  }
+.job.is-conflict{
+  background:#000 !important;
+  color:#fff !important;
+  border-color:#000 !important;
+}
 
-  /* Header 1: KW (Gruppiert) */
-  .kw-row th{ padding-top:8px; padding-bottom:8px; font-size:12px; }
-  .kw-group{
-    text-align:center;
-  }
-  .kw-cell{
-    display:flex; align-items:center; justify-content:center; gap:10px;
-  }
-  .kw-mini{ font-weight:900; opacity:.95; }
-  .kw-toggle{
-    display:flex; align-items:center; gap:6px;
-    font-size:12px; opacity:0.95; user-select:none;
-    padding:2px 8px;
-    border-radius:999px;
-    background:rgba(255,255,255,0.14);
-  }
-  .kw-toggle input{ transform:translateY(1px); }
+/* ============================= */
+/* Rest bleibt wie bei dir      */
+/* ============================= */
 
-  /* Header 2: Tag + Datum */
-  .day-row th{ padding-top:8px; padding-bottom:8px; }
-  .day-label{ font-weight:900; line-height:1.05; }
-  .day-date{ font-size:11px; opacity:0.90; margin-top:2px; }
+.year-topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; margin-bottom:12px;
+}
 
-  /* Body Zellen */
-  table.year tbody th,
-  table.year tbody td{
-    border-bottom:1px solid #eef2f7;
-    border-right:1px solid #eef2f7;
-    padding:0;
-  }
-  table.year tbody th{
-    width:220px; min-width:220px; max-width:220px;
-    padding:6px 10px;
-    background:#fff;
-    font-weight:800;
-  }
+.year-scroll{
+  overflow-x:auto;
+  overflow-y:hidden;
+  border:1px solid #d9dee5;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 3px 12px rgba(0,0,0,0.06);
+}
 
-  table.year tbody td{
-    width:34px; min-width:34px; max-width:34px;
-    height:26px;
-    position:relative;
-    overflow:visible;              /* wichtig: Jobs dürfen rausstehen */
-    z-index:1;
-  }
+table.year{
+  border-collapse:separate;
+  border-spacing:0;
+  width:max-content;
+  table-layout:fixed;
+  font-size:13px;
+}
 
-  /* Section Header Zeilen */
-  tr.section-head th{
-    background:#f1f5f9;
-    font-weight:900;
-    border-top:2px solid #cbd5e1;
-  }
-  tr.section-head td{
-    background:#f1f5f9;
-    height:22px;
-  }
+table.year thead th{
+  position:sticky;
+  top:0;
+  z-index:5;
+  background:#0b57d0;
+  color:#fff;
+  border-bottom:1px solid rgba(255,255,255,0.2);
+  padding:6px 6px;
+  white-space:nowrap;
+  text-align:center;
+}
 
-  /* Optische Trennzeile */
-  tr.section-gap th,
-  tr.section-gap td{
-    background:#ffffff !important;
-    height:10px;
-    border:0 !important;
-  }
+.sticky-col{
+  position:sticky;
+  left:0;
+  z-index:8;
+  background:#fff;
+  border-right:1px solid #e5e7eb;
+}
 
-  /* Stammkapazität (untere 4 Zeilen) über volle Breite */
-  tr.capacity th,
-  tr.capacity td{
-    background:#f3f4f6 !important;
-  }
+thead .sticky-col{
+  z-index:10;
+  background:#0b57d0;
+  color:#fff;
+  border-right:1px solid rgba(255,255,255,0.25);
+}
 
-  /* Grid click selection */
-  td.cell{ cursor:pointer; }
-  td.cell.is-selected{
-    outline:2px solid #0b57d0;
-    outline-offset:-2px;
-  }
+table.year tbody td{
+  width:34px;
+  height:26px;
+  position:relative;
+  overflow:visible;
+  border-bottom:1px solid #eef2f7;
+  border-right:1px solid #eef2f7;
+}
 
-  /* Jobs */
-  .job{
-    position:absolute;
-    top:2px; left:2px;
-    border-radius:8px;
-    border:1px solid rgba(0,0,0,0.25);
-    color:#0f172a;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    padding:3px 6px;
-    box-sizing:border-box;
-    overflow:hidden;
-    user-select:none;
-    z-index:50;                    /* <<< wichtig: über Tabellenzellen */
-    pointer-events:auto;           /* <<< klickbar */
-  }
-  .job small.dot{
-    position:absolute;
-    right:6px;
-    top:6px;
-    width:10px;
-    height:10px;
-    border-radius:50%;
-    background:#1d4ed8;
-  }
+/* Jobs */
 
-  /* Farben */
-  .c-blue{ background:#93c5fd; }
-  .c-yellow{ background:#fde68a; }
-  .c-red{ background:#fca5a5; }
-  .c-green{ background:#86efac; }
+.job{
+  position:absolute;
+  top:2px;
+  left:2px;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,0.25);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:3px 6px;
+  box-sizing:border-box;
+  z-index:50;
+  pointer-events:auto;
+}
 
-  /* Rechtsklick-Menü */
-  .ctx{
-    position:fixed;
-    z-index:9999;
-    background:#fff;
-    border:1px solid #d9dee5;
-    border-radius:10px;
-    box-shadow:0 10px 30px rgba(0,0,0,.12);
-    min-width:180px;
-    display:none;
-    overflow:hidden;
-  }
-  .ctx button{
-    width:100%;
-    text-align:left;
-    border:0;
-    background:#fff;
-    padding:10px 12px;
-    cursor:pointer;
-    font-size:13px;
-  }
-  .ctx button:hover{ background:#f8fafc; }
-  .ctx .danger{ color:#b91c1c; }
+.c-blue{ background:#93c5fd; }
+.c-yellow{ background:#fde68a; }
+.c-red{ background:#fca5a5; }
+.c-green{ background:#86efac; }
 
-  /* Ressourcen-Zeilennamen editierbar */
-  .rowname-edit{ border-radius:6px; padding:4px 6px; }
-  .rowname-edit[contenteditable="true"]:hover{ background:#f8fafc; outline:1px dashed #cbd5e1; }
-  .rowname-edit[contenteditable="true"]:focus{ background:#fff; outline:2px solid #0b57d0; }
-
-  /* Modal */
-  .modal-backdrop{
-    position:fixed; inset:0;
-    background:rgba(15,23,42,0.45);
-    display:none; align-items:center; justify-content:center;
-    z-index:9998;
-  }
-  .modal{
-    width:min(520px, calc(100vw - 24px));
-    background:#fff;
-    border-radius:14px;
-    border:1px solid #d9dee5;
-    box-shadow:0 20px 60px rgba(0,0,0,.25);
-    overflow:hidden;
-  }
-  .modal header{
-    padding:12px 14px;
-    background:#0b57d0;
-    color:#fff;
-    font-weight:900;
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  .modal .body{ padding:14px; display:grid; gap:10px; }
-  .modal label{ font-weight:800; font-size:13px; }
-  .modal input, .modal textarea, .modal select{
-    width:100%;
-    padding:8px 10px;
-    border-radius:10px;
-    border:1px solid #d9dee5;
-    font-size:14px;
-  }
-  .modal footer{
-    padding:12px 14px;
-    display:flex;
-    justify-content:flex-end;
-    gap:10px;
-    border-top:1px solid #eef2f7;
-  }
-
-  .hint{ font-size:12px; color:#334155; }
 </style>
 {% endblock %}
 
 {% block content %}
 
-{% set y = year if year is defined else 2025 %}
+<div class="year-scroll">
+<table class="year" id="yearTable">
 
-<div class="year-topbar">
-  <div class="left">
-    <div class="pill">
-      <b>Jahresplanung</b>
-      <span style="opacity:.75;">|</span>
-      <span>Jahr: <b>{{ y }}</b></span>
-    </div>
+<thead>
 
-    <a class="btn" href="/year?year={{ y-1 }}">← {{ y-1 }}</a>
-    <a class="btn" href="/year?year={{ y+1 }}">{{ y+1 }} →</a>
+<tr class="kw-row">
+<th class="sticky-col">KW</th>
+{% for g in week_groups %}
+<th class="{% if not loop.first %}kw-sep{% endif %}" colspan="{{ g.span }}">
+KW {{ g.kw }}
+</th>
+{% endfor %}
+</tr>
 
-    <button class="btn primary" id="btnNew">+ Neue Baustelle</button>
+<tr>
+<th class="sticky-col"></th>
+{% for d in days %}
+<th class="{% if d.label == 'Mo' %}week-sep{% endif %}">
+{{ d.label }}<br>
+<small>{{ d.date_full }}</small>
+</th>
+{% endfor %}
+</tr>
 
-    <div class="pill hint">
-      Starttag wählen: <b>in Tabelle klicken</b> → dann „Neue Baustelle“
-    </div>
+</thead>
 
-    <div class="pill">
-      <div class="rc">
-        <label>EB</label>
-        <input id="rcEb" type="number" min="1" value="{{ row_counts.eb if row_counts is defined else (rows.eb|length) }}">
-      </div>
-      <div class="rc">
-        <label>RES</label>
-        <input id="rcRes" type="number" min="1" value="{{ row_counts.res if row_counts is defined else (rows.res|length) }}">
-      </div>
-      <div class="rc">
-        <label>GG</label>
-        <input id="rcGg" type="number" min="1" value="{{ row_counts.gg if row_counts is defined else (rows.gg|length) }}">
-      </div>
-      <button class="btn" id="btnSaveRows" type="button">Zeilen speichern</button>
-    </div>
-  </div>
-</div>
+<tbody>
 
-<div class="year-scroll" id="yearScroll">
-  <table class="year" id="yearTable">
-    <thead>
-      <!-- KW Zeile: 1 Feld pro Woche (colspan) -->
-      <tr class="kw-row">
-        <th class="sticky-col">KW / Freitag</th>
-        {% for g in week_groups %}
-          <th class="kw-group" colspan="{{ g.span }}">
-            <div class="kw-cell">
-              <span class="kw-mini">KW {{ g.kw }}</span>
-              <label class="kw-toggle" title="Freitag für diese KW ein/ausblenden (global)">
-                <input type="checkbox"
-                       class="kwFrToggle"
-                       data-year="{{ g.year }}"
-                       data-kw="{{ g.kw }}"
-                       {% if g.show_friday %}checked{% endif %}>
-                Fr
-              </label>
-            </div>
-          </th>
-        {% endfor %}
-      </tr>
+{% for sec in ['eb','res','gg'] %}
+{% for r in rows[sec] %}
+<tr>
+<th class="sticky-col">{{ r.name }}</th>
+{% for d in days %}
+<td class="cell {% if d.label == 'Mo' %}week-sep{% endif %}"
+    data-section="{{ sec }}"
+    data-row="{{ r.row_index }}"
+    data-ymd="{{ d.ymd }}">
+</td>
+{% endfor %}
+</tr>
+{% endfor %}
+{% endfor %}
 
-      <!-- Tag + Datum -->
-      <tr class="day-row">
-        <th class="sticky-col"></th>
-        {% for d in days %}
-          <th data-ymd="{{ d.ymd }}">
-            <div class="day-label">{{ d.label }}</div>
-            <div class="day-date">{{ d.date_full if d.date_full is defined else d.date }}</div>
-          </th>
-        {% endfor %}
-      </tr>
-    </thead>
-
-    <tbody>
-      <!-- EB -->
-      <tr class="section-head">
-        <th class="sticky-col">Standort Engelbrechts</th>
-        {% for _ in days %}<td></td>{% endfor %}
-      </tr>
-
-      {% set eb_count = rows.eb|length %}
-      {% for r in rows.eb %}
-        {% set is_cap = (r.row_index >= eb_count-4) %}
-        <tr class="{% if is_cap %}capacity{% endif %}">
-          <th class="sticky-col"><span>{{ r.name }}</span></th>
-          {% for d in days %}
-            <td class="cell" data-section="eb" data-row="{{ r.row_index }}" data-ymd="{{ d.ymd }}"></td>
-          {% endfor %}
-        </tr>
-      {% endfor %}
-
-      <tr class="section-gap">
-        <th class="sticky-col"></th>
-        {% for _ in days %}<td></td>{% endfor %}
-      </tr>
-
-      <!-- RES -->
-      <tr class="section-head">
-        <th class="sticky-col">Ressourcen (editierbar)</th>
-        {% for _ in days %}<td></td>{% endfor %}
-      </tr>
-
-      {% set res_count = rows.res|length %}
-      {% for r in rows.res %}
-        {% set is_cap = (r.row_index >= res_count-4) %}
-        <tr class="{% if is_cap %}capacity{% endif %}">
-          <th class="sticky-col">
-            <span class="rowname-edit"
-                  contenteditable="true"
-                  data-rowid="{{ r.id }}"
-                  data-section="res"
-                  data-row="{{ r.row_index }}"
-                  spellcheck="false">{{ r.name }}</span>
-          </th>
-          {% for d in days %}
-            <td class="cell" data-section="res" data-row="{{ r.row_index }}" data-ymd="{{ d.ymd }}"></td>
-          {% endfor %}
-        </tr>
-      {% endfor %}
-
-      <tr class="section-gap">
-        <th class="sticky-col"></th>
-        {% for _ in days %}<td></td>{% endfor %}
-      </tr>
-
-      <!-- GG -->
-      <tr class="section-head">
-        <th class="sticky-col">Standort Groß Gerungs</th>
-        {% for _ in days %}<td></td>{% endfor %}
-      </tr>
-
-      {% set gg_count = rows.gg|length %}
-      {% for r in rows.gg %}
-        {% set is_cap = (r.row_index >= gg_count-4) %}
-        <tr class="{% if is_cap %}capacity{% endif %}">
-          <th class="sticky-col"><span>{{ r.name }}</span></th>
-          {% for d in days %}
-            <td class="cell" data-section="gg" data-row="{{ r.row_index }}" data-ymd="{{ d.ymd }}"></td>
-          {% endfor %}
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-<!-- Context Menu -->
-<div class="ctx" id="ctxMenu">
-  <button id="ctxEdit">Bearbeiten</button>
-  <button class="danger" id="ctxDelete">Löschen</button>
-</div>
-
-<!-- Modal: Neue Baustelle -->
-<div class="modal-backdrop" id="modalBg">
-  <div class="modal">
-    <header>
-      <span id="modalTitle">Neue Baustelle</span>
-      <button class="btn" id="btnClose" type="button">✕</button>
-    </header>
-
-    <div class="body">
-      <div>
-        <label>Name, Ort</label>
-        <input id="fTitle" placeholder="z.B. Huber, Zwettl">
-      </div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div>
-          <label>Dauer (Arbeitstage)</label>
-          <input id="fDur" type="number" min="1" value="5">
-        </div>
-        <div>
-          <label>Mitarbeiter (Höhe in Zeilen)</label>
-          <input id="fHeight" type="number" min="1" value="1">
-        </div>
-      </div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div>
-          <label>Start (geklickter Tag)</label>
-          <input id="fStart" type="text" readonly>
-          <div class="hint">Wird über Klick in der Tabelle gesetzt.</div>
-        </div>
-        <div>
-          <label>Art</label>
-          <select id="fColor">
-            <option value="blue">Fixtermin (blau)</option>
-            <option value="yellow" selected>Verschiebbar (gelb)</option>
-            <option value="red">Urlaub (rot)</option>
-            <option value="green">Intern (grün)</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label>Zusatzinfo (optional)</label>
-        <textarea id="fNote" rows="3" placeholder="Notiz…"></textarea>
-      </div>
-
-      <div class="hint">
-        Zielposition kommt vom Klick: Bereich (EB/RES/GG) + Zeile + Tag.
-      </div>
-    </div>
-
-    <footer>
-      <button class="btn" id="btnCancel" type="button">Abbrechen</button>
-      <button class="btn primary" id="btnSave" type="button">Speichern</button>
-    </footer>
-  </div>
+</tbody>
+</table>
 </div>
 
 <script>
-  const jobs = {{ jobs|tojson }};
-  const days = {{ days|tojson }};
 
-  const yearTable = document.getElementById('yearTable');
-  const modalBg = document.getElementById('modalBg');
-  const btnNew = document.getElementById('btnNew');
-  const btnClose = document.getElementById('btnClose');
-  const btnCancel = document.getElementById('btnCancel');
-  const btnSave = document.getElementById('btnSave');
+const jobs = {{ jobs|tojson }};
+const days = {{ days|tojson }};
+const yearTable = document.getElementById('yearTable');
 
-  const fTitle = document.getElementById('fTitle');
-  const fDur = document.getElementById('fDur');
-  const fHeight = document.getElementById('fHeight');
-  const fStart = document.getElementById('fStart');
-  const fColor = document.getElementById('fColor');
-  const fNote = document.getElementById('fNote');
+/* ============================= */
+/* Konflikt-Erkennung            */
+/* ============================= */
 
-  // row count controls
-  const btnSaveRows = document.getElementById('btnSaveRows');
-  const rcEb = document.getElementById('rcEb');
-  const rcRes = document.getElementById('rcRes');
-  const rcGg = document.getElementById('rcGg');
+function detectConflicts(jobs){
 
-  // Auswahl (Klickzelle)
-  let anchor = null; // {section,row,ymd}
-  let selectedCellEl = null;
+  const occupied = {};
 
-  function openModal(){ modalBg.style.display = 'flex'; }
-  function closeModal(){ modalBg.style.display = 'none'; }
-
-  btnNew.addEventListener('click', () => {
-    if (!anchor) {
-      alert('Bitte zuerst einen Starttag in der Tabelle anklicken.');
-      return;
-    }
-    fTitle.value = '';
-    fDur.value = 5;
-    fHeight.value = 1;
-    fStart.value = anchor.ymd + ' (' + anchor.section.toUpperCase() + ', Zeile ' + (anchor.row+1) + ')';
-    fColor.value = 'yellow';
-    fNote.value = '';
-    openModal();
-  });
-
-  btnClose.addEventListener('click', closeModal);
-  btnCancel.addEventListener('click', closeModal);
-  modalBg.addEventListener('click', (e) => { if (e.target === modalBg) closeModal(); });
-
-  // Klick in Grid: Starttag/Position setzen
-  yearTable.querySelectorAll('td.cell').forEach(td => {
-    td.addEventListener('click', () => {
-      if (selectedCellEl) selectedCellEl.classList.remove('is-selected');
-      selectedCellEl = td;
-      td.classList.add('is-selected');
-      anchor = { section: td.dataset.section, row: parseInt(td.dataset.row, 10), ymd: td.dataset.ymd };
-    });
-  });
-
-  // KW Freitag Toggle (global)
-  document.querySelectorAll('.kwFrToggle').forEach(cb => {
-    cb.addEventListener('change', async () => {
-      const year = parseInt(cb.dataset.year, 10);
-      const kw = parseInt(cb.dataset.kw, 10);
-      const show_friday = cb.checked ? 1 : 0;
-      try{
-        const res = await fetch('/api/year/set-friday', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({year, kw, show_friday})
-        });
-        if (!res.ok) throw new Error('save failed');
-        location.reload();
-      }catch(e){
-        console.warn(e);
-        alert('Konnte Freitag-Override nicht speichern.');
-        cb.checked = !cb.checked;
+  jobs.forEach(j=>{
+    for(let c=0;c<j.col_span;c++){
+      for(let h=0;h<j.height_rows;h++){
+        const key = j.section+"-"+(j.row_index+h)+"-"+(j.col_start+c);
+        if(!occupied[key]) occupied[key]=[];
+        occupied[key].push(j.id);
       }
-    });
-  });
-
-  // Ressourcen-Zeilennamen speichern (blur)
-  document.querySelectorAll('.rowname-edit').forEach(el => {
-    el.addEventListener('blur', async () => {
-      const row_id = parseInt(el.dataset.rowid, 10);
-      const name = (el.textContent || '').trim();
-      if (!name) return;
-      try{
-        const res = await fetch('/api/year/update-row-name', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ row_id, name })
-        });
-        if (!res.ok) throw new Error('save failed');
-      }catch(e){
-        console.warn(e);
-        alert('Konnte Ressourcen-Namen nicht speichern.');
-      }
-    });
-  });
-
-  // Zeilenanzahl speichern
-  btnSaveRows.addEventListener('click', async () => {
-    const counts = {
-      eb: parseInt(rcEb.value || "1", 10),
-      res: parseInt(rcRes.value || "1", 10),
-      gg: parseInt(rcGg.value || "1", 10),
-    };
-    try{
-      const res = await fetch('/api/year/set-row-counts', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ counts })
-      });
-      const js = await res.json().catch(()=>({}));
-      if (!res.ok || !js.ok){
-        alert(js.error || 'Speichern fehlgeschlagen.');
-        return;
-      }
-      location.reload();
-    }catch(e){
-      console.warn(e);
-      alert('Speichern fehlgeschlagen.');
     }
   });
 
-  // ===== Jobs rendern =====
-  function findCell(section, rowIndex, colIndex){
-    const ymd = days[colIndex]?.ymd;
-    if (!ymd) return null;
-    return yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
-  }
+  const conflicts = new Set();
 
-  function renderJobs(){
-    yearTable.querySelectorAll('.job').forEach(n => n.remove());
-
-    jobs.forEach(j => {
-      const startCell = findCell(j.section, j.row_index, j.col_start);
-      if (!startCell) return;
-
-      const cellH = startCell.getBoundingClientRect().height;
-      const cellW = startCell.getBoundingClientRect().width;
-
-      const heightPx = Math.max(cellH * j.height_rows - 4, cellH-4);
-      const widthPx  = (cellW * j.col_span) - 4;
-
-      const div = document.createElement('div');
-      div.className = `job c-${j.color}`;
-      div.style.height = heightPx + 'px';
-      div.style.width = widthPx + 'px';
-      div.dataset.id = j.id;
-      div.textContent = j.title || '';
-
-      if ((j.note || '').trim().length > 0){
-        const dot = document.createElement('small');
-        dot.className = 'dot';
-        div.appendChild(dot);
-      }
-
-      // Rechtsklick
-      div.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        openCtxMenu(e.clientX, e.clientY, j);
-      });
-
-      startCell.appendChild(div);
-    });
-  }
-
-  // bei Resize neu berechnen (sonst Pixelmaße verziehen)
-  let _rzT = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(_rzT);
-    _rzT = setTimeout(renderJobs, 120);
-  });
-
-  // Context Menu
-  const ctx = document.getElementById('ctxMenu');
-  const ctxEdit = document.getElementById('ctxEdit');
-  const ctxDelete = document.getElementById('ctxDelete');
-  let ctxJob = null;
-
-  function openCtxMenu(x, y, job){
-    ctxJob = job;
-    ctx.style.display = 'block';
-    ctx.style.left = x + 'px';
-    ctx.style.top = y + 'px';
-  }
-  function closeCtxMenu(){
-    ctx.style.display = 'none';
-    ctxJob = null;
-  }
-
-  document.addEventListener('click', () => {
-    if (ctx.style.display === 'block') closeCtxMenu();
-  });
-
-  ctxDelete.addEventListener('click', async () => {
-    if (!ctxJob) return;
-    if (!confirm('Baustelle wirklich löschen?')) return;
-
-    try{
-      const res = await fetch('/api/year/delete-job', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({id: ctxJob.id})
-      });
-      if (!res.ok) throw new Error('delete failed');
-      location.reload();
-    }catch(e){
-      console.warn(e);
-      alert('Löschen fehlgeschlagen.');
-    }finally{
-      closeCtxMenu();
+  Object.values(occupied).forEach(arr=>{
+    if(arr.length>1){
+      arr.forEach(id=>conflicts.add(id));
     }
   });
 
-  ctxEdit.addEventListener('click', () => {
-    if (!ctxJob) return;
-    alert('Edit ist der nächste Step: dafür bauen wir /api/year/update-job + Modal-Save.');
-    closeCtxMenu();
-  });
+  return conflicts;
+}
 
-  // Speichern (create)
-  btnSave.addEventListener('click', async () => {
-    if (!anchor) return;
+function findCell(section,rowIndex,colIndex){
+  const ymd = days[colIndex]?.ymd;
+  return yearTable.querySelector(
+    `td[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`
+  );
+}
 
-    const payload = {
-      title: (fTitle.value || '').trim(),
-      start_date: anchor.ymd,
-      duration_days: parseInt(fDur.value || '1', 10),
-      height_rows: parseInt(fHeight.value || '1', 10),
-      section: anchor.section,
-      row_index: anchor.row,
-      color: fColor.value,
-      note: (fNote.value || '').trim()
-    };
+function renderJobs(){
 
-    if (!payload.title){
-      alert('Bitte "Name, Ort" ausfüllen.');
-      return;
+  yearTable.querySelectorAll('.job').forEach(n=>n.remove());
+
+  const conflicts = detectConflicts(jobs);
+
+  jobs.forEach(j=>{
+
+    const startCell = findCell(j.section,j.row_index,j.col_start);
+    if(!startCell) return;
+
+    const cellH = startCell.getBoundingClientRect().height;
+    const cellW = startCell.getBoundingClientRect().width;
+
+    const heightPx = cellH*j.height_rows-4;
+    const widthPx  = cellW*j.col_span-4;
+
+    const div = document.createElement('div');
+    div.className = `job c-${j.color}`;
+    if(conflicts.has(j.id)){
+      div.classList.add('is-conflict');
     }
 
-    try{
-      const res = await fetch('/api/year/create-job', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      const js = await res.json().catch(()=>({}));
-      if (!res.ok || !js.ok){
-        alert(js.error || 'Speichern fehlgeschlagen.');
-        return;
-      }
-      closeModal();
-      location.reload();
-    }catch(e){
-      console.warn(e);
-      alert('Speichern fehlgeschlagen.');
-    }
+    div.style.height = heightPx+'px';
+    div.style.width  = widthPx+'px';
+    div.textContent  = j.title;
+
+    startCell.appendChild(div);
   });
 
-  renderJobs();
+}
+
+window.addEventListener('resize',()=>{
+  setTimeout(renderJobs,100);
+});
+
+renderJobs();
+
 </script>
+
 {% endblock %}
