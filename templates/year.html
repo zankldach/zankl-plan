@@ -105,6 +105,7 @@
     padding:0;
   }
   table.year tbody th{
+    min-width:60px;
     width:220px; min-width:220px; max-width:220px;
     padding:6px 10px;
     background:#fff;
@@ -112,11 +113,11 @@
   }
 
   table.year tbody td{
-    width:34px; min-width:34px; max-width:34px;
-    height:26px;
+    width:60px; min-width:60px; max-width:60px;
+    height:24px;
     position:relative;
     overflow:visible;
-    z-index:1;
+    z-index:0;
   }
 
   /* Abschnitt-Header */
@@ -172,7 +173,7 @@
     box-sizing:border-box;
     overflow:hidden;
     user-select:none;
-    z-index:50;
+    z-index:999;
     pointer-events:auto;
   }
   .job small.dot{
@@ -191,6 +192,12 @@
   .c-red{ background:#fca5a5; }
   .c-green{ background:#86efac; }
 
+  .c-white{
+    background:#ffffff;
+    border:2px solid #cbd5e1;
+    opacity:0.6;
+  }
+  
   /* Konflikt (Überschneidung) -> schwarz */
   .job.is-conflict{
     background:#000 !important;
@@ -618,40 +625,41 @@
     return yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
   }
 
-  function renderJobs(){
-    yearTable.querySelectorAll('.job').forEach(n => n.remove());
+ function renderJobs(){
+  yearTable.querySelectorAll('.job').forEach(n => n.remove());
+  yearTable.querySelectorAll('.conflict-cell').forEach(n => n.classList.remove('conflict-cell'));
 
-    jobs.forEach(j => {
-      const startCell = findCell(j.section, j.row_index, j.col_start);
-      if (!startCell) return;
+  jobs.forEach(j => {
+    const startCell = findCell(j.section, j.row_index, j.col_start);
+    if (!startCell) return;
 
-      const cellH = startCell.getBoundingClientRect().height;
-      const cellW = startCell.getBoundingClientRect().width;
+    const cellH = startCell.getBoundingClientRect().height;
+    const cellW = startCell.getBoundingClientRect().width;
 
-      const heightPx = Math.max(cellH * j.height_rows - 4, cellH-4);
-      const widthPx  = (cellW * j.col_span) - 4;
+    const heightPx = Math.max(cellH * j.height_rows - 4, cellH-4);
+    const widthPx  = (cellW * j.col_span) - 4;
 
-      const div = document.createElement('div');
-      div.className = `job c-${j.color}` + (j.conflict ? ' is-conflict' : '');
-      div.style.height = heightPx + 'px';
-      div.style.width = widthPx + 'px';
-      div.dataset.id = j.id;
-      div.textContent = j.title || '';
+    const div = document.createElement('div');
+    div.className = `job c-${j.color}`;
+    div.style.height = heightPx + 'px';
+    div.style.width = widthPx + 'px';
+    div.dataset.id = j.id;
+    div.textContent = j.title || '';
 
-      if ((j.note || '').trim().length > 0){
-        const dot = document.createElement('small');
-        dot.className = 'dot';
-        div.appendChild(dot);
+    startCell.appendChild(div);
+
+    // Nur Konfliktbereiche schwarz markieren
+    if (j.conflict){
+      for (let c=j.col_start; c < j.col_start + j.col_span; c++){
+        const cell = findCell(j.section, j.row_index, c);
+        if (cell){
+          cell.classList.add("conflict-cell");
+        }
       }
+    }
+  });
+}
 
-      div.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        openCtxMenu(e.clientX, e.clientY, j);
-      });
-
-      startCell.appendChild(div);
-    });
-  }
 
   let _rzT = null;
   window.addEventListener('resize', () => {
