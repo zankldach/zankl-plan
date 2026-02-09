@@ -104,17 +104,22 @@
     border-right:1px solid #eef2f7;
     padding:0;
   }
-  table.year tbody th{
-    min-width:60px;
-    width:220px; min-width:220px; max-width:220px;
-    padding:6px 10px;
-    background:#fff;
-    font-weight:800;
-  }
+table.year tbody td{
+    width:110px;
+    min-width:110px;
+    max-width:110px;
+    height:28px;
+    position:relative;
+    overflow:visible;
+}
 
-  table.year tbody td{
-    width:60px; min-width:60px; max-width:60px;
-    height:24px;
+
+table.year tbody td{
+    width:110px;
+    min-width:110px;
+    max-width:110px;
+    height:28px;
+
     position:relative;
     overflow:visible;
     z-index:0;
@@ -173,7 +178,7 @@
     box-sizing:border-box;
     overflow:hidden;
     user-select:none;
-    z-index:999;
+    z-index:50;
     pointer-events:auto;
   }
   .job small.dot{
