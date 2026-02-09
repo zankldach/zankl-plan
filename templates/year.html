@@ -33,13 +33,16 @@
   }
 
   /* Scroll-Container */
-  .year-scroll{
+.year-scroll{
+    position:relative;
     overflow-x:auto;
     overflow-y:hidden;
     border:1px solid #d9dee5;
     border-radius:12px;
     background:#fff;
     box-shadow:0 3px 12px rgba(0,0,0,0.06);
+}
+
   }
 
   table.year{
@@ -111,18 +114,9 @@ table.year tbody td{
     height:28px;
     position:relative;
     overflow:visible;
+    z-index:1;
 }
 
-
-table.year tbody td{
-    width:110px;
-    min-width:110px;
-    max-width:110px;
-    height:28px;
-
-    position:relative;
-    overflow:visible;
-  }
 
   /* Abschnitt-Header */
   tr.section-head th{
@@ -164,22 +158,20 @@ table.year tbody td{
 
   /* Jobs */
 .job{
-    position:absolute;
-    top:2px;
-    left:2px;
-    border-radius:8px;
-    border:1px solid rgba(0,0,0,0.25);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    padding:3px 6px;
-    box-sizing:border-box;
-    overflow:hidden;
-    user-select:none;
+  position:absolute;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,0.25);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:3px 6px;
+  box-sizing:border-box;
+  overflow:hidden;
+  user-select:none;
 
-    z-index:20;          /* wichtig */
-    pointer-events:auto; /* wichtig */
+  z-index:50;
+  pointer-events:auto;
 }
 
   }
@@ -281,6 +273,11 @@ table.year tbody td{
   }
 
   .hint{ font-size:12px; color:#334155; }
+
+  .conflict-cell{
+  background:#000 !important;
+}
+
 </style>
 {% endblock %}
 
@@ -324,6 +321,7 @@ table.year tbody td{
 </div>
 
 <div class="year-scroll" id="yearScroll">
+  <div id="jobLayer"></div>
   <table class="year" id="yearTable">
     <thead>
       <tr class="kw-row">
@@ -653,7 +651,8 @@ table.year tbody td{
     div.dataset.id = j.id;
     div.textContent = j.title || '';
 
-    startCell.appendChild(div);
+  document.getElementById('jobLayer').appendChild(div);
+
 
     // Nur Konfliktbereiche schwarz markieren
     if (j.conflict){
