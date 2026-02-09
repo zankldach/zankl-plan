@@ -38,6 +38,13 @@ def column_exists(cur, table: str, column: str) -> bool:
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS year_row_settings(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          section TEXT NOT NULL UNIQUE,        -- 'eb' | 'res' | 'gg'
+          row_count INTEGER NOT NULL
+        )
+    """)
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
