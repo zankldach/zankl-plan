@@ -549,6 +549,17 @@ def year_page(request: Request, year: int | None = Query(None)):
         for j in jobs:
             if int(j["id"]) in conflict_ids:
                 j["conflict"] = True
+                # --- conflict_cells: nur die echten überlappenden Zellen ---
+conflict_cells = []
+for (sec, rr, cc), ids in occ.items():
+    if len(ids) > 1:
+        if 0 <= cc < len(days):
+            conflict_cells.append({
+                "section": sec,
+                "row": int(rr),
+                "ymd": days[cc]["ymd"],
+            })
+
 
         return templates.TemplateResponse(
             "year.html",
@@ -559,6 +570,7 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "week_groups": week_groups,
                 "rows": rows,
                 "jobs": jobs,
+                "conflict_cells": conflict_cells,
                 "row_counts": row_counts,
             }
         )
