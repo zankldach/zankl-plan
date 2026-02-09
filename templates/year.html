@@ -42,12 +42,18 @@
     background:#fff;
     box-shadow:0 3px 12px rgba(0,0,0,0.06);
 }
-  #jobLayer{
-  position: relative;
-  z-index: 3;
+#jobLayer{
+  position:absolute;
+  inset:0;
+  z-index:4;
+  pointer-events:none;   /* wichtig */
 }
 
-  }
+.job{
+  pointer-events:auto;   /* wichtig */
+  z-index:5;
+}
+
 
   table.year{
     border-collapse:separate;
@@ -176,7 +182,6 @@ table.year tbody td{
 
   z-index:3;
   pointer-events:auto;
-}
 
   }
   .job small.dot{
@@ -644,20 +649,10 @@ yearTable.addEventListener('click', (e) => {
     if (!ymd) return null;
     return yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
   }
-function selectCell(td){
-  if (!td) return;
-  if (selectedCellEl) selectedCellEl.classList.remove('is-selected');
-  selectedCellEl = td;
-  td.classList.add('is-selected');
-  anchor = {
-    section: td.dataset.section,
-    row: parseInt(td.dataset.row, 10),
-    ymd: td.dataset.ymd
-  };
-}
+
 
  function renderJobs(){
-  yearTable.querySelectorAll('.job').forEach(n => n.remove());
+  document.getElementById('jobLayer').querySelectorAll('.job').forEach(n => n.remove());
   yearTable.querySelectorAll('.conflict-cell').forEach(n => n.classList.remove('conflict-cell'));
 
   jobs.forEach(j => {
@@ -677,9 +672,6 @@ function selectCell(td){
     div.dataset.id = j.id;
     div.textContent = j.title || '';
 
-  document.getElementById('jobLayer').appendChild(div);
-
-    div.textContent = j.title || '';
 
     // 1) Position im jobLayer setzen (SONST immer links oben!)
     const cellRect = startCell.getBoundingClientRect();
