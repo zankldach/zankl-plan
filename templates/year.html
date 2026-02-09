@@ -283,8 +283,8 @@ table.year tbody td{
 
   .hint{ font-size:12px; color:#334155; }
 
-  .conflict-cell{
-  background:#000 !important;
+.conflict-cell{ background:#000 !important; }
+
 }
 
 </style>
@@ -501,6 +501,8 @@ table.year tbody td{
 <script>
   const jobs = {{ jobs|tojson }};
   const days = {{ days|tojson }};
+  const conflictCells = {{ conflict_cells|tojson }};
+
 
   const yearTable = document.getElementById('yearTable');
   const modalBg = document.getElementById('modalBg');
@@ -654,6 +656,13 @@ yearTable.addEventListener('click', (e) => {
  function renderJobs(){
   document.getElementById('jobLayer').querySelectorAll('.job').forEach(n => n.remove());
   yearTable.querySelectorAll('.conflict-cell').forEach(n => n.classList.remove('conflict-cell'));
+  // Overlap-Zellen markieren (nur echte Überschneidungen)
+  (conflictCells || []).forEach(c => {
+    const td = yearTable.querySelector(
+      `td.cell[data-section="${c.section}"][data-row="${c.row}"][data-ymd="${c.ymd}"]`
+    );
+    if (td) td.classList.add('conflict-cell');
+  });
 
   jobs.forEach(j => {
     const startCell = findCell(j.section, j.row_index, j.col_start);
@@ -699,11 +708,7 @@ yearTable.addEventListener('click', (e) => {
     });
 
     // Nur Konfliktbereiche schwarz markieren
-    if (j.conflict){
-      for (let c=j.col_start; c < j.col_start + j.col_span; c++){
-        const cell = findCell(j.section, j.row_index, c);
-        if (cell){
-          cell.classList.add("conflict-cell");
+   
         }
       }
     }
