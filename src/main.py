@@ -347,6 +347,32 @@ def build_year_days(cur, center: date) -> list[dict]:
 
     return days
 
+def build_year_days_for_year(cur, year: int) -> list[dict]:
+    """
+    Liefert ALLE Arbeitstage eines Jahres (Mo–Fr, Fr nach Regel/Override, Feiertage raus).
+    Zusätzlich: date_full als dd.mm.yy für die Anzeige.
+    """
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+
+    out = []
+    d = start
+    while d <= end:
+        if is_workday(cur, d):
+            y, w, _ = d.isocalendar()
+            out.append({
+                "ymd": fmt_ymd(d),
+                "label": ["Mo", "Di", "Mi", "Do", "Fr"][d.isoweekday()-1],
+                "date": d.strftime("%d.%m."),      # kurz (falls du es noch wo brauchst)
+                "date_full": d.strftime("%d.%m.%y"),  # NEU: dd.mm.yy
+                "year": int(y),
+                "kw": int(w),
+                "is_friday": (d.isoweekday() == 5),
+            })
+        d += timedelta(days=1)
+
+    return out
+
 
 # 👉 GENAU HIER EINFÜGEN
 def password_ok(pw: str) -> bool:
@@ -376,16 +402,17 @@ def require_write(request: Request):
 
 # ---------------- YEAR – Jahresplanung ----------------
 @app.get("/year", response_class=HTMLResponse)
-def year_page(request: Request):
+def year_page(request: Request, year: int | None = Query(None)):
     guard = require_write(request)
     if guard:
         return guard
 
-    today = date.today()
+    year_sel = int(year) if year else date.today().year
+
 
     conn = get_conn(); cur = conn.cursor()
     try:
-        days = build_year_days(cur, today)
+        days = build_year_days_for_year(cur, year_sel)
 
         # rows
         cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
@@ -437,26 +464,30 @@ def year_page(request: Request):
             })
 
         # friday visibility map per KW (für Checkboxen im Header)
-        kw_map = {}
-        for d in days:
-            key = f'{d["year"]}-KW{d["kw"]}'
-            if key not in kw_map:
-                kw_map[key] = {
-                    "year": d["year"],
-                    "kw": d["kw"],
-                    "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
-                }
+kw_map = {}
+for d in days:
+    if d.get("label") != "Mo":
+        continue
+    key = f'{d["year"]}-KW{d["kw"]}'
+    kw_map[key] = {
+        "year": d["year"],
+        "kw": d["kw"],
+        "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
+    }
 
-        return templates.TemplateResponse(
-            "year.html",
-            {
-                "request": request,
-                "days": days,
-                "kw_map": list(kw_map.values()),
-                "rows": rows,
-                "jobs": jobs,
-            }
-        )
+
+return templates.TemplateResponse(
+    "year.html",
+    {
+        "request": request,
+        "year": year_sel,   # <-- NEU
+        "days": days,
+        "kw_map": list(kw_map.values()),
+        "rows": rows,
+        "jobs": jobs,
+    }
+)
+
     finally:
         conn.close()
 
@@ -506,6 +537,34 @@ async def api_year_set_friday(request: Request, data: dict = Body(...)):
             VALUES(?,?,?)
             ON CONFLICT(year,kw) DO UPDATE SET show_friday=excluded.show_friday
         """, (year, kw, show))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+@app.post("/api/year/update-row-name")
+async def api_year_update_row_name(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    row_id = int(data.get("row_id") or 0)
+    name = (data.get("name") or "").strip()
+
+    if not row_id or not name:
+        return JSONResponse({"ok": False, "error": "missing row_id/name"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, section FROM year_rows WHERE id=?", (row_id,))
+        r = cur.fetchone()
+        if not r:
+            return JSONResponse({"ok": False, "error": "row not found"}, status_code=404)
+
+        # nur Ressourcen editierbar (wie gewünscht)
+        if (r["section"] or "") != "res":
+            return JSONResponse({"ok": False, "error": "only resources editable"}, status_code=400)
+
+        cur.execute("UPDATE year_rows SET name=? WHERE id=?", (name, row_id))
         conn.commit()
         return {"ok": True}
     finally:
