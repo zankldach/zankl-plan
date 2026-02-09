@@ -368,8 +368,8 @@ def build_year_days(cur, center: date) -> list[dict]:
 
 def build_year_days_for_year(cur, year: int) -> list[dict]:
     """
-    Liefert ALLE Arbeitstage eines Jahres (Mo–Fr, Fr nach Regel/Override, Feiertage raus).
-    Zusätzlich: date_full als dd.mm.yy für die Anzeige.
+    Liefert ALLE Arbeitstage eines Jahres (Mo-Fr, Fr nach Regel/Override, Feiertage raus).
+    Zusaetzlich: date_full als dd.mm.yy fuer die Anzeige.
     """
     start = date(year, 1, 1)
     end = date(year, 12, 31)
@@ -382,8 +382,8 @@ def build_year_days_for_year(cur, year: int) -> list[dict]:
             out.append({
                 "ymd": fmt_ymd(d),
                 "label": ["Mo", "Di", "Mi", "Do", "Fr"][d.isoweekday()-1],
-                "date": d.strftime("%d.%m."),      # kurz (falls du es noch wo brauchst)
-                "date_full": d.strftime("%d.%m.%y"),  # NEU: dd.mm.yy
+                "date": d.strftime("%d.%m."),
+                "date_full": d.strftime("%d.%m.%y"),
                 "year": int(y),
                 "kw": int(w),
                 "is_friday": (d.isoweekday() == 5),
@@ -391,6 +391,7 @@ def build_year_days_for_year(cur, year: int) -> list[dict]:
         d += timedelta(days=1)
 
     return out
+
 
 
 # 👉 GENAU HIER EINFÜGEN
