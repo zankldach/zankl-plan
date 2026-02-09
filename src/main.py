@@ -464,29 +464,29 @@ def year_page(request: Request, year: int | None = Query(None)):
             })
 
         # friday visibility map per KW (für Checkboxen im Header)
-kw_map = {}
-for d in days:
-    if d.get("label") != "Mo":
-        continue
-    key = f'{d["year"]}-KW{d["kw"]}'
-    kw_map[key] = {
-        "year": d["year"],
-        "kw": d["kw"],
-        "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
-    }
+        kw_map = {}
+        for d in days:
+            if d.get("label") != "Mo":
+                continue
+            key = f'{d["year"]}-KW{d["kw"]}'
+            kw_map[key] = {
+                "year": d["year"],
+                "kw": d["kw"],
+                "show_friday": 1 if should_show_friday(cur, d["year"], d["kw"]) else 0
+            }
 
+        return templates.TemplateResponse(
+            "year.html",
+            {
+                "request": request,
+                "year": year_sel,
+                "days": days,
+                "kw_map": list(kw_map.values()),
+                "rows": rows,
+                "jobs": jobs,
+            }
+        )
 
-return templates.TemplateResponse(
-    "year.html",
-    {
-        "request": request,
-        "year": year_sel,   # <-- NEU
-        "days": days,
-        "kw_map": list(kw_map.values()),
-        "rows": rows,
-        "jobs": jobs,
-    }
-)
 
     finally:
         conn.close()
