@@ -42,6 +42,10 @@
     background:#fff;
     box-shadow:0 3px 12px rgba(0,0,0,0.06);
 }
+  #jobLayer{
+  position: relative;
+  z-index: 3;
+}
 
   }
 
@@ -170,7 +174,7 @@ table.year tbody td{
   overflow:hidden;
   user-select:none;
 
-  z-index:50;
+  z-index:3;
   pointer-events:auto;
 }
 
@@ -536,14 +540,25 @@ table.year tbody td{
   btnCancel.addEventListener('click', closeModal);
   modalBg.addEventListener('click', (e) => { if (e.target === modalBg) closeModal(); });
 
-  yearTable.querySelectorAll('td.cell').forEach(td => {
-    td.addEventListener('click', () => {
-      if (selectedCellEl) selectedCellEl.classList.remove('is-selected');
-      selectedCellEl = td;
-      td.classList.add('is-selected');
-      anchor = { section: td.dataset.section, row: parseInt(td.dataset.row, 10), ymd: td.dataset.ymd };
-    });
-  });
+function selectCell(td){
+  if (!td) return;
+  if (selectedCellEl) selectedCellEl.classList.remove('is-selected');
+  selectedCellEl = td;
+  td.classList.add('is-selected');
+  anchor = {
+    section: td.dataset.section,
+    row: parseInt(td.dataset.row, 10),
+    ymd: td.dataset.ymd
+  };
+}
+
+// Event Delegation: funktioniert auch wenn du auf .job klickst
+yearTable.addEventListener('click', (e) => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  selectCell(td);
+});
+
 
   // KW Freitag Toggle
   document.querySelectorAll('.kwFrToggle').forEach(cb => {
@@ -629,6 +644,17 @@ table.year tbody td{
     if (!ymd) return null;
     return yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
   }
+function selectCell(td){
+  if (!td) return;
+  if (selectedCellEl) selectedCellEl.classList.remove('is-selected');
+  selectedCellEl = td;
+  td.classList.add('is-selected');
+  anchor = {
+    section: td.dataset.section,
+    row: parseInt(td.dataset.row, 10),
+    ymd: td.dataset.ymd
+  };
+}
 
  function renderJobs(){
   yearTable.querySelectorAll('.job').forEach(n => n.remove());
@@ -653,6 +679,32 @@ table.year tbody td{
 
   document.getElementById('jobLayer').appendChild(div);
 
+    div.textContent = j.title || '';
+
+    // 1) Position im jobLayer setzen (SONST immer links oben!)
+    const cellRect = startCell.getBoundingClientRect();
+    const layer = document.getElementById('jobLayer');
+    const layerRect = layer.getBoundingClientRect();
+
+    div.style.position = "absolute";
+    div.style.left = (cellRect.left - layerRect.left + 2) + "px";
+    div.style.top  = (cellRect.top  - layerRect.top  + 2) + "px";
+
+    // 2) in Layer einfügen
+    layer.appendChild(div);
+
+    // 3) Rechtsklick aktivieren (HIER!)
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openCtxMenu(e.clientX, e.clientY, j);
+    });
+
+    // 4) Klick auf Job soll auch die Zelle auswählen (damit Anchor stimmt)
+    div.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectCell(startCell);   // <- selectCell muss existieren (siehe unten)
+    });
 
     // Nur Konfliktbereiche schwarz markieren
     if (j.conflict){
