@@ -695,6 +695,26 @@ async def api_year_delete_job(request: Request, data: dict = Body(...)):
         return {"ok": True}
     finally:
         conn.close()
+@app.post("/api/year/update-job-color")
+async def api_year_update_job_color(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    job_id = int(data.get("id") or 0)
+    color = (data.get("color") or "").strip()
+
+    if not job_id or not color:
+        return JSONResponse({"ok": False, "error": "missing id/color"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("UPDATE year_jobs SET color=? WHERE id=?", (color, job_id))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
 @app.post("/api/year/set-row-counts")
 async def api_year_set_row_counts(request: Request, data: dict = Body(...)):
     guard = require_write(request)
