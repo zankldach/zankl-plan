@@ -46,6 +46,16 @@ def init_db():
         )
     """)
 
+        # Seed default row settings (nur wenn noch nix drin)
+    cur.execute("SELECT COUNT(*) AS n FROM year_row_settings")
+    if (cur.fetchone()["n"] or 0) == 0:
+        for sec, cnt in [("eb", 12), ("res", 8), ("gg", 12)]:
+            cur.execute(
+                "INSERT OR IGNORE INTO year_row_settings(section,row_count) VALUES(?,?)",
+                (sec, cnt)
+            )
+
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -450,11 +460,44 @@ def year_page(request: Request, year: int | None = Query(None)):
         # rows
         cur.execute("SELECT id, section, row_index, name FROM year_rows ORDER BY section, row_index")
         rows_all = [dict(r) for r in cur.fetchall()]
+       
+        # --- row_counts laden (wie viele Zeilen pro Bereich angezeigt werden sollen) ---
+        cur.execute("SELECT section, row_count FROM year_row_settings")
+        row_counts = {r["section"]: int(r["row_count"]) for r in cur.fetchall()}
+        for sec in ["eb", "res", "gg"]:
+            row_counts.setdefault(sec, 1)
 
+        # --- year_rows sicherstellen bis row_count (falls User erhöht) ---
+        # wir legen fehlende Zeilen in year_rows an
+        def ensure_rows(section: str, want: int, prefix: str):
+            cur.execute("SELECT COUNT(*) AS n FROM year_rows WHERE section=?", (section,))
+            have = int(cur.fetchone()["n"] or 0)
+            if have >= want:
+                return
+            # max row_index bestimmen
+            cur.execute("SELECT MAX(row_index) AS m FROM year_rows WHERE section=?", (section,))
+            m = cur.fetchone()["m"]
+            start_idx = int(m) + 1 if m is not None else 0
+            for i in range(have, want):
+                idx = start_idx + (i - have)
+                cur.execute(
+                    "INSERT OR IGNORE INTO year_rows(section,row_index,name) VALUES(?,?,?)",
+                    (section, idx, f"{prefix} {idx+1}")
+                )
+
+        ensure_rows("eb", row_counts["eb"], "Team EB")
+        ensure_rows("gg", row_counts["gg"], "Team GG")
+        ensure_rows("res", row_counts["res"], "Ressource")
+        conn.commit()
+
+        
         # section split
         rows = {"eb": [], "res": [], "gg": []}
         for r in rows_all:
             rows[r["section"]].append(r)
+        # auf row_counts begrenzen (nur row_index < row_count)
+        for sec in ["eb", "res", "gg"]:
+            rows[sec] = [r for r in rows[sec] if int(r["row_index"]) < int(row_counts[sec])]
 
         # jobs
         cur.execute("SELECT * FROM year_jobs ORDER BY start_date")
@@ -517,6 +560,8 @@ def year_page(request: Request, year: int | None = Query(None)):
                 "week_groups": week_groups,
                 "rows": rows,
                 "jobs": jobs,
+                "row_counts": row_counts,
+
             }
         )
 
@@ -651,6 +696,39 @@ async def api_year_delete_job(request: Request, data: dict = Body(...)):
         cur.execute("DELETE FROM year_jobs WHERE id=?", (job_id,))
         conn.commit()
         return {"ok": True}
+    finally:
+        conn.close()
+@app.post("/api/year/set-row-counts")
+async def api_year_set_row_counts(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    counts = (data.get("counts") or {})
+
+    def clamp(v, lo=1, hi=80):
+        try:
+            v = int(v)
+        except Exception:
+            v = lo
+        return max(lo, min(hi, v))
+
+    eb = clamp(counts.get("eb", 12))
+    res = clamp(counts.get("res", 8))
+    gg = clamp(counts.get("gg", 12))
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        for sec, val in [("eb", eb), ("res", res), ("gg", gg)]:
+            cur.execute("""
+                INSERT INTO year_row_settings(section,row_count)
+                VALUES(?,?)
+                ON CONFLICT(section) DO UPDATE SET row_count=excluded.row_count
+            """, (sec, val))
+        conn.commit()
+        return {"ok": True}
+    except Exception:
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
 
