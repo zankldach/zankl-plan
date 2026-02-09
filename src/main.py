@@ -38,7 +38,7 @@ def column_exists(cur, table: str, column: str) -> bool:
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("""
+
     # --- YEAR row settings (Anzahl Zeilen pro Bereich) ---
     cur.execute("""
         CREATE TABLE IF NOT EXISTS year_row_settings(
@@ -56,7 +56,6 @@ def init_db():
                 "INSERT OR IGNORE INTO year_row_settings(section,row_count) VALUES(?,?)",
                 (sec, cnt)
             )
-
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS week_plans(
@@ -141,7 +140,7 @@ def init_db():
           title TEXT NOT NULL UNIQUE,          -- "Name, Ort"
           start_date TEXT NOT NULL,            -- 'YYYY-MM-DD'
           duration_days INTEGER NOT NULL,      -- Arbeitstage
-          height_rows INTEGER NOT NULL,        -- Mitarbeiter/Zeilen-Höhe
+          height_rows INTEGER NOT NULL,        -- Mitarbeiter/Zeilen-Hoehe
           section TEXT NOT NULL,               -- 'eb'|'res'|'gg'
           row_index INTEGER NOT NULL,          -- Startzeile (0-basiert innerhalb section)
           color TEXT NOT NULL,                 -- 'blue'|'yellow'|'red'|'green'
@@ -170,7 +169,7 @@ def init_db():
     # ---- SEED default row names (nur wenn leer) ----
     def seed_rows(section: str, default_count: int, prefix: str):
         cur.execute("SELECT COUNT(*) AS n FROM year_rows WHERE section=?", (section,))
-        if cur.fetchone()["n"] == 0:
+        if int(cur.fetchone()["n"] or 0) == 0:
             for i in range(default_count):
                 name = f"{prefix} {i+1}"
                 cur.execute(
@@ -182,9 +181,9 @@ def init_db():
     seed_rows("gg", 12, "Team GG")
     seed_rows("res", 8, "Ressource")
 
-    
     conn.commit()
     conn.close()
+
 
 
 @app.on_event("startup")
