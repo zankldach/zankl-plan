@@ -686,12 +686,29 @@ function renderJobs(){
 
     const div = document.createElement('div');
     div.className = `job c-${j.color}`;
+    if (j.conflict) {
+  div.classList.add('is-conflict');
+}
     div.style.height = heightPx + 'px';
     div.style.width  = widthPx + 'px';
-    div.style.left   = (cellRect.left - layerRect.left + 2) + 'px';
-    div.style.top    = (cellRect.top  - layerRect.top  + 2) + 'px';
-    div.dataset.id   = j.id;
-    div.textContent  = j.title || '';
+div.style.left  = (cellRect.left - layerRect.left + 2) + 'px';
+div.style.top   = (cellRect.top  - layerRect.top  + 2) + 'px';
+div.dataset.id  = j.id;
+
+div.title = j.note || '';
+
+div.innerHTML = `
+  <div style="display:flex; flex-direction:column; width:100%; line-height:1.05;">
+    <div style="font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+      ${j.title || ''}
+    </div>
+    ${j.note ? `
+      <div style="font-size:11px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${j.note}
+      </div>
+    ` : ''}
+  </div>
+`;
 
     layer.appendChild(div);
 
