@@ -529,9 +529,23 @@ table.year tbody td{
 
   let anchor = null; // {section,row,ymd}
   let selectedCellEl = null;
+  let editJobId = null;   // null = create, sonst update
+  let editJobObj = null;
 
-  function openModal(){ modalBg.style.display = 'flex'; }
-  function closeModal(){ modalBg.style.display = 'none'; }
+function openModal(){
+  modalBg.style.display = 'flex';
+  document.getElementById('modalTitle').textContent = editJobId ? 'Baustelle bearbeiten' : 'Neue Baustelle';
+  btnSave.textContent = editJobId ? 'Änderungen speichern' : 'Speichern';
+}
+
+function closeModal(){
+  modalBg.style.display = 'none';
+  editJobId = null;
+  editJobObj = null;
+  btnSave.textContent = 'Speichern';
+  document.getElementById('modalTitle').textContent = 'Neue Baustelle';
+}
+
 
   btnNew.addEventListener('click', () => {
     if (!anchor) {
@@ -795,11 +809,37 @@ div.innerHTML = `
     }
   });
 
-  ctxEdit.addEventListener('click', () => {
-    if (!ctxJob) return;
-    alert('Edit ist der nächste Step: dafür bauen wir /api/year/update-job + Modal-Save.');
-    closeCtxMenu();
-  });
+ctxEdit.addEventListener('click', () => {
+  if (!ctxJob) return;
+
+  // Edit-Modus setzen
+  editJobId = ctxJob.id;
+  editJobObj = ctxJob;
+
+  // Anchor auf Start der Baustelle setzen
+  anchor = {
+    section: ctxJob.section,
+    row: parseInt(ctxJob.row_index, 10),
+    ymd: ctxJob.start_date // kommt aus DB
+  };
+
+  // Optional: Zelle optisch auswählen (Startzelle)
+  const startCell = findCell(ctxJob.section, ctxJob.row_index, ctxJob.col_start);
+  if (startCell) selectCell(startCell);
+
+  // Felder befüllen
+  fTitle.value = ctxJob.title || '';
+  fDur.value = parseInt(ctxJob.duration_days || 1, 10);
+  fHeight.value = parseInt(ctxJob.height_rows || 1, 10);
+  fColor.value = ctxJob.color || 'yellow';
+  fNote.value = ctxJob.note || '';
+
+  fStart.value = anchor.ymd + ' (' + anchor.section.toUpperCase() + ', Zeile ' + (anchor.row+1) + ')';
+
+  closeCtxMenu();
+  openModal();
+});
+
 
   // Speichern (create)
   btnSave.addEventListener('click', async () => {
@@ -822,22 +862,28 @@ div.innerHTML = `
     }
 
     try{
-      const res = await fetch('/api/year/create-job', {
+      const url = editJobId ? '/api/year/update-job' : '/api/year/create-job';
+      const body = editJobId ? { ...payload, id: editJobId } : payload;
+
+      const res = await fetch(url, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
+        body: JSON.stringify(body)
       });
+
       const js = await res.json().catch(()=>({}));
       if (!res.ok || !js.ok){
         alert(js.error || 'Speichern fehlgeschlagen.');
         return;
       }
+
       closeModal();
       location.reload();
     }catch(e){
       console.warn(e);
       alert('Speichern fehlgeschlagen.');
     }
+
   });
 
   applyMondayStripes();
