@@ -51,9 +51,11 @@
   pointer-events:none; /* Zellen bleiben klickbar */
 }
 
-.job{ pointer-events:auto; }
+.job{
+  pointer-events:auto;
   z-index:5;
 }
+
 
 
   table.year{
@@ -366,7 +368,7 @@ table.year tbody td{
     <tbody>
       <!-- EB -->
       <tr class="section-head">
-        <th class="sticky-col">Standort Engelbrechts</th>
+        <th class="sticky-col">Standort EB</th>
         {% for _ in days %}<td></td>{% endfor %}
       </tr>
 
@@ -388,7 +390,7 @@ table.year tbody td{
 
       <!-- RES -->
       <tr class="section-head">
-        <th class="sticky-col">Ressourcen (editierbar)</th>
+        <th class="sticky-col">Ressourcen</th>
         {% for _ in days %}<td></td>{% endfor %}
       </tr>
 
@@ -417,7 +419,7 @@ table.year tbody td{
 
       <!-- GG -->
       <tr class="section-head">
-        <th class="sticky-col">Standort Groß Gerungs</th>
+        <th class="sticky-col">Standort GG</th>
         {% for _ in days %}<td></td>{% endfor %}
       </tr>
 
@@ -653,10 +655,14 @@ yearTable.addEventListener('click', (e) => {
   }
 
 
- function renderJobs(){
-  document.getElementById('jobLayer').querySelectorAll('.job').forEach(n => n.remove());
+function renderJobs(){
+  const layer = document.getElementById('jobLayer');
+
+  // alte Jobs entfernen
+  layer.querySelectorAll('.job').forEach(n => n.remove());
+
+  // Overlap-Zellen reset + markieren
   yearTable.querySelectorAll('.conflict-cell').forEach(n => n.classList.remove('conflict-cell'));
-  // Overlap-Zellen markieren (nur echte Überschneidungen)
   (conflictCells || []).forEach(c => {
     const td = yearTable.querySelector(
       `td.cell[data-section="${c.section}"][data-row="${c.row}"][data-ymd="${c.ymd}"]`
@@ -664,49 +670,45 @@ yearTable.addEventListener('click', (e) => {
     if (td) td.classList.add('conflict-cell');
   });
 
+  // Jobs zeichnen
   jobs.forEach(j => {
     const startCell = findCell(j.section, j.row_index, j.col_start);
     if (!startCell) return;
 
-    const cellH = startCell.getBoundingClientRect().height;
-    const cellW = startCell.getBoundingClientRect().width;
+    const cellRect = startCell.getBoundingClientRect();
+    const layerRect = layer.getBoundingClientRect();
 
-    const heightPx = Math.max(cellH * j.height_rows - 4, cellH-4);
+    const cellH = cellRect.height;
+    const cellW = cellRect.width;
+
+    const heightPx = Math.max(cellH * (j.height_rows || 1) - 4, cellH - 4);
     const widthPx  = (cellW * j.col_span) - 4;
 
     const div = document.createElement('div');
     div.className = `job c-${j.color}`;
     div.style.height = heightPx + 'px';
-    div.style.width = widthPx + 'px';
-    div.dataset.id = j.id;
-    div.textContent = j.title || '';
+    div.style.width  = widthPx + 'px';
+    div.style.left   = (cellRect.left - layerRect.left + 2) + 'px';
+    div.style.top    = (cellRect.top  - layerRect.top  + 2) + 'px';
+    div.dataset.id   = j.id;
+    div.textContent  = j.title || '';
 
-
-    // 1) Position im jobLayer setzen (SONST immer links oben!)
-    const cellRect = startCell.getBoundingClientRect();
-    const layer = document.getElementById('jobLayer');
-    const layerRect = layer.getBoundingClientRect();
-
-    div.style.position = "absolute";
-    div.style.left = (cellRect.left - layerRect.left + 2) + "px";
-    div.style.top  = (cellRect.top  - layerRect.top  + 2) + "px";
-
-    // 2) in Layer einfügen
     layer.appendChild(div);
 
-    // 3) Rechtsklick aktivieren (HIER!)
+    // Rechtsklick
     div.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
       openCtxMenu(e.clientX, e.clientY, j);
     });
 
-    // 4) Klick auf Job soll auch die Zelle auswählen (damit Anchor stimmt)
+    // Klick auf Job = Zelle auswählen
     div.addEventListener('click', (e) => {
       e.stopPropagation();
-      selectCell(startCell);   // <- selectCell muss existieren (siehe unten)
+      selectCell(startCell);
     });
-
+  });
+}
 
 
 
