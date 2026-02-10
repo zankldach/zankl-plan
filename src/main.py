@@ -691,6 +691,52 @@ async def api_year_create_job(request: Request, data: dict = Body(...)):
         return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
     finally:
         conn.close()
+@app.post("/api/year/update-job")
+async def api_year_update_job(request: Request, data: dict = Body(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    job_id = int(data.get("id") or 0)
+    if not job_id:
+        return JSONResponse({"ok": False, "error": "missing id"}, status_code=400)
+
+    # Felder (wir erlauben erstmal „Inhalt bearbeiten“, Position bleibt gleich)
+    title = (data.get("title") or "").strip()
+    duration_days = int(data.get("duration_days") or 1)
+    height_rows = int(data.get("height_rows") or 1)
+    color = (data.get("color") or "yellow").strip()
+    note = (data.get("note") or "").strip()
+
+    if not title:
+        return JSONResponse({"ok": False, "error": "missing title"}, status_code=400)
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        # Existiert Job?
+        cur.execute("SELECT id FROM year_jobs WHERE id=?", (job_id,))
+        if not cur.fetchone():
+            return JSONResponse({"ok": False, "error": "job not found"}, status_code=404)
+
+        cur.execute("""
+            UPDATE year_jobs
+            SET title=?,
+                duration_days=?,
+                height_rows=?,
+                color=?,
+                note=?
+            WHERE id=?
+        """, (title, duration_days, height_rows, color, note or None, job_id))
+
+        conn.commit()
+        return {"ok": True}
+    except sqlite3.IntegrityError:
+        # title ist UNIQUE
+        return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
+    except Exception:
+        return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
+    finally:
+        conn.close()
 
 
 @app.post("/api/year/delete-job")
