@@ -282,6 +282,13 @@ table.year tbody td{
   .hint{ font-size:12px; color:#334155; }
 
 .conflict-cell{ background:#000 !important; }
+.conflict-overlay{
+  position:absolute;
+  background:#000;
+  opacity:0.85;
+  z-index: 999;       /* über den Jobs */
+  pointer-events:none; /* nichts blockieren */
+}
 
 
 </style>
@@ -654,7 +661,7 @@ function renderJobs(){
   const layer = document.getElementById('jobLayer');
 
   // alte Jobs entfernen
-  layer.querySelectorAll('.job').forEach(n => n.remove());
+
 
   // Overlap-Zellen reset + markieren
   yearTable.querySelectorAll('.conflict-cell').forEach(n => n.classList.remove('conflict-cell'));
@@ -664,6 +671,25 @@ function renderJobs(){
     );
     if (td) td.classList.add('conflict-cell');
   });
+// Konflikt-Overlays (sichtbar ÜBER Jobs)
+(conflictCells || []).forEach(c => {
+  const td = yearTable.querySelector(
+    `td.cell[data-section="${c.section}"][data-row="${c.row}"][data-ymd="${c.ymd}"]`
+  );
+  if (!td) return;
+
+  const r = td.getBoundingClientRect();
+  const lr = layer.getBoundingClientRect();
+
+  const o = document.createElement('div');
+  o.className = 'conflict-overlay';
+  o.style.left = (r.left - lr.left + 1) + 'px';
+  o.style.top  = (r.top  - lr.top  + 1) + 'px';
+  o.style.width  = (r.width - 2) + 'px';
+  o.style.height = (r.height - 2) + 'px';
+
+  layer.appendChild(o);
+});
 
   // Jobs zeichnen
   jobs.forEach(j => {
