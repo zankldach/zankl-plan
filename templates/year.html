@@ -295,10 +295,11 @@ table.year tbody td{
 }
 
 /* Beim Ziehen darf der Block nicht die Zellen "überdecken" */
-.year-job.dragging {
-  pointer-events: none;
-  opacity: 0.75;
+.job.dragging{
+  pointer-events:none !important;
+  opacity:0.75;
 }
+
 
 
 </style>
@@ -845,16 +846,27 @@ div.innerHTML = `
     // ===== Drag & Drop START =====
     div.draggable = true;
 
-    div.addEventListener('dragstart', (e) => {
-      dragJob = j;
-      e.dataTransfer.setData('text/plain', String(j.id));
-      e.dataTransfer.effectAllowed = 'move';
-    });
+div.addEventListener('dragstart', (e) => {
+  dragJob = j;
 
-    div.addEventListener('dragend', () => {
-      dragJob = null;
-      yearTable.querySelectorAll('td.cell.is-drop').forEach(x => x.classList.remove('is-drop'));
-    });
+  // WICHTIG: Block während Drag "durchlässig" machen,
+  // damit die Zellen darunter dragover/drop bekommen.
+  div.classList.add('dragging');
+
+  e.dataTransfer.setData('text/plain', String(j.id));
+  e.dataTransfer.effectAllowed = 'move';
+});
+
+div.addEventListener('dragend', () => {
+  dragJob = null;
+
+  // Zustand wieder zurücksetzen
+  div.classList.remove('dragging');
+
+  yearTable.querySelectorAll('td.cell.is-drop')
+    .forEach(x => x.classList.remove('is-drop'));
+});
+
     // ===== Drag & Drop END =====
 
     // Rechtsklick
