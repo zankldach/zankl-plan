@@ -691,6 +691,7 @@ yearTable.addEventListener('click', (e) => {
 
 function renderJobs(){
   const layer = document.getElementById('jobLayer');
+layer.querySelectorAll('.job, .conflict-overlay').forEach(n => n.remove());
 
   // alte Jobs entfernen
 
@@ -828,15 +829,12 @@ function openCtxMenu(x, y, job){
   }
 }
 
-  document.addEventListener('click', () => {
-    if (ctx.style.display === 'block') closeCtxMenu();
-  });
+document.addEventListener('click', () => {
+  if (ctx.style.display === 'block') closeCtxMenu();
+});
 
-  ctxDelete.addEventListener('click', async () => {
-    if (!ctxJob) return;
-    if (!confirm('Baustelle wirklich löschen?')) return;
-
-    if (ctxColor){
+// ✅ Dropdown / White Button: EINMALIG registrieren
+if (ctxColor){
   ctxColor.addEventListener('change', () => {
     if (!ctxJob) return;
     saveJobColor(ctxJob.id, ctxColor.value);
@@ -852,6 +850,12 @@ if (ctxWhite){
   });
 }
 
+
+  ctxDelete.addEventListener('click', async () => {
+    if (!ctxJob) return;
+    if (!confirm('Baustelle wirklich löschen?')) return;
+
+   
     try{
       const res = await fetch('/api/year/delete-job', {
         method:'POST',
