@@ -294,6 +294,12 @@ table.year tbody td{
   pointer-events:none; /* nichts blockieren */
 }
 
+/* Beim Ziehen darf der Block nicht die Zellen "überdecken" */
+.year-job.dragging {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
 
 </style>
 {% endblock %}
