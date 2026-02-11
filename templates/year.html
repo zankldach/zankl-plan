@@ -325,7 +325,8 @@ body.is-dragging-jobs .job.dragging{
     <a class="btn" href="/year?year={{ y-1 }}">← {{ y-1 }}</a>
     <a class="btn" href="/year?year={{ y+1 }}">{{ y+1 }} →</a>
 
-    <button class="btn primary" id="btnNew">+ Neue Baustelle</button>
+    <button class="btn primary" id="btnNew">+ Neuer Termin</button>
+
 
     <div class="pill hint">
       Starttag wählen: <b>in Tabelle klicken</b> → dann „Neue Baustelle“
@@ -772,6 +773,29 @@ yearTable.addEventListener('drop', async (e) => {
     if (!ymd) return null;
     return yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
   }
+  function scrollToCell(section, rowIndex, ymd){
+    const td = yearTable.querySelector(`td.cell[data-section="${section}"][data-row="${rowIndex}"][data-ymd="${ymd}"]`);
+    if (!td) return;
+
+    const scroller = document.getElementById('yearScroll'); // dein .year-scroll
+    if (!scroller) return;
+
+    // Zelle in die Mitte des Scroll-Containers bringen
+    const tdRect = td.getBoundingClientRect();
+    const scRect = scroller.getBoundingClientRect();
+
+    const curLeft = scroller.scrollLeft;
+    const curTop  = scroller.scrollTop;
+
+    const targetLeft = curLeft + (tdRect.left - scRect.left) - (scRect.width/2) + (tdRect.width/2);
+    const targetTop  = curTop  + (tdRect.top  - scRect.top)  - (scRect.height/2) + (tdRect.height/2);
+
+    scroller.scrollTo({ left: Math.max(0, targetLeft), top: Math.max(0, targetTop), behavior: 'smooth' });
+
+     // optional optisch kurz highlighten:
+    td.classList.add('is-selected');
+    setTimeout(()=> td.classList.remove('is-selected'), 1200);
+}
 
 
 function renderJobs(){
@@ -1057,8 +1081,10 @@ ctxEdit.addEventListener('click', () => {
         return;
       }
 
-      closeModal();
-      location.reload();
+closeModal();
+const focus = `${anchor.ymd}|${anchor.section}|${anchor.row}`;
+location.href = `/year?year={{ y }}&focus=` + encodeURIComponent(focus);
+
     }catch(e){
       console.warn(e);
       alert('Speichern fehlgeschlagen.');
@@ -1068,6 +1094,21 @@ ctxEdit.addEventListener('click', () => {
 
   applyMondayStripes();
   renderJobs();
+  // Nach Reload gezielt hinspringen (z.B. nach Create/Update)
+(function(){
+  const qs = new URLSearchParams(window.location.search);
+  const focus = qs.get('focus'); // Format: ymd|section|row
+  if (!focus) return;
+  const parts = focus.split('|');
+  if (parts.length !== 3) return;
+  const [ymd, section, rowStr] = parts;
+  const row = parseInt(rowStr, 10);
+  if (!ymd || !section || Number.isNaN(row)) return;
+
+  // warten bis Layout fertig ist
+  setTimeout(()=> scrollToCell(section, row, ymd), 120);
+})();
+
   // nach dem Rendern zentrieren (kleiner Timeout, damit Layout sicher steht)
   setTimeout(scrollTodayIntoCenter, 50);
 
