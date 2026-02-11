@@ -680,7 +680,9 @@ yearTable.addEventListener('drop', async (e) => {
       alert(js.error || 'Verschieben fehlgeschlagen.');
       return;
     }
-    location.reload();
+    const focus = `${start_date}|${section}|${row_index}`;
+    location.href = `/year?year={{ y }}&focus=` + encodeURIComponent(focus);
+
   }catch(err){
     console.warn(err);
     alert('Verschieben fehlgeschlagen.');
