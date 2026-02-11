@@ -701,42 +701,75 @@ async def api_year_update_job(request: Request, data: dict = Body(...)):
     if not job_id:
         return JSONResponse({"ok": False, "error": "missing id"}, status_code=400)
 
-    # Felder (wir erlauben erstmal „Inhalt bearbeiten“, Position bleibt gleich)
+    # Felder
     title = (data.get("title") or "").strip()
+    start_date = (data.get("start_date") or "").strip()   # optional
     duration_days = int(data.get("duration_days") or 1)
     height_rows = int(data.get("height_rows") or 1)
+    section = (data.get("section") or "").strip()         # optional
+    row_index = data.get("row_index")                      # optional
     color = (data.get("color") or "yellow").strip()
     note = (data.get("note") or "").strip()
 
     if not title:
         return JSONResponse({"ok": False, "error": "missing title"}, status_code=400)
 
+    # kleine Guards
+    if duration_days < 1: duration_days = 1
+    if height_rows < 1: height_rows = 1
+    if section and section not in ("eb", "res", "gg"):
+        return JSONResponse({"ok": False, "error": "invalid section"}, status_code=400)
+
+    if row_index is not None:
+        try:
+            row_index = int(row_index)
+            if row_index < 0: row_index = 0
+        except Exception:
+            return JSONResponse({"ok": False, "error": "invalid row_index"}, status_code=400)
+
+    if start_date:
+        try:
+            _ = parse_ymd(start_date)  # validiert Format YYYY-MM-DD
+        except Exception:
+            return JSONResponse({"ok": False, "error": "invalid start_date"}, status_code=400)
+
     conn = get_conn(); cur = conn.cursor()
     try:
-        # Existiert Job?
-        cur.execute("SELECT id FROM year_jobs WHERE id=?", (job_id,))
-        if not cur.fetchone():
+        cur.execute("SELECT * FROM year_jobs WHERE id=?", (job_id,))
+        old = cur.fetchone()
+        if not old:
             return JSONResponse({"ok": False, "error": "job not found"}, status_code=404)
+
+        # Falls nicht mitgesendet, alte Werte behalten
+        if not start_date:
+            start_date = old["start_date"]
+        if not section:
+            section = old["section"]
+        if row_index is None:
+            row_index = int(old["row_index"])
 
         cur.execute("""
             UPDATE year_jobs
             SET title=?,
+                start_date=?,
                 duration_days=?,
                 height_rows=?,
+                section=?,
+                row_index=?,
                 color=?,
                 note=?
             WHERE id=?
-        """, (title, duration_days, height_rows, color, note or None, job_id))
+        """, (title, start_date, duration_days, height_rows, section, row_index, color, note or None, job_id))
 
         conn.commit()
         return {"ok": True}
     except sqlite3.IntegrityError:
-        # title ist UNIQUE
         return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
+
 
 
 @app.post("/api/year/delete-job")
@@ -765,16 +798,22 @@ async def api_year_update_job_color(request: Request, data: dict = Body(...)):
     job_id = int(data.get("id") or 0)
     color = (data.get("color") or "").strip()
 
-    if not job_id or not color:
-        return JSONResponse({"ok": False, "error": "missing id/color"}, status_code=400)
+    allowed = {"blue","yellow","red","green","white"}
+    if not job_id or color not in allowed:
+        return JSONResponse({"ok": False, "error": "missing/invalid id/color"}, status_code=400)
 
     conn = get_conn(); cur = conn.cursor()
     try:
+        cur.execute("SELECT id FROM year_jobs WHERE id=?", (job_id,))
+        if not cur.fetchone():
+            return JSONResponse({"ok": False, "error": "job not found"}, status_code=404)
+
         cur.execute("UPDATE year_jobs SET color=? WHERE id=?", (color, job_id))
         conn.commit()
         return {"ok": True}
     finally:
         conn.close()
+
 
 @app.post("/api/year/set-row-counts")
 async def api_year_set_row_counts(request: Request, data: dict = Body(...)):
