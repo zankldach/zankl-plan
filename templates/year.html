@@ -829,9 +829,12 @@ function openCtxMenu(x, y, job){
   }
 }
 
-document.addEventListener('click', () => {
-  if (ctx.style.display === 'block') closeCtxMenu();
+document.addEventListener('click', (e) => {
+  if (ctx.style.display !== 'block') return;
+  if (ctx.contains(e.target)) return; // Klick IM Menü => nicht schließen
+  closeCtxMenu();
 });
+
 
 // ✅ Dropdown / White Button: EINMALIG registrieren
 if (ctxColor){
