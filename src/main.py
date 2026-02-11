@@ -137,7 +137,7 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS year_jobs(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL UNIQUE,          -- "Name, Ort"
+          title TEXT NOT NULL,                 -- "Name, Ort"
           start_date TEXT NOT NULL,            -- 'YYYY-MM-DD'
           duration_days INTEGER NOT NULL,      -- Arbeitstage
           height_rows INTEGER NOT NULL,        -- Mitarbeiter/Zeilen-Hoehe
@@ -147,6 +147,39 @@ def init_db():
           note TEXT
         )
     """)
+
+    def migrate_year_jobs_title_not_unique(cur):
+        cur.execute("CREATE TABLE IF NOT EXISTS _migrations (key TEXT PRIMARY KEY)")
+        cur.execute("SELECT 1 FROM _migrations WHERE key='year_jobs_title_not_unique'")
+        if cur.fetchone():
+            return
+
+        cur.execute("""
+          CREATE TABLE IF NOT EXISTS year_jobs_new(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            duration_days INTEGER NOT NULL,
+            height_rows INTEGER NOT NULL,
+            section TEXT NOT NULL,
+            row_index INTEGER NOT NULL,
+            color TEXT NOT NULL,
+            note TEXT
+          )
+        """)
+
+        cur.execute("""
+          INSERT INTO year_jobs_new(id,title,start_date,duration_days,height_rows,section,row_index,color,note)
+          SELECT id,title,start_date,duration_days,height_rows,section,row_index,color,note
+          FROM year_jobs
+        """)
+
+        cur.execute("DROP TABLE year_jobs")
+        cur.execute("ALTER TABLE year_jobs_new RENAME TO year_jobs")
+        cur.execute("INSERT INTO _migrations(key) VALUES('year_jobs_title_not_unique')")
+
+    migrate_year_jobs_title_not_unique(cur)
+
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS year_week_overrides(
@@ -687,10 +720,11 @@ async def api_year_create_job(request: Request, data: dict = Body(...)):
         """, (title, start_date, duration_days, height_rows, section, row_index, color, note or None))
         conn.commit()
         return {"ok": True}
-    except sqlite3.IntegrityError as e:
-        return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
+    except sqlite3.IntegrityError:
+        return JSONResponse({"ok": False, "error": "insert failed (db constraint)"}, status_code=400)
     finally:
         conn.close()
+
 @app.post("/api/year/update-job")
 async def api_year_update_job(request: Request, data: dict = Body(...)):
     guard = require_write(request)
@@ -749,22 +783,35 @@ async def api_year_update_job(request: Request, data: dict = Body(...)):
             row_index = int(old["row_index"])
 
         cur.execute("""
+sets = ["title=?", "duration_days=?", "height_rows=?", "color=?", "note=?"]
+vals = [title, duration_days, height_rows, color, note or None]
+
+if start_date:
+    sets.append("start_date=?")
+
+              # Falls nicht mitgesendet, alte Werte behalten
+        if not start_date:
+            start_date = old["start_date"]
+        if not section:
+            section = old["section"]
+        if row_index is None:
+            row_index = int(old["row_index"])
+
+        sets = ["title=?", "start_date=?", "duration_days=?", "height_rows=?", "section=?", "row_index=?", "color=?", "note=?"]
+        vals = [title, start_date, duration_days, height_rows, section, int(row_index), color, note or None]
+
+        vals.append(job_id)
+
+        cur.execute(f"""
             UPDATE year_jobs
-            SET title=?,
-                start_date=?,
-                duration_days=?,
-                height_rows=?,
-                section=?,
-                row_index=?,
-                color=?,
-                note=?
+            SET {", ".join(sets)}
             WHERE id=?
-        """, (title, start_date, duration_days, height_rows, section, row_index, color, note or None, job_id))
+        """, tuple(vals))
+
 
         conn.commit()
         return {"ok": True}
-    except sqlite3.IntegrityError:
-        return JSONResponse({"ok": False, "error": "title must be unique"}, status_code=400)
+   
     except Exception:
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
