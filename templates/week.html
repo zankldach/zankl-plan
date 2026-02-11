@@ -63,6 +63,36 @@
     background:#fff7ed !important;
     border-radius:6px;
   }
+    /* ===== Autocomplete für "Name, Ort" in Textareas ===== */
+  #titleSuggest {
+    position: fixed;
+    z-index: 9999;
+    display: none;
+    min-width: 260px;
+    max-width: 420px;
+    max-height: 220px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #d9dee5;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    padding: 6px;
+  }
+  #titleSuggest .item{
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #titleSuggest .item:hover{ background:#f8fafc; }
+  #titleSuggest .item.active{
+    background:#eef7ff;
+    outline: 1px solid #7db3ff;
+  }
+
 </style>
 {% endblock %}
 
@@ -144,6 +174,9 @@
     </div>
   </div>
 </div>
+<!-- Autocomplete Dropdown (global, fixed) -->
+<div id="titleSuggest"></div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -333,6 +366,206 @@ document.addEventListener('DOMContentLoaded', () => {
        ======================= */
     const inputs = document.querySelectorAll('#weekTable textarea.cell');
     const cells  = document.querySelectorAll('#weekTable td');
+    /* =======================
+       Autocomplete: "Name, Ort" aus Jahresplanung (nur aktuelles YEAR)
+       ======================= */
+    const SUG = document.getElementById('titleSuggest');
+    let YEAR_TITLES = [];
+    let sugOpenFor = null;      // textarea element
+    let sugItems = [];
+    let sugIndex = -1;
+    let blurTimer = null;
+
+    async function loadYearTitles(){
+      try{
+        const res = await fetch(`/api/year/titles?year=${encodeURIComponent(YEAR)}`);
+        const js = await res.json().catch(()=>({}));
+        if (!res.ok || !js.ok) return;
+        YEAR_TITLES = (js.titles || []).filter(Boolean);
+      }catch(e){
+        console.warn('loadYearTitles failed', e);
+      }
+    }
+
+    function hideSuggest(){
+      if (!SUG) return;
+      SUG.style.display = 'none';
+      SUG.innerHTML = '';
+      sugOpenFor = null;
+      sugItems = [];
+      sugIndex = -1;
+    }
+
+    function positionSuggest(ta){
+      if (!SUG || !ta) return;
+      const r = ta.getBoundingClientRect();
+      const margin = 6;
+      let left = r.left;
+      let top  = r.bottom + margin;
+
+      // wenn unten kein Platz -> nach oben
+      const wantH = 240;
+      if (top + wantH > window.innerHeight) {
+        top = r.top - margin;
+        // dann über dem Feld anzeigen
+        SUG.style.transform = 'translateY(-100%)';
+      } else {
+        SUG.style.transform = 'none';
+      }
+
+      // Clamp
+      left = Math.max(6, Math.min(left, window.innerWidth - 440));
+      SUG.style.left = `${left}px`;
+      SUG.style.top  = `${top}px`;
+    }
+
+    function renderSuggest(list, activeIdx){
+      if (!SUG) return;
+      SUG.innerHTML = '';
+      list.forEach((t, i) => {
+        const div = document.createElement('div');
+        div.className = 'item' + (i === activeIdx ? ' active' : '');
+        div.textContent = t;
+        div.addEventListener('mousedown', (e)=>{
+          // mousedown (nicht click), damit blur nicht davor zusperrt
+          e.preventDefault();
+          applySuggestion(t);
+        });
+        SUG.appendChild(div);
+      });
+      SUG.style.display = list.length ? 'block' : 'none';
+    }
+
+    function getQueryFromTextarea(ta){
+      // Wir nehmen die aktuelle Zeile bis Cursor (für "hu" -> Vorschläge)
+      const v = ta.value || '';
+      const pos = ta.selectionStart ?? v.length;
+      const upTo = v.slice(0, pos);
+      const lastNl = upTo.lastIndexOf('\n');
+      const q = upTo.slice(lastNl + 1).trim();
+      return q;
+    }
+
+    function buildMatches(q){
+      const qq = (q || '').trim().toLowerCase();
+      if (qq.length < 2) return [];
+      // startsWith priorisiert, danach contains
+      const starts = [];
+      const contains = [];
+      for (const t of YEAR_TITLES){
+        const tl = String(t).toLowerCase();
+        if (tl.startsWith(qq)) starts.push(t);
+        else if (tl.includes(qq)) contains.push(t);
+        if (starts.length >= 10) break;
+      }
+      // wenn starts wenig, ergänze mit contains
+      for (const t of contains){
+        if (starts.length >= 10) break;
+        starts.push(t);
+      }
+      return starts.slice(0, 10);
+    }
+
+    function showSuggestFor(ta){
+      if (!SUG || !ta) return;
+      const q = getQueryFromTextarea(ta);
+      const matches = buildMatches(q);
+
+      sugOpenFor = ta;
+      sugItems = matches;
+      sugIndex = matches.length ? 0 : -1;
+
+      positionSuggest(ta);
+      renderSuggest(matches, sugIndex);
+    }
+
+    function applySuggestion(text){
+      const ta = sugOpenFor;
+      if (!ta) return;
+
+      const v = ta.value || '';
+      const pos = ta.selectionStart ?? v.length;
+
+      // ersetze nur die aktuelle Zeile (ab letztem \n bis Cursor)
+      const upTo = v.slice(0, pos);
+      const after = v.slice(pos);
+
+      const lastNl = upTo.lastIndexOf('\n');
+      const lineStart = lastNl + 1;
+
+      const beforeLine = v.slice(0, lineStart);
+      const newVal = beforeLine + text + after;
+
+      ta.value = newVal;
+
+      // Cursor ans Ende des eingefügten Textes
+      const newPos = (beforeLine + text).length;
+      ta.focus();
+      ta.setSelectionRange(newPos, newPos);
+
+      hideSuggest();
+
+      // speichern + färben
+      saveCell(ta.dataset.row, parseInt(ta.dataset.day,10), ta.value).then(applyColors);
+    }
+
+    // Suggestion bei Resize/Scroll korrekt halten
+    window.addEventListener('scroll', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); }, true);
+    window.addEventListener('resize', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); });
+
+    // global: click außerhalb -> schließen
+    document.addEventListener('mousedown', (e)=>{
+      if (!SUG || SUG.style.display !== 'block') return;
+      if (SUG.contains(e.target)) return;
+      if (sugOpenFor && sugOpenFor.contains(e.target)) return;
+      hideSuggest();
+    });
+
+    // Textareas anbinden
+    inputs.forEach(ta => {
+      ta.addEventListener('focus', ()=>{
+        clearTimeout(blurTimer);
+        showSuggestFor(ta);
+      });
+
+      ta.addEventListener('input', ()=>{
+        // nur wenn nicht Freitag gesperrt
+        if (fourChk.checked && Number(ta.dataset.day) === 4) return;
+        showSuggestFor(ta);
+      });
+
+      ta.addEventListener('keydown', (ev)=>{
+        if (!SUG || SUG.style.display !== 'block') return;
+        if (!sugItems || !sugItems.length) return;
+
+        if (ev.key === 'ArrowDown'){
+          ev.preventDefault();
+          sugIndex = Math.min(sugItems.length - 1, sugIndex + 1);
+          renderSuggest(sugItems, sugIndex);
+        } else if (ev.key === 'ArrowUp'){
+          ev.preventDefault();
+          sugIndex = Math.max(0, sugIndex - 1);
+          renderSuggest(sugItems, sugIndex);
+        } else if (ev.key === 'Enter'){
+          // nur wenn Suggest offen ist und du NICHT Shift+Enter machst
+          if (ev.shiftKey) return;
+          ev.preventDefault();
+          if (sugIndex >= 0 && sugItems[sugIndex]) applySuggestion(sugItems[sugIndex]);
+        } else if (ev.key === 'Escape'){
+          ev.preventDefault();
+          hideSuggest();
+        }
+      });
+
+      ta.addEventListener('blur', ()=>{
+        // kleine Verzögerung, damit Klick auf Suggestion funktioniert
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(hideSuggest, 140);
+      });
+    });
+
+    // Titles laden
+    loadYearTitles();
 
     let DND_COPY = false;   // nur für grid→grid
     let DND_FROM = null;    // 'grid' | 'klein' | null
