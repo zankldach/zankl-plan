@@ -294,11 +294,16 @@ table.year tbody td{
   pointer-events:none; /* nichts blockieren */
 }
 
-/* Beim Ziehen darf der Block nicht die Zellen "überdecken" */
-.job.dragging{
+/* Beim Ziehen sollen ALLE Jobs keine Drop-Ziele blockieren */
+body.is-dragging-jobs .job{
   pointer-events:none !important;
+}
+
+/* Der gezogene Job bleibt sichtbar/markiert */
+body.is-dragging-jobs .job.dragging{
   opacity:0.75;
 }
+
 
 
 
@@ -849,8 +854,10 @@ div.innerHTML = `
 div.addEventListener('dragstart', (e) => {
   dragJob = j;
 
-  // WICHTIG: Block während Drag "durchlässig" machen,
-  // damit die Zellen darunter dragover/drop bekommen.
+  // Global: während Drag werden alle Jobs "durchlässig"
+  document.body.classList.add('is-dragging-jobs');
+
+  // Nur den gezogenen Job optisch markieren
   div.classList.add('dragging');
 
   e.dataTransfer.setData('text/plain', String(j.id));
@@ -860,7 +867,9 @@ div.addEventListener('dragstart', (e) => {
 div.addEventListener('dragend', () => {
   dragJob = null;
 
-  // Zustand wieder zurücksetzen
+  // Globalen Drag-Modus wieder aus
+  document.body.classList.remove('is-dragging-jobs');
+
   div.classList.remove('dragging');
 
   yearTable.querySelectorAll('td.cell.is-drop')
