@@ -1068,5 +1068,36 @@ ctxEdit.addEventListener('click', () => {
 
   applyMondayStripes();
   renderJobs();
+  // nach dem Rendern zentrieren (kleiner Timeout, damit Layout sicher steht)
+  setTimeout(scrollTodayIntoCenter, 50);
+
+  function scrollTodayIntoCenter(){
+  const sc = document.getElementById('yearScroll');
+  if (!sc || !days || !days.length) return;
+
+  // Heute (YYYY-MM-DD)
+  const t = new Date();
+  const y = t.getFullYear();
+  const m = String(t.getMonth()+1).padStart(2,'0');
+  const d = String(t.getDate()).padStart(2,'0');
+  const today = `${y}-${m}-${d}`;
+
+  // Zieltag: heute wenn vorhanden, sonst nächster Arbeitstag, sonst letzter
+  let target = days.find(x => x.ymd === today);
+  if (!target) target = days.find(x => x.ymd > today) || days[days.length - 1];
+
+  const th = yearTable.querySelector(`thead th[data-ymd="${target.ymd}"]`);
+  if (!th) return;
+
+  // Mitte des Ziel-Headers in Scroll-Container zentrieren
+  const scRect = sc.getBoundingClientRect();
+  const thRect = th.getBoundingClientRect();
+
+  const thCenter = (thRect.left - scRect.left) + (thRect.width / 2);
+  const desired = sc.scrollLeft + thCenter - (sc.clientWidth / 2);
+
+  sc.scrollLeft = Math.max(0, desired);
+}
+
 </script>
 {% endblock %}
