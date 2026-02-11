@@ -12,6 +12,7 @@ from urllib.parse import urlparse, parse_qs
 import hashlib
 import hmac
 
+
 app = FastAPI(title="Zankl-Plan MVP")
 app.add_middleware(
     SessionMiddleware,
