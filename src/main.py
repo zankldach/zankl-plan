@@ -906,6 +906,29 @@ async def api_year_set_row_counts(request: Request, data: dict = Body(...)):
         return JSONResponse({"ok": False, "error": traceback.format_exc()}, status_code=500)
     finally:
         conn.close()
+@app.get("/api/year/titles")
+def api_year_titles(request: Request, year: int = Query(...)):
+    guard = require_write(request)
+    if guard:
+        return JSONResponse({"ok": False, "redirect": "/login"}, status_code=401)
+
+    y1 = f"{int(year)}-01-01"
+    y2 = f"{int(year)}-12-31"
+
+    conn = get_conn(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT DISTINCT title
+            FROM year_jobs
+            WHERE start_date BETWEEN ? AND ?
+            AND title IS NOT NULL
+            AND TRIM(title) != ''
+            ORDER BY title COLLATE NOCASE
+        """, (y1, y2))
+        titles = [r["title"] for r in cur.fetchall()]
+        return {"ok": True, "titles": titles}
+    finally:
+        conn.close()
 
 
 # ---------------- zentrale Week-Logik ----------------
