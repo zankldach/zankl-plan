@@ -159,7 +159,11 @@ table.year tbody td{
   /* Grid click selection */
   td.cell{ cursor:pointer; }
   td.cell.is-selected{
-    outline:2px solid #0b57d0;
+  td.cell.is-drop{
+    outline:2px dashed #0b57d0;
+    outline-offset:-2px;
+  }
+  outline:2px solid #0b57d0;
     outline-offset:-2px;
   }
 
@@ -549,6 +553,7 @@ table.year tbody td{
   let selectedCellEl = null;
   let editJobId = null;   // null = create, sonst update
   let editJobObj = null;
+  let dragJob = null; // aktuell gezogener Job (Objekt)
 
 function openModal(){
   modalBg.style.display = 'flex';
@@ -601,6 +606,74 @@ yearTable.addEventListener('click', (e) => {
   if (!td) return;
   selectCell(td);
 });
+
+// ===== Drag & Drop: Zellen als Drop-Ziel =====
+yearTable.addEventListener('dragover', (e) => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  e.preventDefault(); // Drop erlauben
+  td.classList.add('is-drop');
+  e.dataTransfer.dropEffect = 'move';
+});
+
+yearTable.addEventListener('dragleave', (e) => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  td.classList.remove('is-drop');
+});
+
+yearTable.addEventListener('drop', async (e) => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  e.preventDefault();
+
+  yearTable.querySelectorAll('td.cell.is-drop').forEach(x => x.classList.remove('is-drop'));
+
+  const idStr = e.dataTransfer.getData('text/plain');
+  const jobId = parseInt(idStr || '0', 10);
+  if (!jobId) return;
+
+  const section = td.dataset.section;
+  const row_index = parseInt(td.dataset.row, 10);
+  const start_date = td.dataset.ymd;
+
+  // wenn wir das Job-Objekt haben, schicken wir alle Felder mit (damit Backend nix “leer” macht)
+  const j = (dragJob && dragJob.id === jobId) ? dragJob : (jobs || []).find(x => x.id === jobId);
+
+  if (!j) {
+    alert('Job nicht gefunden (Drag state). Bitte neu laden.');
+    return;
+  }
+
+  try{
+    const res = await fetch('/api/year/update-job', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: jobId,
+        title: j.title || '',
+        duration_days: parseInt(j.duration_days || 1, 10),
+        height_rows: parseInt(j.height_rows || 1, 10),
+        color: j.color || 'yellow',
+        note: j.note || '',
+        section,
+        row_index,
+        start_date
+      })
+    });
+
+    const js = await res.json().catch(()=>({}));
+    if (!res.ok || !js.ok){
+      alert(js.error || 'Verschieben fehlgeschlagen.');
+      return;
+    }
+    location.reload();
+  }catch(err){
+    console.warn(err);
+    alert('Verschieben fehlgeschlagen.');
+  }
+});
+// ===== Ende Drag & Drop =====
 
 
   // KW Freitag Toggle
@@ -763,6 +836,20 @@ div.innerHTML = `
 `;
 
     layer.appendChild(div);
+    // ===== Drag & Drop START =====
+    div.draggable = true;
+
+    div.addEventListener('dragstart', (e) => {
+      dragJob = j;
+      e.dataTransfer.setData('text/plain', String(j.id));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    div.addEventListener('dragend', () => {
+      dragJob = null;
+      yearTable.querySelectorAll('td.cell.is-drop').forEach(x => x.classList.remove('is-drop'));
+    });
+    // ===== Drag & Drop END =====
 
     // Rechtsklick
     div.addEventListener('contextmenu', (e) => {
