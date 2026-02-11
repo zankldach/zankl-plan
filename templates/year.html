@@ -441,8 +441,26 @@ table.year tbody td{
 
 <div class="ctx" id="ctxMenu">
   <button id="ctxEdit">Bearbeiten</button>
-  <button class="danger" id="ctxDelete">Löschen</button>
+
+  <div style="padding:10px 12px; border-top:1px solid #eef2f7;">
+    <div style="font-size:12px; font-weight:800; margin-bottom:6px;">Farbe</div>
+    <select id="ctxColor" style="width:100%; padding:8px 10px; border-radius:10px; border:1px solid #d9dee5; font-size:13px;">
+      <option value="blue">Fixtermin (blau)</option>
+      <option value="yellow">Verschiebbar (gelb)</option>
+      <option value="red">Urlaub (rot)</option>
+      <option value="green">Intern (grün)</option>
+      <option value="white">Verrechnet (weiß)</option>
+    </select>
+
+    <button id="ctxWhite" class="btn" type="button"
+            style="width:100%; margin-top:8px; padding:8px 10px; border-radius:10px;">
+      Verrechnet (weiß)
+    </button>
+  </div>
+
+  <button class="danger" id="ctxDelete" style="border-top:1px solid #eef2f7;">Löschen</button>
 </div>
+
 
 <div class="modal-backdrop" id="modalBg">
   <div class="modal">
@@ -772,18 +790,43 @@ div.innerHTML = `
   const ctx = document.getElementById('ctxMenu');
   const ctxEdit = document.getElementById('ctxEdit');
   const ctxDelete = document.getElementById('ctxDelete');
+  const ctxColor = document.getElementById('ctxColor');
+  const ctxWhite = document.getElementById('ctxWhite');
   let ctxJob = null;
 
-  function openCtxMenu(x, y, job){
-    ctxJob = job;
-    ctx.style.display = 'block';
-    ctx.style.left = x + 'px';
-    ctx.style.top = y + 'px';
-  }
+  
+
+function openCtxMenu(x, y, job){
+  ctxJob = job;
+
+  // Dropdown auf aktuelle Farbe setzen
+  if (ctxColor) ctxColor.value = (job.color || 'yellow');
+
+  ctx.style.display = 'block';
+  ctx.style.left = x + 'px';
+  ctx.style.top = y + 'px';
+}
+
   function closeCtxMenu(){
     ctx.style.display = 'none';
     ctxJob = null;
   }
+
+  async function saveJobColor(jobId, color){
+  try{
+    const res = await fetch('/api/year/update-job-color', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: jobId, color })
+    });
+    const js = await res.json().catch(()=>({}));
+    if (!res.ok || !js.ok) throw new Error(js.error || 'save failed');
+    location.reload();
+  }catch(e){
+    console.warn(e);
+    alert('Farbe konnte nicht gespeichert werden.');
+  }
+}
 
   document.addEventListener('click', () => {
     if (ctx.style.display === 'block') closeCtxMenu();
@@ -792,6 +835,22 @@ div.innerHTML = `
   ctxDelete.addEventListener('click', async () => {
     if (!ctxJob) return;
     if (!confirm('Baustelle wirklich löschen?')) return;
+
+    if (ctxColor){
+  ctxColor.addEventListener('change', () => {
+    if (!ctxJob) return;
+    saveJobColor(ctxJob.id, ctxColor.value);
+    closeCtxMenu();
+  });
+}
+
+if (ctxWhite){
+  ctxWhite.addEventListener('click', () => {
+    if (!ctxJob) return;
+    saveJobColor(ctxJob.id, 'white');
+    closeCtxMenu();
+  });
+}
 
     try{
       const res = await fetch('/api/year/delete-job', {
