@@ -782,14 +782,8 @@ async def api_year_update_job(request: Request, data: dict = Body(...)):
         if row_index is None:
             row_index = int(old["row_index"])
 
-        cur.execute("""
-sets = ["title=?", "duration_days=?", "height_rows=?", "color=?", "note=?"]
-vals = [title, duration_days, height_rows, color, note or None]
-
-if start_date:
-    sets.append("start_date=?")
-
-              # Falls nicht mitgesendet, alte Werte behalten
+       
+        # Falls nicht mitgesendet, alte Werte behalten
         if not start_date:
             start_date = old["start_date"]
         if not section:
@@ -797,16 +791,33 @@ if start_date:
         if row_index is None:
             row_index = int(old["row_index"])
 
-        sets = ["title=?", "start_date=?", "duration_days=?", "height_rows=?", "section=?", "row_index=?", "color=?", "note=?"]
-        vals = [title, start_date, duration_days, height_rows, section, int(row_index), color, note or None]
+        sets = [
+            "title=?",
+            "start_date=?",
+            "duration_days=?",
+            "height_rows=?",
+            "section=?",
+            "row_index=?",
+            "color=?",
+            "note=?",
+        ]
+        vals = [
+            title,
+            start_date,
+            duration_days,
+            height_rows,
+            section,
+            int(row_index),
+            color,
+            note or None,
+        ]
 
         vals.append(job_id)
 
-        cur.execute(f"""
-            UPDATE year_jobs
-            SET {", ".join(sets)}
-            WHERE id=?
-        """, tuple(vals))
+        cur.execute(
+            f"UPDATE year_jobs SET {', '.join(sets)} WHERE id=?",
+            tuple(vals)
+        )
 
 
         conn.commit()
