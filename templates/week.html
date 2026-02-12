@@ -687,26 +687,31 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       // DragStart (Grid -> Grid)
-      inp.addEventListener('dragstart', (e)=>{
-        if (isLockedCell(inp)) { e.preventDefault(); return; }
+     inp.addEventListener('dragstart', (e)=>{
+  if (isLockedCell(inp)) { e.preventDefault(); return; }
 
-        const m = metaFromEl(inp);
-        DND_FROM = 'grid';
-        DND_COPY = false;
+  const m = metaFromEl(inp);
 
-        const payload = {
-          source: 'grid',
-          row: Number(inp.dataset.row),
-          day: Number(inp.dataset.day),
-          value: inp.value || '',
-          year: m.year,
-          kw: m.kw
-        };
-        const s = JSON.stringify(payload);
-        try{ e.dataTransfer.setData('application/json', s); }catch(_){}
-        try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
-        e.dataTransfer.effectAllowed = 'copyMove';
-      });
+  // 👇 WICHTIG: Copy-Status hier merken
+  DND_COPY = !!(e.ctrlKey || e.metaKey);
+  DND_FROM = 'grid';
+
+  const payload = {
+    source: 'grid',
+    row: Number(inp.dataset.row),
+    day: Number(inp.dataset.day),
+    value: inp.value || '',
+    year: m.year,
+    kw: m.kw
+  };
+
+  const s = JSON.stringify(payload);
+  try{ e.dataTransfer.setData('application/json', s); }catch(_){}
+  try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
+
+  e.dataTransfer.effectAllowed = DND_COPY ? 'copy' : 'move';
+});
+
 
       inp.addEventListener('dragend', ()=>{
         DND_FROM = null;
