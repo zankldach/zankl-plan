@@ -233,6 +233,13 @@ def build_days(year: int, kw: int):
     labels = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     return [{"label": labels[i], "date": (start + timedelta(days=i)).strftime("%d.%m.%Y")} for i in range(5)]
 
+def next_iso_week(year: int, kw: int) -> tuple[int, int]:
+    """Gibt (year, kw) der nächsten ISO-KW zurück."""
+    monday = date.fromisocalendar(int(year), int(kw), 1)
+    next_monday = monday + timedelta(days=7)
+    y2, w2, _ = next_monday.isocalendar()
+    return int(y2), int(w2)
+
 def canon_standort(s: str | None) -> str:
     s = (s or "").strip()
     if not s:
@@ -1475,33 +1482,51 @@ def week(
     if guard:
         return guard
 
+    # Default: aktuelle ISO-KW/Jahr
     if year is None or kw is None:
-        iso = _date.today().isocalendar()  # (year, week, weekday)
+        iso = date.today().isocalendar()  # (year, week, weekday)
         if year is None:
             year = int(iso[0])
         if kw is None:
             kw = int(iso[1])
 
     standort = canon_standort(standort)
+
     try:
-        ctx = build_week_context(year, kw, standort)
+        # aktuelle Woche
+        ctx = build_week_context(int(year), int(kw), standort)
+
+        # nächste Woche
+        ny, nkw = next_iso_week(int(year), int(kw))
+        ctx_next = build_week_context(ny, nkw, standort)
+
         return templates.TemplateResponse(
             "week.html",
             {
                 "request": request,
+
+                # aktuelle Woche (wie bisher)
                 "grid": ctx["grid"],
                 "employees": ctx["employees"],
-                "kw": kw,
-                "year": year,
+                "kw": int(kw),
+                "year": int(year),
                 "days": ctx["days"],
                 "standort": standort,
                 "four_day_week": ctx["four_day_week"],
                 "small_jobs": ctx["small_jobs"],
                 "standorte": ["engelbrechts", "gross-gerungs"],
+
+                # NEU: nächste Woche
+                "next_year": ny,
+                "next_kw": nkw,
+                "next_grid": ctx_next["grid"],
+                "next_days": ctx_next["days"],
+                "next_four_day_week": ctx_next["four_day_week"],
             }
         )
     except Exception:
         return HTMLResponse(f"<pre>{traceback.format_exc()}</pre>", status_code=500)
+
 
 # ---------------- WEEK API (unverändert) ----------------
 @app.post("/api/week/set-cell")
