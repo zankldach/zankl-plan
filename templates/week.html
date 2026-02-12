@@ -281,6 +281,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function applyColors(){
       document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
+      const c = colorFor(inp.value);
+      if (c){
+        inp.style.background = c.bg;
+        inp.style.border = `1px solid ${c.border}`;
+        inp.style.borderRadius = '6px';
+      } else {
+        inp.style.background = 'transparent';
+        inp.style.border = 'none';
+      }
+    });
+  }
+
+inp.addEventListener('input', ()=>{
+  // wenn Freitag in aktueller Woche gesperrt, dann nix
+  const m = metaFromEl(inp);
+  if (m.year === YEAR && m.kw === KW && fourChk.checked && Number(inp.dataset.day) === 4) return;
+  showSuggestFor(inp);
+});
+inp.addEventListener('blur', ()=>{
+  clearTimeout(blurTimer);
+  blurTimer = setTimeout(hideSuggest, 140);
+});
+
         const c = colorFor(inp.value);
         if (c){ inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
         else { inp.style.background='transparent'; inp.style.border='none'; }
@@ -564,39 +587,72 @@ document.addEventListener('mousedown', (e)=>{
     let DND_COPY = false;
     let DND_FROM = null;
 
-    document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
-      inp.addEventListener('input', applyColors);
+document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
+  // Farben live
+  inp.addEventListener('input', applyColors);
 
-      inp.addEventListener('blur', async ()=>{
-        await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
-        applyColors();
-      });
+  // Autocomplete: bei Fokus & Eingabe
+  inp.addEventListener('focus', ()=>{
+    clearTimeout(blurTimer);
+    showSuggestFor(inp);
+  });
 
-      inp.addEventListener('keydown', async ev=>{
-        if (ev.key === 'Enter' && !ev.shiftKey){
-          ev.preventDefault();
-          await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
-          applyColors();
-        }
-      });
+  inp.addEventListener('input', ()=>{
+    const m = metaFromEl(inp);
+    if (m.year === YEAR && m.kw === KW && fourChk.checked && Number(inp.dataset.day) === 4) return;
+    showSuggestFor(inp);
+  });
 
-      inp.addEventListener('dragstart', e=>{
-        if (e.shiftKey || fillState.active) { e.preventDefault(); return; }
-        const payload = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value || '' };
-        const s = JSON.stringify(payload);
-        try{ e.dataTransfer.setData('application/json', s); }catch(_){}
-        try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
-        e.dataTransfer.effectAllowed = 'copyMove';
-        inp.classList.add('dragging');
-        DND_FROM = 'grid';
-      });
+  inp.addEventListener('blur', ()=>{
+    clearTimeout(blurTimer);
+    blurTimer = setTimeout(hideSuggest, 140);
+  });
 
-      inp.addEventListener('dragend', ()=>{
-        document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
-        document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-        DND_FROM = null;
-      });
-    });
+  // Speichern bei Blur
+  inp.addEventListener('blur', async ()=>{
+    await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
+    applyColors();
+  });
+
+  // Keydown: zuerst Autocomplete abfangen, sonst Enter=Speichern
+  inp.addEventListener('keydown', async (ev)=>{
+    // Autocomplete offen?
+    if (SUG && SUG.style.display === 'block' && sugOpenFor === inp && sugItems && sugItems.length){
+      if (ev.key === 'ArrowDown'){
+        ev.preventDefault();
+        sugIndex = Math.min(sugItems.length-1, sugIndex+1);
+        renderSuggest(sugItems, sugIndex);
+        return;
+      }
+      if (ev.key === 'ArrowUp'){
+        ev.preventDefault();
+        sugIndex = Math.max(0, sugIndex-1);
+        renderSuggest(sugItems, sugIndex);
+        return;
+      }
+      if (ev.key === 'Enter' && !ev.shiftKey){
+        ev.preventDefault();
+        if (sugIndex >= 0 && sugItems[sugIndex]) applySuggestion(sugItems[sugIndex]);
+        return;
+      }
+      if (ev.key === 'Escape'){
+        ev.preventDefault();
+        hideSuggest();
+        return;
+      }
+    }
+
+    // Normal: Enter speichert
+    if (ev.key === 'Enter' && !ev.shiftKey){
+      ev.preventDefault();
+      await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
+      applyColors();
+    }
+  });
+
+  // DragStart/End bleibt wie du’s hast (kannst du darunter lassen)
+});
+
 
     document.querySelectorAll('.planner td[data-row][data-day]').forEach(td=>{
       const grid = td.closest('table.planner');
