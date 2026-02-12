@@ -1208,6 +1208,12 @@ def admin_debug_login(request: Request):
     guard = require_write(request)
     if guard:
         return guard
+@app.get("/bedienung", response_class=HTMLResponse)
+def bedienung(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=303)
+
+    return templates.TemplateResponse("bedienung.html", {"request": request})
 
     conn = get_conn(); cur = conn.cursor()
     try:
