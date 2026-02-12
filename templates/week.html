@@ -253,7 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
     }
     kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
-    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+ yearSel?.addEventListener('change', ()=>{
+  navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10));
+});
+
 
     document.getElementById('prevWeekBtn').onclick = ()=>{
       const kw = parseInt(kwSel?.value ?? KW,10);
@@ -279,19 +282,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const s=70, l=80;
       return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)` };
     }
-    function applyColors(){
-      document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
-      const c = colorFor(inp.value);
-      if (c){
-        inp.style.background = c.bg;
-        inp.style.border = `1px solid ${c.border}`;
-        inp.style.borderRadius = '6px';
-      } else {
-        inp.style.background = 'transparent';
-        inp.style.border = 'none';
-      }
-    });
-  }
+function applyColors(){
+document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
+  inp.addEventListener('input', ()=>{
+    applyColors();
+  });
+});
+
+    if (c){
+      inp.style.background = c.bg;
+      inp.style.border = `1px solid ${c.border}`;
+      inp.style.borderRadius = '6px';
+    } else {
+      inp.style.background = 'transparent';
+      inp.style.border = 'none';
+    }
+  });
+}
+
 
 inp.addEventListener('input', ()=>{
   // wenn Freitag in aktueller Woche gesperrt, dann nix
@@ -304,11 +312,6 @@ inp.addEventListener('blur', ()=>{
   blurTimer = setTimeout(hideSuggest, 140);
 });
 
-        const c = colorFor(inp.value);
-        if (c){ inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
-        else { inp.style.background='transparent'; inp.style.border='none'; }
-      });
-    }
 
     /* ===== Meta pro Grid (wichtig für 2 Tabellen!) ===== */
     function metaFromEl(el){
@@ -726,13 +729,14 @@ document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
           return;
         }
 
-        if (payload.source === 'klein'){
-          const text = (payload.value || '').trim();
-          tgt.value = text;
-          await saveCellForEl(tgt, targetRow, targetDay, text);
-          applyColors();
-          return;
-        }
+if (payload.source === 'klein'){
+  const text = (payload.value || '').trim();
+  tgt.value = text;
+  await saveCellForEl(tgt, targetRow, targetDay, text);
+  applyColors();
+  return;
+}
+
       });
     });
 
