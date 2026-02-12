@@ -163,7 +163,11 @@
 </div>
 
 <div class="plan-wrap">
-  <div class="week-grid" data-week-grid data-year="{{ next_year }}" data-kw="{{ next_kw }}" data-standort="{{ standort }}">
+  <div class="week-grid"
+       data-week-grid
+       data-year="{{ next_year }}"
+       data-kw="{{ next_kw }}"
+       data-standort="{{ standort }}">
     <table class="planner" id="weekTableNext">
       <thead>
         <tr>
@@ -173,6 +177,7 @@
           {% endfor %}
         </tr>
       </thead>
+
       <tbody>
         {% for row in next_grid %}
           {% set r = loop.index0 %}
@@ -180,12 +185,21 @@
             <td>
               {% if employees and employees|length > r and employees[r] %}
                 {{ employees[r].name }}
-              {% else %}Unbenannt{% endif %}
+              {% else %}
+                Unbenannt
+              {% endif %}
             </td>
+
             {% for cell in row %}
               {% set d = loop.index0 %}
-              <td data-row="{{ r }}" data-day="{{ d }}" class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-                <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+              <td data-row="{{ r }}"
+                  data-day="{{ d }}"
+                  class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+                <textarea class="cell"
+                          draggable="true"
+                          data-row="{{ r }}"
+                          data-day="{{ d }}"
+                          rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
                 {% if d == 4 %}<span class="hint"></span>{% endif %}
               </td>
             {% endfor %}
@@ -195,6 +209,7 @@
     </table>
   </div>
 </div>
+
 
   <!-- Sidebar: Kleinbaustellen -->
   <div>
@@ -343,28 +358,56 @@ document.addEventListener('DOMContentLoaded', () => {
     /* =======================
        Speichern (Zellen)
        ======================= */
-    async function saveCell(row, day, value){
-      if (Number(day) === 4) cacheFridayTexts();
-      if (fourChk.checked && Number(day) === 4) return true;
-      try{
-        const res = await fetch('/api/week/set-cell',{
-          method:'POST', headers:{'Content-Type':'application/json'},
-      const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+async function saveCell(row, day, value){
+  if (Number(day) === 4) cacheFridayTexts();
+  if (fourChk.checked && Number(day) === 4) return true;
 
+  const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+
+  try{
+    const res = await fetch('/api/week/set-cell',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         row:Number(row), day:Number(day), value: value ?? "",
         kw: m.kw,
         year: m.year,
         standort: m.standort
       })
+    });
 
-        });
-        if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
-        const r = await res.json().catch(()=>({ok:true}));
-        if(!r.ok){ console.warn('Save-Fehler:', r.error); return false; }
-        return true;
-      }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
-    }
+    if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
+    const r = await res.json().catch(()=>({ok:true}));
+    if(!r.ok){ console.warn('Save-Fehler:', r.error); return false; }
+    return true;
+  }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+}
+
+async function saveBatch(updates){
+  cacheFridayTexts();
+  if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
+
+  const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+
+  try{
+    const res = await fetch('/api/week/batch',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        year: m.year,
+        kw: m.kw,
+        standort: m.standort,
+        updates
+      })
+    });
+
+    if (!res.ok){ console.warn('Batch HTTP-Fehler:', res.status); return false; }
+    const r = await res.json().catch(()=>({ok:true}));
+    if(!r.ok){ console.warn('Batch-Fehler:', r.error); return false; }
+    return true;
+  }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+}
+
     async function saveBatch(updates){
       cacheFridayTexts();
       if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
@@ -676,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Paint-Select Interaktion
-    document.querySelectorAll('.plannere td').forEach(td=>{
+    document.querySelectorAll('.planner td').forEach(td=>{
       const row = Number(td.dataset.row), day = Number(td.dataset.day);
       const ta = td.querySelector('textarea.cell');
       td.addEventListener('mousedown', (e)=>{
@@ -764,7 +807,8 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = url;
     }
     kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
-    yearSel?.addEventListener('change', ()=> navigate(parseInt(yearSel.value,10), parseInt(yearSel.value,10)));
+    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+
     document.getElementById('prevWeekBtn').onclick = ()=>{
       const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
       const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
