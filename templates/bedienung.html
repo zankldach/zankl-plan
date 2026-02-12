@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Bedienung – Zankl Plan{% endblock %}
+
+{% block content %}
+
+<h1>Zankl Plan – Jahres- & Wochenplanung</h1>
+
+<hr>
+
+<h2>1️⃣ Überblick</h2>
+
+<p>Das Planungstool besteht aus zwei Hauptbereichen:</p>
+
+<ul>
+  <li><strong>Jahresplanung</strong> → Strategische Gesamtübersicht aller Projekte</li>
+  <li><strong>Wochenplanung</strong> → Operative Detailplanung pro Kalenderwoche</li>
+</ul>
+
+<p>Zusätzlich:</p>
+
+<ul>
+  <li>Kleinbaustellen-Verwaltung</li>
+  <li>4-Tage-Woche Steuerung</li>
+  <li>Drag & Drop Funktionen</li>
+  <li>Konfliktanzeige</li>
+  <li>Farblogik</li>
+</ul>
+
+<hr>
+
+<h2>2️⃣ Jahresplanung</h2>
+
+<h3>🔎 Zweck</h3>
+<ul>
+  <li>Grobplanung aller Projekte</li>
+  <li>Ressourcenverteilung</li>
+  <li>Urlaubseintragung</li>
+  <li>Kapazitätsübersicht</li>
+  <li>Konflikterkennung</li>
+</ul>
+
+<h3>📅 Navigation</h3>
+<ul>
+  <li>Pfeile links/rechts → Jahr wechseln</li>
+  <li>Seitliches Scrollen durch das gesamte Jahr</li>
+  <li>Linke Zeilen bleiben beim Scrollen sichtbar</li>
+</ul>
+
+<h3>➕ Neuer Termin</h3>
+<ol>
+  <li>Startzelle anklicken</li>
+  <li>„Neuer Termin“ klicken</li>
+  <li>Daten eingeben</li>
+  <li>Speichern</li>
+</ol>
+
+<p>Nach dem Speichern springt die Ansicht automatisch zur neuen Position.</p>
+
+<h3>🎨 Farben</h3>
+<table border="1" cellpadding="6">
+<tr><th>Farbe</th><th>Bedeutung</th></tr>
+<tr><td>Blau</td><td>Fixtermin</td></tr>
+<tr><td>Gelb</td><td>Verschiebbar</td></tr>
+<tr><td>Rot</td><td>Urlaub</td></tr>
+<tr><td>Grün</td><td>Intern</td></tr>
+<tr><td>Weiß</td><td>Verrechnet</td></tr>
+</table>
+
+<h3>🔄 Drag & Drop</h3>
+<p>Termin anklicken → ziehen → loslassen → automatische Speicherung.</p>
+
+<h3>⚠️ Konflikte</h3>
+<p>Überlappungen in gleicher Zeile am gleichen Tag werden schwarz markiert.</p>
+
+<h3>🗓 Freitag ein-/ausblenden</h3>
+<p>Über die Checkbox im Wochenkopf steuerbar. Gilt für alle Bereiche dieser Woche.</p>
+
+<hr>
+
+<h2>3️⃣ Wochenplanung</h2>
+
+<h3>🔎 Zweck</h3>
+<p>Detailplanung je Mitarbeiter und Tag.</p>
+
+<h3>✏️ Zelle bearbeiten</h3>
+<p>Klicken → Text eingeben → automatische Speicherung.</p>
+
+<h3>🟧 Bereich füllen</h3>
+<p>SHIFT gedrückt halten → mehrere Tage markieren → Text übernehmen.</p>
+
+<h3>🧲 Drag & Drop</h3>
+<ul>
+  <li>Ziehen → verschieben</li>
+  <li>Strg + Ziehen → kopieren</li>
+  <li>Kleinbaustellen → immer Kopie</li>
+</ul>
+
+<h3>📅 4-Tage-Woche</h3>
+<p>Freitag wird gesperrt, bestehende Einträge bleiben sichtbar.</p>
+
+<hr>
+
+<h2>4️⃣ Workflow</h2>
+
+<h3>Jahresplanung</h3>
+<ul>
+  <li>Große Projekte eintragen</li>
+  <li>Urlaub planen</li>
+  <li>Ressourcen verteilen</li>
+</ul>
+
+<h3>Wochenplanung</h3>
+<ul>
+  <li>Detailplanung</li>
+  <li>Kleinbaustellen verteilen</li>
+  <li>Kurzfristige Änderungen</li>
+</ul>
+
+<hr>
+
+<p><strong>Hinweis:</strong> Änderungen werden automatisch gespeichert.</p>
+
+{% endblock %}
