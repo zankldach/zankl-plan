@@ -687,14 +687,16 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       // DragStart (Grid -> Grid)
-     inp.addEventListener('dragstart', (e)=>{
+   inp.addEventListener('dragstart', (e)=>{
   if (isLockedCell(inp)) { e.preventDefault(); return; }
 
   const m = metaFromEl(inp);
 
-  // 👇 WICHTIG: Copy-Status hier merken
-  DND_COPY = !!(e.ctrlKey || e.metaKey);
+  // immer erlauben, browser entscheidet nach dropEffect
+  e.dataTransfer.effectAllowed = 'copyMove';
+
   DND_FROM = 'grid';
+  DND_COPY = !!(e.ctrlKey || e.metaKey); // Startwert
 
   const payload = {
     source: 'grid',
@@ -708,16 +710,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const s = JSON.stringify(payload);
   try{ e.dataTransfer.setData('application/json', s); }catch(_){}
   try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
-
-  e.dataTransfer.effectAllowed = DND_COPY ? 'copy' : 'move';
 });
 
 
+
       inp.addEventListener('dragend', ()=>{
-        DND_FROM = null;
-        DND_COPY = false;
-        document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
-      });
+  DND_FROM = null;
+  document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+});
+
     });
 
     // TD Events für beide Tabellen (Shift-Fill + Drop Targets)
@@ -750,8 +751,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (DND_FROM === 'klein'){
           e.dataTransfer.dropEffect = 'copy';
         } else {
-          DND_COPY = !!(e.ctrlKey || e.metaKey);
-          e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
+// live aktualisieren (user kann STRG erst nach dem Start drücken)
+DND_COPY = !!(e.ctrlKey || e.metaKey);
+e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
+
+
         }
         e.preventDefault();
         td.classList.add('drag-over');
@@ -790,7 +794,7 @@ document.addEventListener('DOMContentLoaded', () => {
           applyColors();
 
           // MOVE: Quelle leeren (auch wenn andere Woche) – außer Copy gedrückt
-          if (!DND_COPY && !(srcYear === metaFromEl(tgt).year && srcKw === metaFromEl(tgt).kw && srcR === targetRow && srcD === targetDay)){
+          if (!FINAL_COPY && !(srcYear === metaFromEl(tgt).year && srcKw === metaFromEl(tgt).kw && srcR === targetRow && srcD === targetDay)){
             try{
               // Quelle finden (passende Tabelle anhand year/kw)
               const srcGrid = Array.from(document.querySelectorAll('[data-week-grid]'))
