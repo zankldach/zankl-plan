@@ -876,6 +876,12 @@ e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
         inp.addEventListener('blur',     () => saveKlein(inp.dataset.row, inp.value));
         inp.addEventListener('keydown',  (ev)=>{ if (ev.key==='Enter'){ ev.preventDefault(); saveKlein(inp.dataset.row, inp.value);} });
         inp.addEventListener('input',    ()=>{ debouncedSave(); ensureTrailingEmpty(); });
+// Doppelklick: gesamten Text markieren (Kleinbaustellen)
+inp.addEventListener('dblclick', (e) => {
+  e.preventDefault();
+  inp.focus();
+  inp.select();
+});
 
         function setDragPayload(dt, obj){
           const s = JSON.stringify(obj || {});
