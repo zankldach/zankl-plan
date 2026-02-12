@@ -297,6 +297,156 @@ document.addEventListener('DOMContentLoaded', () => {
         standort: grid.dataset.standort || CURLOC
       };
     }
+/* =======================
+   Autocomplete: "Name, Ort" aus Jahresplanung (je nach YEAR des aktiven Grids)
+   ======================= */
+const SUG = document.getElementById('titleSuggest');
+const TITLES_CACHE = new Map(); // year -> array
+let sugOpenFor = null;      // textarea element
+let sugItems = [];
+let sugIndex = -1;
+let blurTimer = null;
+
+async function ensureYearTitles(year){
+  if (TITLES_CACHE.has(year)) return TITLES_CACHE.get(year);
+  try{
+    const res = await fetch(`/api/year/titles?year=${encodeURIComponent(year)}`);
+    const js = await res.json().catch(()=>({}));
+    if (!res.ok || !js.ok) { TITLES_CACHE.set(year, []); return []; }
+    const arr = (js.titles || []).filter(Boolean);
+    TITLES_CACHE.set(year, arr);
+    return arr;
+  }catch(e){
+    console.warn('ensureYearTitles failed', e);
+    TITLES_CACHE.set(year, []);
+    return [];
+  }
+}
+
+function hideSuggest(){
+  if (!SUG) return;
+  SUG.style.display = 'none';
+  SUG.innerHTML = '';
+  sugOpenFor = null;
+  sugItems = [];
+  sugIndex = -1;
+}
+
+function positionSuggest(ta){
+  if (!SUG || !ta) return;
+  const r = ta.getBoundingClientRect();
+  const margin = 6;
+  let left = r.left;
+  let top  = r.bottom + margin;
+
+  const wantH = 240;
+  if (top + wantH > window.innerHeight) {
+    top = r.top - margin;
+    SUG.style.transform = 'translateY(-100%)';
+  } else {
+    SUG.style.transform = 'none';
+  }
+
+  left = Math.max(6, Math.min(left, window.innerWidth - 440));
+  SUG.style.left = `${left}px`;
+  SUG.style.top  = `${top}px`;
+}
+
+function renderSuggest(list, activeIdx){
+  if (!SUG) return;
+  SUG.innerHTML = '';
+  list.forEach((t, i) => {
+    const div = document.createElement('div');
+    div.className = 'item' + (i === activeIdx ? ' active' : '');
+    div.textContent = t;
+    div.addEventListener('mousedown', (e)=>{
+      e.preventDefault(); // damit blur nicht vorher schließt
+      applySuggestion(t);
+    });
+    SUG.appendChild(div);
+  });
+  SUG.style.display = list.length ? 'block' : 'none';
+}
+
+function getQueryFromTextarea(ta){
+  const v = ta.value || '';
+  const pos = ta.selectionStart ?? v.length;
+  const upTo = v.slice(0, pos);
+  const lastNl = upTo.lastIndexOf('\n');
+  return upTo.slice(lastNl + 1).trim();
+}
+
+function buildMatches(titles, q){
+  const qq = (q || '').trim().toLowerCase();
+  if (qq.length < 2) return [];
+  const starts = [];
+  const contains = [];
+  for (const t of titles){
+    const tl = String(t).toLowerCase();
+    if (tl.startsWith(qq)) starts.push(t);
+    else if (tl.includes(qq)) contains.push(t);
+    if (starts.length >= 10) break;
+  }
+  for (const t of contains){
+    if (starts.length >= 10) break;
+    starts.push(t);
+  }
+  return starts.slice(0, 10);
+}
+
+async function showSuggestFor(ta){
+  if (!SUG || !ta) return;
+  const m = metaFromEl(ta);                // <-- WICHTIG: aus dem aktiven Grid holen
+  const titles = await ensureYearTitles(m.year);
+
+  const q = getQueryFromTextarea(ta);
+  const matches = buildMatches(titles, q);
+
+  sugOpenFor = ta;
+  sugItems = matches;
+  sugIndex = matches.length ? 0 : -1;
+
+  positionSuggest(ta);
+  renderSuggest(matches, sugIndex);
+}
+
+function applySuggestion(text){
+  const ta = sugOpenFor;
+  if (!ta) return;
+
+  const v = ta.value || '';
+  const pos = ta.selectionStart ?? v.length;
+
+  const upTo = v.slice(0, pos);
+  const after = v.slice(pos);
+  const lastNl = upTo.lastIndexOf('\n');
+  const lineStart = lastNl + 1;
+
+  const beforeLine = v.slice(0, lineStart);
+  const newVal = beforeLine + text + after;
+  ta.value = newVal;
+
+  const newPos = (beforeLine + text).length;
+  ta.focus();
+  ta.setSelectionRange(newPos, newPos);
+
+  hideSuggest();
+
+  // Speichern + Farben
+  saveCellForEl(ta, ta.dataset.row, ta.dataset.day, ta.value).then(applyColors);
+}
+
+// Suggest bei Scroll/Resize korrekt halten
+window.addEventListener('scroll', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); }, true);
+window.addEventListener('resize', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); });
+
+// Klick außerhalb => schließen
+document.addEventListener('mousedown', (e)=>{
+  if (!SUG || SUG.style.display !== 'block') return;
+  if (SUG.contains(e.target)) return;
+  if (sugOpenFor && sugOpenFor.contains(e.target)) return;
+  hideSuggest();
+});
 
     /* ===== 4-Tage-Woche (Checkbox wirkt nur auf AKTUELLE Woche) ===== */
     function applyFourDayWeekUI(flag){
