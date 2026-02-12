@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}Wochenplanung Zankl Dach – KW {{ kw }} / {{ year }}{% endblock %}
 
@@ -12,36 +11,37 @@
   .toolbar select, .toolbar button, .toolbar input[type="checkbox"] { padding:6px 8px; font-size:14px; }
   .toolbar .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
 
-  .planner {
+  .planner{
     width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;
     background:#fff; border:1px solid #d9dee5; border-radius:8px; overflow:hidden;
     box-shadow:0 3px 12px rgba(0,0,0,0.06);
   }
-  .planner thead th {
+  .planner thead th{
     position:sticky; top:0; z-index:3; background:#0b57d0; color:#fff; padding:8px 6px; font-weight:700;
     border-bottom:1px solid rgba(255,255,255,0.2); text-align:center;
   }
   .planner thead th:first-child,
-  .planner tbody td:first-child {
+  .planner tbody td:first-child{
     position:sticky; left:0; z-index:2; background:#f7f9fc; font-weight:600; width:180px; text-align:left;
   }
-  .planner tbody td { border-top:1px solid #eef2f6; border-right:1px solid #eef2f6; padding:0 6px; height:54px; vertical-align:middle; }
-  .planner tbody tr:nth-child(even) td:first-child { background:#f1f5fb; }
-  .planner tbody tr:hover td { background:#fbfdff; }
-  .planner textarea.cell {
+  .planner tbody td{ border-top:1px solid #eef2f6; border-right:1px solid #eef2f6; padding:0 6px; height:54px; vertical-align:middle; }
+  .planner tbody tr:nth-child(even) td:first-child{ background:#f1f5fb; }
+  .planner tbody tr:hover td{ background:#fbfdff; }
+
+  .planner textarea.cell{
     width:100%; height:46px; padding:4px 6px; border:none; background:transparent;
     text-align:center; font-size:13px; outline:none; resize:vertical; line-height:1.2;
   }
-  .planner textarea.cell:focus { outline:2px solid #7db3ff; background:#fff; border-radius:6px; }
+  .planner textarea.cell:focus{ outline:2px solid #7db3ff; background:#fff; border-radius:6px; }
 
-  .drag-over { outline:2px dashed #2196f3; outline-offset:-4px; background:#eef7ff !important; }
-  .paint-select { outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
+  .drag-over{ outline:2px dashed #2196f3; outline-offset:-4px; background:#eef7ff !important; }
+  .paint-select{ outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
 
-  /* Freitag (4‑Tage‑Woche) */
+  /* Freitag (4-Tage-Woche) */
   td.cell-friday-locked { background:#e2e8f0 !important; }
   td.cell-friday-locked textarea.cell { color:#475569; }
 
-  /* Sidebar Kleinbaustellen */
+  /* Sidebar */
   .side { background:#fff; border:1px solid #d9dee5; border-radius:8px; box-shadow:0 3px 12px rgba(0,0,0,0.06); }
   .side header { background:#0b57d0; color:#fff; padding:8px 12px; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.2); position:sticky; top:0; z-index:2; }
   .side .list { max-height:70vh; overflow-y:auto; padding:8px 12px; }
@@ -53,18 +53,11 @@
     color:#111 !important; background:#fff !important;
   }
 
-  /* Ausgewählte (Doppelklick) Zelle im Grid */
   td.cell-selected { outline:2px solid #fb923c; outline-offset:-4px; background:#fff7ed !important; }
+  .side .row.klein-selected { outline:2px solid #fb923c; outline-offset:-3px; background:#fff7ed !important; border-radius:6px; }
 
-  /* Neu: Ausgewählte (Doppelklick) Kleinbaustellen-Zeile */
-  .side .row.klein-selected {
-    outline:2px solid #fb923c;
-    outline-offset:-3px;
-    background:#fff7ed !important;
-    border-radius:6px;
-  }
-    /* ===== Autocomplete für "Name, Ort" in Textareas ===== */
-  #titleSuggest {
+  /* Autocomplete */
+  #titleSuggest{
     position: fixed;
     z-index: 9999;
     display: none;
@@ -88,11 +81,7 @@
     text-overflow: ellipsis;
   }
   #titleSuggest .item:hover{ background:#f8fafc; }
-  #titleSuggest .item.active{
-    background:#eef7ff;
-    outline: 1px solid #7db3ff;
-  }
-
+  #titleSuggest .item.active{ background:#eef7ff; outline: 1px solid #7db3ff; }
 </style>
 {% endblock %}
 
@@ -112,106 +101,97 @@
     <span class="badge">KW {{ kw }} / {{ year }}</span>
   </div>
   <div class="group">
-    <label for="fourDayChk">4‑Tage‑Woche:</label>
+    <label for="fourDayChk">4-Tage-Woche:</label>
     <input type="checkbox" id="fourDayChk" {% if four_day_week %}checked{% endif %} />
   </div>
 </div>
 
 <div class="layout">
-  <!-- Wochenplan -->
-  <div class="plan-wrap">
-    <div class="week-grid" data-week-grid data-year="{{ year }}" data-kw="{{ kw }}" data-standort="{{ standort }}">
-    <table class="planner" id="weekTable">
-      <thead>
-        <tr>
-          <th>Mitarbeiter / Tag</th>
-          {% for day in days %}
-            <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in grid %}
-          {% set r = loop.index0 %}
-          <tr>
-            <td>
-              {% if employees and employees|length > r and employees[r] %}
-                {{ employees[r].name }}
-              {% else %}Unbenannt{% endif %}
-            </td>
-            {% for cell in row %}
-              {% set d = loop.index0 %}
-              <td data-row="{{ r }}" data-day="{{ d }}" class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-                <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
-                {% if d == 4 %}<span class="hint"></span>{% endif %}
-              </td>
+  <!-- LINKS: beide Wochen untereinander -->
+  <div>
+    <!-- Aktuelle Woche -->
+    <div class="plan-wrap">
+      <div class="week-grid" data-week-grid data-year="{{ year }}" data-kw="{{ kw }}" data-standort="{{ standort }}">
+        <table class="planner" id="weekTable">
+          <thead>
+            <tr>
+              <th>Mitarbeiter / Tag</th>
+              {% for day in days %}
+                <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in grid %}
+              {% set r = loop.index0 %}
+              <tr>
+                <td>
+                  {% if employees and employees|length > r and employees[r] %}
+                    {{ employees[r].name }}
+                  {% else %}Unbenannt{% endif %}
+                </td>
+                {% for cell in row %}
+                  {% set d = loop.index0 %}
+                  <td data-row="{{ r }}" data-day="{{ d }}" class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+                    <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+                    {% if d == 4 %}<span class="hint"></span>{% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
             {% endfor %}
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-<hr style="margin:16px 0; border:none; border-top:1px solid rgba(0,0,0,0.15);">
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-<div style="display:flex; justify-content:space-between; align-items:center; margin:6px 0 10px;">
-  <div style="font-weight:700;">
-    Nächste Woche: KW {{ next_kw }} / {{ next_year }}
-  </div>
-  <div style="opacity:.75; font-size:12px;">
-    Ziehen = verschieben · STRG+Ziehen = kopieren
-  </div>
-</div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid rgba(0,0,0,0.15);">
 
-<div class="plan-wrap">
-  <div class="week-grid"
-       data-week-grid
-       data-year="{{ next_year }}"
-       data-kw="{{ next_kw }}"
-       data-standort="{{ standort }}">
-    <table class="planner" id="weekTableNext">
-      <thead>
-        <tr>
-          <th>Mitarbeiter / Tag</th>
-          {% for day in next_days %}
-            <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
-          {% endfor %}
-        </tr>
-      </thead>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin:6px 0 10px;">
+      <div style="font-weight:700;">
+        Nächste Woche: KW {{ next_kw }} / {{ next_year }}
+      </div>
+      <div style="opacity:.75; font-size:12px;">
+        Ziehen = verschieben · STRG+Ziehen = kopieren
+      </div>
+    </div>
 
-      <tbody>
-        {% for row in next_grid %}
-          {% set r = loop.index0 %}
-          <tr>
-            <td>
-              {% if employees and employees|length > r and employees[r] %}
-                {{ employees[r].name }}
-              {% else %}
-                Unbenannt
-              {% endif %}
-            </td>
-
-            {% for cell in row %}
-              {% set d = loop.index0 %}
-              <td data-row="{{ r }}"
-                  data-day="{{ d }}"
-                  class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-                <textarea class="cell"
-                          draggable="true"
-                          data-row="{{ r }}"
-                          data-day="{{ d }}"
-                          rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
-                {% if d == 4 %}<span class="hint"></span>{% endif %}
-              </td>
+    <!-- Nächste Woche -->
+    <div class="plan-wrap">
+      <div class="week-grid" data-week-grid data-year="{{ next_year }}" data-kw="{{ next_kw }}" data-standort="{{ standort }}">
+        <table class="planner" id="weekTableNext">
+          <thead>
+            <tr>
+              <th>Mitarbeiter / Tag</th>
+              {% for day in next_days %}
+                <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in next_grid %}
+              {% set r = loop.index0 %}
+              <tr>
+                <td>
+                  {% if employees and employees|length > r and employees[r] %}
+                    {{ employees[r].name }}
+                  {% else %}Unbenannt{% endif %}
+                </td>
+                {% for cell in row %}
+                  {% set d = loop.index0 %}
+                  <td data-row="{{ r }}" data-day="{{ d }}" class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+                    <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+                    {% if d == 4 %}<span class="hint"></span>{% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
             {% endfor %}
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-</div>
 
-
-  <!-- Sidebar: Kleinbaustellen -->
+  <!-- RECHTS: Kleinbaustellen -->
   <div>
     <div class="side">
       <header>Kleinbaustellen</header>
@@ -234,31 +214,24 @@
     </div>
   </div>
 </div>
-<!-- Autocomplete Dropdown (global, fixed) -->
-<div id="titleSuggest"></div>
 
+<div id="titleSuggest"></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    // --- Kontext ---
     const KW = parseInt('{{ kw }}', 10);
     const YEAR = parseInt('{{ year }}', 10);
     const CURLOC = "{{ (standort|string) }}";
     const MAX_WEEKS = 53;
-    const FOUR_DAY = !!({{ 1 if four_day_week else 0 }});
-    const PLAN_KEY = (loc, kw, year)=> `${loc}|${kw}|${year}`;
-    const planKey = PLAN_KEY(CURLOC, KW, YEAR);
 
     const kwSel = document.getElementById('kwSelect');
     const yearSel = document.getElementById('yearSelect');
     const fourChk = document.getElementById('fourDayChk');
 
-    /* =======================
-       KW/Jahr füllen
-       ======================= */
+    /* ===== KW/Jahr füllen ===== */
     (function initSelectors(){
       if (kwSel && kwSel.options.length === 0) {
         for (let w=1; w<=MAX_WEEKS; w++){
@@ -276,57 +249,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })();
 
-    /* =======================
-       4‑Tage‑Woche UI
-       ======================= */
-    function cacheFridayTexts(){
-      const vals = Array.from(document.querySelectorAll('.planner td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
-      localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
+    function navigate(kw, year){
+      window.location.href = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
     }
-    function restoreFridayFromCache(){
-      const raw = localStorage.getItem(`fridayCache:${planKey}`); if (!raw) return;
-      const cache = JSON.parse(raw);
-      document.querySelectorAll('.planner td[data-day="4"] textarea.cell').forEach((inp, idx)=>{
-        if (!inp.value && cache && typeof cache[idx] === 'string') inp.value = cache[idx];
-      });
-    }
-    function applyFourDayWeekUI(flag){
-      document.querySelectorAll('.planner td[data-day="4"]').forEach(td=>{
-        const ta = td.querySelector('textarea.cell');
-        const hint = td.querySelector('.hint');
-        if (flag) {
-          td.classList.add('cell-friday-locked');
-          if (ta) ta.readOnly = true;
-          if (hint) hint.textContent = "";
-        } else {
-          td.classList.remove('cell-friday-locked');
-          if (ta) ta.readOnly = false;
-          if (hint) hint.textContent = "";
-        }
-      });
-    }
-    async function setFourDayWeek(flag){
-      const payload = { year: parseInt(yearSel?.value ?? '{{ year }}',10),
-                        kw: parseInt(kwSel?.value ?? '{{ kw }}',10),
-                        standort: CURLOC, four_day_week: !!flag };
-      try{
-        const res = await fetch('/api/week/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        if (!res.ok) console.warn('4‑Tage‑Woche speichern fehlgeschlagen', await res.text());
-      }catch(e){ console.warn('Netz-/Serverfehler bei 4‑Tage‑Woche:', e); }
-    }
-    fourChk.addEventListener('change', async ()=>{
-      const flag = fourChk.checked;
-      cacheFridayTexts();
-      applyFourDayWeekUI(flag);
-      applyColors();
-      await setFourDayWeek(flag);
-    });
-    applyFourDayWeekUI(FOUR_DAY);
-    if (FOUR_DAY) restoreFridayFromCache();
+    kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
 
-    /* =======================
-       Farben
-       ======================= */
+    document.getElementById('prevWeekBtn').onclick = ()=>{
+      const kw = parseInt(kwSel?.value ?? KW,10);
+      const yr = parseInt(yearSel?.value ?? YEAR,10);
+      const p = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
+      navigate(p.kw, p.year);
+    };
+    document.getElementById('nextWeekBtn').onclick = ()=>{
+      const kw = parseInt(kwSel?.value ?? KW,10);
+      const yr = parseInt(yearSel?.value ?? YEAR,10);
+      const n = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
+      navigate(n.kw, n.year);
+    };
+
+    /* ===== Farben ===== */
     const RESERVED_RED = new Set(["urlaub","krank","arzt","za","xxx","x","xx"]);
     const norm = s => (s||"").trim().toLowerCase().replace(/\s+/g, " ");
     function hashCode(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h); }
@@ -344,7 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
         else { inp.style.background='transparent'; inp.style.border='none'; }
       });
     }
-    // --- NEU: Metadaten (KW/Jahr/Standort) aus dem nächstgelegenen Grid-Container holen ---
+
+    /* ===== Meta pro Grid (wichtig für 2 Tabellen!) ===== */
     function metaFromEl(el){
       const grid = el.closest('[data-week-grid]');
       if (!grid) return { year: YEAR, kw: KW, standort: CURLOC };
@@ -355,74 +298,63 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    /* =======================
-       Speichern (Zellen)
-       ======================= */
-async function saveCell(row, day, value){
-  if (Number(day) === 4) cacheFridayTexts();
-  if (fourChk.checked && Number(day) === 4) return true;
-
-  const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
-
-  try{
-    const res = await fetch('/api/week/set-cell',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        row:Number(row), day:Number(day), value: value ?? "",
-        kw: m.kw,
-        year: m.year,
-        standort: m.standort
-      })
-    });
-
-    if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
-    const r = await res.json().catch(()=>({ok:true}));
-    if(!r.ok){ console.warn('Save-Fehler:', r.error); return false; }
-    return true;
-  }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
-}
-
-async function saveBatch(updates){
-  cacheFridayTexts();
-  if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
-
-  const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
-
-  try{
-    const res = await fetch('/api/week/batch',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        year: m.year,
-        kw: m.kw,
-        standort: m.standort,
-        updates
-      })
-    });
-
-    if (!res.ok){ console.warn('Batch HTTP-Fehler:', res.status); return false; }
-    const r = await res.json().catch(()=>({ok:true}));
-    if(!r.ok){ console.warn('Batch-Fehler:', r.error); return false; }
-    return true;
-  }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
-}
-
-    async function saveBatch(updates){
-      cacheFridayTexts();
-      if (fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
+    /* ===== 4-Tage-Woche (Checkbox wirkt nur auf AKTUELLE Woche) ===== */
+    function applyFourDayWeekUI(flag){
+      document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
+        const ta = td.querySelector('textarea.cell');
+        if (flag) { td.classList.add('cell-friday-locked'); if (ta) ta.readOnly = true; }
+        else      { td.classList.remove('cell-friday-locked'); if (ta) ta.readOnly = false; }
+      });
+    }
+    async function setFourDayWeek(flag){
+      const payload = {
+        year: parseInt(yearSel?.value ?? YEAR, 10),
+        kw: parseInt(kwSel?.value ?? KW, 10),
+        standort: CURLOC,
+        four_day_week: !!flag
+      };
       try{
-        const res = await fetch('/api/week/batch',{
-          method:'POST', headers:{'Content-Type':'application/json'},
-      const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+        const res = await fetch('/api/week/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (!res.ok) console.warn('4-Tage-Woche speichern fehlgeschlagen', await res.text());
+      }catch(e){ console.warn('Netz-/Serverfehler bei 4-Tage-Woche:', e); }
+    }
+    applyFourDayWeekUI(!!({{ 1 if four_day_week else 0 }}));
+    fourChk.addEventListener('change', async ()=>{
+      applyFourDayWeekUI(fourChk.checked);
+      applyColors();
+      await setFourDayWeek(fourChk.checked);
+    });
 
-      body: JSON.stringify({
-        year: m.year,
-        kw: m.kw,
-        standort: m.standort,
-        updates
-      })
+    /* ===== Speichern ===== */
+    async function saveCellForEl(el, row, day, value){
+      const m = metaFromEl(el);
+      // Freitag in aktueller Woche gesperrt?
+      if (m.year === YEAR && m.kw === KW && fourChk.checked && Number(day) === 4) return true;
 
+      try{
+        const res = await fetch('/api/week/set-cell', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            row:Number(row), day:Number(day), value: value ?? "",
+            kw: m.kw, year: m.year, standort: m.standort
+          })
+        });
+        if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
+        const r = await res.json().catch(()=>({ok:true}));
+        if(!r.ok){ console.warn('Save-Fehler:', r.error); return false; }
+        return true;
+      }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
+    }
+
+    async function saveBatchForEl(el, updates){
+      const m = metaFromEl(el);
+      if (m.year === YEAR && m.kw === KW && fourChk.checked) updates = updates.filter(u => Number(u.day) !== 4);
+      try{
+        const res = await fetch('/api/week/batch', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ year: m.year, kw: m.kw, standort: m.standort, updates })
         });
         if (!res.ok){ console.warn('Batch HTTP-Fehler:', res.status); return false; }
         const r = await res.json().catch(()=>({ok:true}));
@@ -431,447 +363,190 @@ async function saveBatch(updates){
       }catch(e){ console.warn('Netz-/Serverfehler:', e); return false; }
     }
 
-    /* =======================
-       Bereichs-Füllen (Shift)
-       ======================= */
-    const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
-    function getCell(row, day){ return document.querySelector(`.planner textarea.cell[data-row="${row}"][data-day="${day}"]`); }
-    function getTd(row, day){ return document.querySelector(`.planner td[data-row="${row}"][data-day="${day}"]`); }
+    /* ===== Shift-Füllen (pro Tabelle) ===== */
+    const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"", grid:null };
+    function getTd(grid, row, day){ return grid.querySelector(`td[data-row="${row}"][data-day="${day}"]`); }
+    function getTa(grid, row, day){ return grid.querySelector(`textarea.cell[data-row="${row}"][data-day="${day}"]`); }
 
-    function paintRange(row, d1, d2, on=true){
+    function paintRange(grid, row, d1, d2, on=true){
       const [from,to] = d1<=d2 ? [d1,d2] : [d2,d1];
       for (let d=from; d<=to; d++){
-        if (fourChk.checked && d===4) continue;
-        const td = getTd(row, d); if (!td) continue;
+        if (grid.id === 'weekTable' && fourChk.checked && d===4) continue;
+        const td = getTd(grid, row, d); if (!td) continue;
         td.classList.toggle('paint-select', on);
       }
     }
-    function startFill(row, day, value){ fillState.active=true; fillState.row=row; fillState.startDay=day; fillState.lastDay=day; fillState.value=value||""; paintRange(row, day, day, true); }
-    function updateFill(day){ if (!fillState.active) return; paintRange(fillState.row, fillState.startDay, fillState.lastDay, false); fillState.lastDay=day; paintRange(fillState.row, fillState.startDay, fillState.lastDay, true); }
+
+    function startFill(grid, row, day, value){
+      fillState.active=true; fillState.grid=grid;
+      fillState.row=row; fillState.startDay=day; fillState.lastDay=day; fillState.value=value||"";
+      paintRange(grid, row, day, day, true);
+    }
+    function updateFill(day){
+      if (!fillState.active) return;
+      paintRange(fillState.grid, fillState.row, fillState.startDay, fillState.lastDay, false);
+      fillState.lastDay=day;
+      paintRange(fillState.grid, fillState.row, fillState.startDay, fillState.lastDay, true);
+    }
     async function endFill(){
       if (!fillState.active) return;
+      const grid = fillState.grid;
       const row = fillState.row;
       const d1 = Math.min(fillState.startDay, fillState.lastDay);
       const d2 = Math.max(fillState.startDay, fillState.lastDay);
-      let updates = [];
+
+      const updates = [];
       for (let d=d1; d<=d2; d++){
-        if (fourChk.checked && d===4) continue;
-        const ta = getCell(row, d); if (!ta) continue;
+        if (grid.id === 'weekTable' && fourChk.checked && d===4) continue;
+        const ta = getTa(grid, row, d); if (!ta) continue;
         ta.value = fillState.value;
         updates.push({ row, day:d, value: fillState.value });
       }
-      await saveBatch(updates);
+      const anyTa = getTa(grid, row, d1) || grid; // meta braucht ein Element aus dem Grid
+      await saveBatchForEl(anyTa, updates);
       applyColors();
-      paintRange(row, d1, d2, false);
-      fillState.active=false; fillState.row=null; fillState.startDay=null; fillState.lastDay=null; fillState.value="";
+      paintRange(grid, row, d1, d2, false);
+
+      fillState.active=false; fillState.row=null; fillState.startDay=null; fillState.lastDay=null; fillState.value=""; fillState.grid=null;
     }
 
-    /* =======================
-       DnD & Eingabe-Events im Grid
-       ======================= */
-    const inputs = document.querySelectorAll('.planner textarea.cell');
-    const cells  = document.querySelectorAll('.planner td');
-    /* =======================
-       Autocomplete: "Name, Ort" aus Jahresplanung (nur aktuelles YEAR)
-       ======================= */
-    const SUG = document.getElementById('titleSuggest');
-    let YEAR_TITLES = [];
-    let sugOpenFor = null;      // textarea element
-    let sugItems = [];
-    let sugIndex = -1;
-    let blurTimer = null;
+    /* ===== Events für beide Tabellen ===== */
+    let DND_COPY = false;
+    let DND_FROM = null;
 
-    async function loadYearTitles(){
-      try{
-        const res = await fetch(`/api/year/titles?year=${encodeURIComponent(YEAR)}`);
-        const js = await res.json().catch(()=>({}));
-        if (!res.ok || !js.ok) return;
-        YEAR_TITLES = (js.titles || []).filter(Boolean);
-      }catch(e){
-        console.warn('loadYearTitles failed', e);
-      }
-    }
+    document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
+      inp.addEventListener('input', applyColors);
 
-    function hideSuggest(){
-      if (!SUG) return;
-      SUG.style.display = 'none';
-      SUG.innerHTML = '';
-      sugOpenFor = null;
-      sugItems = [];
-      sugIndex = -1;
-    }
-
-    function positionSuggest(ta){
-      if (!SUG || !ta) return;
-      const r = ta.getBoundingClientRect();
-      const margin = 6;
-      let left = r.left;
-      let top  = r.bottom + margin;
-
-      // wenn unten kein Platz -> nach oben
-      const wantH = 240;
-      if (top + wantH > window.innerHeight) {
-        top = r.top - margin;
-        // dann über dem Feld anzeigen
-        SUG.style.transform = 'translateY(-100%)';
-      } else {
-        SUG.style.transform = 'none';
-      }
-
-      // Clamp
-      left = Math.max(6, Math.min(left, window.innerWidth - 440));
-      SUG.style.left = `${left}px`;
-      SUG.style.top  = `${top}px`;
-    }
-
-    function renderSuggest(list, activeIdx){
-      if (!SUG) return;
-      SUG.innerHTML = '';
-      list.forEach((t, i) => {
-        const div = document.createElement('div');
-        div.className = 'item' + (i === activeIdx ? ' active' : '');
-        div.textContent = t;
-        div.addEventListener('mousedown', (e)=>{
-          // mousedown (nicht click), damit blur nicht davor zusperrt
-          e.preventDefault();
-          applySuggestion(t);
-        });
-        SUG.appendChild(div);
-      });
-      SUG.style.display = list.length ? 'block' : 'none';
-    }
-
-    function getQueryFromTextarea(ta){
-      // Wir nehmen die aktuelle Zeile bis Cursor (für "hu" -> Vorschläge)
-      const v = ta.value || '';
-      const pos = ta.selectionStart ?? v.length;
-      const upTo = v.slice(0, pos);
-      const lastNl = upTo.lastIndexOf('\n');
-      const q = upTo.slice(lastNl + 1).trim();
-      return q;
-    }
-
-    function buildMatches(q){
-      const qq = (q || '').trim().toLowerCase();
-      if (qq.length < 2) return [];
-      // startsWith priorisiert, danach contains
-      const starts = [];
-      const contains = [];
-      for (const t of YEAR_TITLES){
-        const tl = String(t).toLowerCase();
-        if (tl.startsWith(qq)) starts.push(t);
-        else if (tl.includes(qq)) contains.push(t);
-        if (starts.length >= 10) break;
-      }
-      // wenn starts wenig, ergänze mit contains
-      for (const t of contains){
-        if (starts.length >= 10) break;
-        starts.push(t);
-      }
-      return starts.slice(0, 10);
-    }
-
-    function showSuggestFor(ta){
-      if (!SUG || !ta) return;
-      const q = getQueryFromTextarea(ta);
-      const matches = buildMatches(q);
-
-      sugOpenFor = ta;
-      sugItems = matches;
-      sugIndex = matches.length ? 0 : -1;
-
-      positionSuggest(ta);
-      renderSuggest(matches, sugIndex);
-    }
-
-    function applySuggestion(text){
-      const ta = sugOpenFor;
-      if (!ta) return;
-
-      const v = ta.value || '';
-      const pos = ta.selectionStart ?? v.length;
-
-      // ersetze nur die aktuelle Zeile (ab letztem \n bis Cursor)
-      const upTo = v.slice(0, pos);
-      const after = v.slice(pos);
-
-      const lastNl = upTo.lastIndexOf('\n');
-      const lineStart = lastNl + 1;
-
-      const beforeLine = v.slice(0, lineStart);
-      const newVal = beforeLine + text + after;
-
-      ta.value = newVal;
-
-      // Cursor ans Ende des eingefügten Textes
-      const newPos = (beforeLine + text).length;
-      ta.focus();
-      ta.setSelectionRange(newPos, newPos);
-
-      hideSuggest();
-
-      // speichern + färben
-      saveCell(ta.dataset.row, parseInt(ta.dataset.day,10), ta.value).then(applyColors);
-    }
-
-    // Suggestion bei Resize/Scroll korrekt halten
-    window.addEventListener('scroll', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); }, true);
-    window.addEventListener('resize', ()=>{ if (sugOpenFor) positionSuggest(sugOpenFor); });
-
-    // global: click außerhalb -> schließen
-    document.addEventListener('mousedown', (e)=>{
-      if (!SUG || SUG.style.display !== 'block') return;
-      if (SUG.contains(e.target)) return;
-      if (sugOpenFor && sugOpenFor.contains(e.target)) return;
-      hideSuggest();
-    });
-
-    // Textareas anbinden
-    inputs.forEach(ta => {
-      ta.addEventListener('focus', ()=>{
-        clearTimeout(blurTimer);
-        showSuggestFor(ta);
+      inp.addEventListener('blur', async ()=>{
+        await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
+        applyColors();
       });
 
-      ta.addEventListener('input', ()=>{
-        // nur wenn nicht Freitag gesperrt
-        if (fourChk.checked && Number(ta.dataset.day) === 4) return;
-        showSuggestFor(ta);
-      });
-
-      ta.addEventListener('keydown', (ev)=>{
-        if (!SUG || SUG.style.display !== 'block') return;
-        if (!sugItems || !sugItems.length) return;
-
-        if (ev.key === 'ArrowDown'){
+      inp.addEventListener('keydown', async ev=>{
+        if (ev.key === 'Enter' && !ev.shiftKey){
           ev.preventDefault();
-          sugIndex = Math.min(sugItems.length - 1, sugIndex + 1);
-          renderSuggest(sugItems, sugIndex);
-        } else if (ev.key === 'ArrowUp'){
-          ev.preventDefault();
-          sugIndex = Math.max(0, sugIndex - 1);
-          renderSuggest(sugItems, sugIndex);
-        } else if (ev.key === 'Enter'){
-          // nur wenn Suggest offen ist und du NICHT Shift+Enter machst
-          if (ev.shiftKey) return;
-          ev.preventDefault();
-          if (sugIndex >= 0 && sugItems[sugIndex]) applySuggestion(sugItems[sugIndex]);
-        } else if (ev.key === 'Escape'){
-          ev.preventDefault();
-          hideSuggest();
+          await saveCellForEl(inp, inp.dataset.row, inp.dataset.day, inp.value);
+          applyColors();
         }
       });
 
-      ta.addEventListener('blur', ()=>{
-        // kleine Verzögerung, damit Klick auf Suggestion funktioniert
-        clearTimeout(blurTimer);
-        blurTimer = setTimeout(hideSuggest, 140);
-      });
-    });
-
-    // Titles laden
-    loadYearTitles();
-
-    let DND_COPY = false;   // nur für grid→grid
-    let DND_FROM = null;    // 'grid' | 'klein' | null
-
-    inputs.forEach(inp=>{
       inp.addEventListener('dragstart', e=>{
         if (e.shiftKey || fillState.active) { e.preventDefault(); return; }
         const payload = { source:'grid', row:Number(inp.dataset.row), day:Number(inp.dataset.day), value: inp.value || '' };
         const s = JSON.stringify(payload);
         try{ e.dataTransfer.setData('application/json', s); }catch(_){}
         try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
-        try{ e.dataTransfer.setData('text', s); }catch(_){}
         e.dataTransfer.effectAllowed = 'copyMove';
         inp.classList.add('dragging');
         DND_FROM = 'grid';
       });
+
       inp.addEventListener('dragend', ()=>{
         document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
         document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
         DND_FROM = null;
       });
-
-      // Doppelklick: Zelle markieren + Text selektieren
-      inp.addEventListener('dblclick', ()=>{
-        const td = inp.closest('td');
-        clearSelected();
-        td.classList.add('cell-selected');
-        SELECTED.row = Number(inp.dataset.row);
-        SELECTED.day = Number(inp.dataset.day);
-        inp.focus(); inp.select();
-      });
-
-      // Speichern bei Blur/Enter
-      inp.addEventListener('blur', async ()=>{ await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value); applyColors(); });
-      inp.addEventListener('keydown', async ev=>{
-        if (ev.key === 'Enter' && !ev.shiftKey){
-          ev.preventDefault();
-          await saveCell(inp.dataset.row, parseInt(inp.dataset.day,10), inp.value);
-          applyColors();
-          const r=Number(inp.dataset.row), d=Number(inp.dataset.day);
-          const next = document.querySelector(`textarea.cell[data-row="${r}"][data-day="${d+1}"]`);
-          (next||inp).focus();
-        }
-      });
-      inp.addEventListener('input', applyColors);
     });
 
-    // Paint-Select Interaktion
-    document.querySelectorAll('.planner td').forEach(td=>{
-      const row = Number(td.dataset.row), day = Number(td.dataset.day);
-      const ta = td.querySelector('textarea.cell');
+    document.querySelectorAll('.planner td[data-row][data-day]').forEach(td=>{
+      const grid = td.closest('table.planner');
+
       td.addEventListener('mousedown', (e)=>{
         if (e.button !== 0) return;
-        if (!e.shiftKey) { clearSelected(); return; }
-        if (fourChk.checked && day === 4) return;
+        const row = Number(td.dataset.row), day = Number(td.dataset.day);
+        if (!e.shiftKey) return;
+        if (grid.id === 'weekTable' && fourChk.checked && day === 4) return;
         e.preventDefault();
-        const startValue = (ta?.value ?? "");
-        startFill(row, day, startValue);
+        const ta = td.querySelector('textarea.cell');
+        startFill(grid, row, day, ta?.value ?? "");
       });
-      td.addEventListener('mouseenter', ()=>{ if (fillState.active && row === fillState.row) updateFill(day); });
-    });
-    document.addEventListener('mouseup', endFill);
-    document.addEventListener('mouseleave', endFill);
 
-    // Drop-Ziele
-    cells.forEach(td=>{
+      td.addEventListener('mouseenter', ()=>{
+        if (!fillState.active) return;
+        if (fillState.grid !== grid) return;
+        updateFill(Number(td.dataset.day));
+      });
+
       td.addEventListener('dragover', e=>{
         if (fillState.active) return;
-        if (DND_FROM === 'klein') {
-          e.dataTransfer.dropEffect = 'copy';
-        } else {
+        if (DND_FROM === 'klein') e.dataTransfer.dropEffect = 'copy';
+        else {
           DND_COPY = !!(e.ctrlKey || e.metaKey);
           e.dataTransfer.dropEffect = DND_COPY ? 'copy' : 'move';
         }
         e.preventDefault();
         const targetDay = Number(td.dataset.day);
-        if (fourChk.checked && targetDay === 4) return;
+        if (grid.id === 'weekTable' && fourChk.checked && targetDay === 4) return;
         td.classList.add('drag-over');
       });
+
       td.addEventListener('dragleave', ()=> td.classList.remove('drag-over'));
+
       td.addEventListener('drop', async e=>{
         td.classList.remove('drag-over');
         if (fillState.active) return;
         e.preventDefault();
-        try{
-          let dataStr =
-            e.dataTransfer.getData('application/json') ||
-            e.dataTransfer.getData('text/plain') ||
-            e.dataTransfer.getData('text') || '';
-          let payload = {};
-          try { payload = JSON.parse(dataStr || '{}'); } catch(_) { payload = {}; }
 
-          const targetRow = Number(td.dataset.row);
-          const targetDay = Number(td.dataset.day);
-          if (fourChk.checked && targetDay === 4) return;
-          const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
+        let dataStr =
+          e.dataTransfer.getData('application/json') ||
+          e.dataTransfer.getData('text/plain') || '';
+        let payload = {};
+        try { payload = JSON.parse(dataStr || '{}'); } catch(_) { payload = {}; }
 
-          if (payload && payload.source === 'grid'){
-            const text  = (payload.value || '');
-            const srcR  = Number(payload.row);
-            const srcD  = Number(payload.day);
+        const targetRow = Number(td.dataset.row);
+        const targetDay = Number(td.dataset.day);
+        if (grid.id === 'weekTable' && fourChk.checked && targetDay === 4) return;
 
-            tgt.value = text;
-            await saveCell(targetRow, targetDay, text);
-            applyColors();
+        const tgt = td.querySelector('textarea.cell'); if (!tgt) return;
 
-            if (!DND_COPY && (srcR !== targetRow || srcD !== targetDay)) {
-              const srcTa = document.querySelector(`.planner textarea.cell[data-row="${srcR}"][data-day="${srcD}"]`);
-              if (srcTa) {
-                srcTa.value = '';
-                await saveCell(srcR, srcD, '');
-                applyColors();
-              }
+        if (payload.source === 'grid'){
+          const text  = (payload.value || '');
+          const srcR  = Number(payload.row);
+          const srcD  = Number(payload.day);
+
+          tgt.value = text;
+          await saveCellForEl(tgt, targetRow, targetDay, text);
+          applyColors();
+
+          if (!DND_COPY && (srcR !== targetRow || srcD !== targetDay)) {
+            // Quelle NUR in derselben Tabelle löschen (damit du nicht unabsichtlich in der anderen Woche löschst)
+            const srcTa = grid.querySelector(`textarea.cell[data-row="${srcR}"][data-day="${srcD}"]`);
+            if (srcTa) {
+              srcTa.value = '';
+              await saveCellForEl(srcTa, srcR, srcD, '');
+              applyColors();
             }
-            return;
           }
+          return;
+        }
 
-          if (payload && payload.source === 'klein'){
-            const text = (payload.value || '').trim();
-            tgt.value = text;
-            await saveCell(targetRow, targetDay, text);
-            applyColors();
-            return;
-          }
-        }catch(err){ console.warn('Drop-Fehler:', err); }
+        if (payload.source === 'klein'){
+          const text = (payload.value || '').trim();
+          tgt.value = text;
+          await saveCellForEl(tgt, targetRow, targetDay, text);
+          applyColors();
+          return;
+        }
       });
     });
 
-    /* =======================
-       Navigation
-       ======================= */
-    function navigate(kw, year){
-      const url = `/week?standort=${encodeURIComponent(CURLOC)}&kw=${kw}&year=${year}`;
-      window.location.href = url;
-    }
-    kwSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
-    yearSel?.addEventListener('change', ()=> navigate(parseInt(kwSel.value,10), parseInt(yearSel.value,10)));
+    document.addEventListener('mouseup', endFill);
+    document.addEventListener('mouseleave', endFill);
 
-    document.getElementById('prevWeekBtn').onclick = ()=>{
-      const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
-      const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
-      const p = (kw>1) ? {kw: kw-1, year: yr} : {kw: MAX_WEEKS, year: yr-1};
-      navigate(p.kw, p.year);
-    };
-    document.getElementById('nextWeekBtn').onclick = ()=>{
-      const kw = parseInt(kwSel?.value ?? '{{ kw }}',10);
-      const yr = parseInt(yearSel?.value ?? '{{ year }}',10);
-      const n = (kw<MAX_WEEKS) ? {kw: kw+1, year: yr} : {kw: 1, year: yr+1};
-      navigate(n.kw, n.year);
-    };
-
-    // ======= Farben initial =======
-    applyColors();
-
-    /* =======================
-       Kleinbaustellen: Speichern + Auto-Zeile + DnD + NEU: Doppelklick/Löschen
-       ======================= */
+    /* ===== Kleinbaustellen (wie vorher) ===== */
     (function () {
       const LIST = document.getElementById('kleinList');
-      const JOB_SELECTOR = '#kleinList input.job';
-
-      // --- Auswahlstatus für Klein ---
-      let SELECTED_KLEIN = { rowIndex: null };
-      function clearSelectedKlein(){
-        LIST.querySelectorAll('.row.klein-selected').forEach(r => r.classList.remove('klein-selected'));
-        SELECTED_KLEIN = { rowIndex:null };
-      }
-
-      // Globale Delete/Esc für Klein
-      document.addEventListener('keydown', async (ev)=>{
-        if (SELECTED_KLEIN.rowIndex === null) return;
-        if (ev.key === 'Delete' || ev.key === 'Backspace') {
-          ev.preventDefault();
-          const inp = LIST.querySelector(`input.job[data-row="${SELECTED_KLEIN.rowIndex}"]`);
-          if (inp) {
-            inp.value = '';
-            await saveKlein(inp.dataset.row, '');
-            ensureTrailingEmpty();
-          }
-          clearSelectedKlein();
-        } else if (ev.key === 'Escape') {
-          ev.preventDefault();
-          clearSelectedKlein();
-        }
-      });
-      // Klick außerhalb der Liste → Auswahl aufheben
-      document.addEventListener('mousedown', (e)=>{
-        if (!LIST.contains(e.target)) clearSelectedKlein();
-      });
+      if (!LIST) return;
 
       function debounce(fn, wait) { let t=null; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), wait);} }
 
       async function saveKlein(rowIndex, text) {
         try {
           const payload = { standort: CURLOC, row_index: Number(rowIndex||0), text: (text||'').trim() };
-          const res = await fetch('/api/klein/set', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          if (!res.ok) console.warn('Kleinbaustellen-HTTP-Fehler:', res.status);
+          await fetch('/api/klein/set', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         } catch (e) { console.warn('Netz-/Serverfehler Kleinbaustellen:', e); }
       }
 
-      // ---- neue Zeile erzeugen (inkl. Verkabelung) ----
       function makeRow(idx, value="") {
         const row = document.createElement('div');
         row.className = 'row';
@@ -880,11 +555,10 @@ async function saveBatch(updates){
           <input type="text" class="job" data-row="${idx}" value="${(value||'').replace(/"/g,'&quot;')}" placeholder="">
         `;
         LIST.appendChild(row);
-        wireRow(row); // Events + DnD + Doppelklick setzen
+        wireRow(row);
         return row;
       }
 
-      // ---- immer eine leere Zeile am Ende ----
       function ensureTrailingEmpty() {
         const inputs = Array.from(LIST.querySelectorAll('input.job'));
         const last = inputs[inputs.length - 1];
@@ -895,32 +569,19 @@ async function saveBatch(updates){
         }
       }
 
-      // ---- Einzelzeile verkabeln ----
       function wireRow(rowEl) {
         const handle = rowEl.querySelector('.drag-handle');
         const inp    = rowEl.querySelector('input.job');
         const debouncedSave = debounce(() => { saveKlein(inp.dataset.row, inp.value); }, 400);
 
-        // Speichern
         inp.addEventListener('blur',     () => saveKlein(inp.dataset.row, inp.value));
-        inp.addEventListener('keydown',  (ev)=>{ if (ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); saveKlein(inp.dataset.row, inp.value);} });
+        inp.addEventListener('keydown',  (ev)=>{ if (ev.key==='Enter'){ ev.preventDefault(); saveKlein(inp.dataset.row, inp.value);} });
         inp.addEventListener('input',    ()=>{ debouncedSave(); ensureTrailingEmpty(); });
 
-        // NEU: Doppelklick → Zeile markieren (für Delete/Backspace)
-        inp.addEventListener('dblclick', ()=>{
-          clearSelected();            // Grid-Auswahl aufheben (falls aktiv)
-          clearSelectedKlein();       // existierende Klein-Auswahl aufheben
-          rowEl.classList.add('klein-selected');
-          SELECTED_KLEIN.rowIndex = Number(inp.dataset.row);
-          inp.focus(); inp.select();
-        });
-
-        // DnD (immer COPY von rechts)
         function setDragPayload(dt, obj){
           const s = JSON.stringify(obj || {});
           try{ dt.setData('application/json', s); }catch(_){}
           try{ dt.setData('text/plain', s); }catch(_){}
-          try{ dt.setData('text', s); }catch(_){}
         }
         [handle, inp].forEach(draggable=>{
           draggable.setAttribute('draggable','true');
@@ -928,62 +589,20 @@ async function saveBatch(updates){
             const value = (inp.value || '').trim();
             setDragPayload(e.dataTransfer, { source:'klein', value });
             e.dataTransfer.effectAllowed = 'copy';
-            draggable.classList.add('dragging');
             DND_FROM = 'klein';
           });
-          draggable.addEventListener('dragend', ()=>{
-            draggable.classList.remove('dragging');
-            DND_FROM = null;
-          });
+          draggable.addEventListener('dragend', ()=>{ DND_FROM = null; });
         });
       }
 
-      // Initial alle vorhandenen Zeilen verkabeln + leere Endzeile sicherstellen
       LIST.querySelectorAll('.row').forEach(wireRow);
       ensureTrailingEmpty();
-
-      // Exponiere für andere Handler (optional)
-      window._kleinEnsureTrailingEmpty = ensureTrailingEmpty;
     })();
 
-    /* =======================
-       Klein → Grid (immer Copy) – DnD_FROM wird oben gesetzt
-       ======================= */
-    (function () {
-      const LIST = document.getElementById('kleinList');
-      if (!LIST) return;
-      // keine zusätzliche Logik notwendig
-    })();
-
-    /* =======================
-       Doppelklick-Markierung & Leeren per Entf/Backspace (Grid)
-       ======================= */
-    let SELECTED = { row: null, day: null };
-    function clearSelected(){
-      document.querySelectorAll('.planner td.cell-selected').forEach(td => td.classList.remove('cell-selected'));
-      SELECTED = { row:null, day:null };
-    }
-    document.addEventListener('keydown', async (ev)=>{
-      if (SELECTED.row === null || SELECTED.day === null) return;
-      if (ev.key === 'Delete' || ev.key === 'Backspace'){
-        ev.preventDefault();
-        if (FOUR_DAY && Number(SELECTED.day) === 4) return;
-        const ta = document.querySelector(`.planner textarea.cell[data-row="${SELECTED.row}"][data-day="${SELECTED.day}"]`);
-        if (ta){
-          ta.value = '';
-          await saveCell(SELECTED.row, SELECTED.day, '');
-          applyColors();
-        }
-        clearSelected();
-      } else if (ev.key === 'Escape'){
-        ev.preventDefault();
-        clearSelected();
-      }
-    });
-
+    applyColors(); // wichtig: Farben initial setzen
   } catch (err) {
     console.error('Init-Fehler in week.html:', err);
-    alert('Fehler beim Laden der Wochenansicht. Bitte Seite hart neu laden (Strg+F5).');
+    alert('Fehler beim Laden der Wochenansicht. Bitte Strg+F5.');
   }
 });
 </script>
