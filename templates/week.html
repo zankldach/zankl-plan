@@ -282,13 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const s=70, l=80;
       return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)` };
     }
-function applyColors(){
-document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
-  inp.addEventListener('input', ()=>{
-    applyColors();
-  });
-});
 
+function applyColors(){
+  document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
+    const c = colorFor(inp.value);
     if (c){
       inp.style.background = c.bg;
       inp.style.border = `1px solid ${c.border}`;
@@ -296,21 +293,32 @@ document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
     } else {
       inp.style.background = 'transparent';
       inp.style.border = 'none';
+      inp.addEventListener('dragstart', e=>{
+  const m = metaFromEl(inp);
+  const payload = {
+    source: 'grid',
+    row: Number(inp.dataset.row),
+    day: Number(inp.dataset.day),
+    value: inp.value || '',
+    year: m.year,
+    kw: m.kw
+  };
+  const s = JSON.stringify(payload);
+  try{ e.dataTransfer.setData('application/json', s); }catch(_){}
+  try{ e.dataTransfer.setData('text/plain', s); }catch(_){}
+  e.dataTransfer.effectAllowed = 'copyMove';
+  DND_FROM = 'grid';
+});
+
+inp.addEventListener('dragend', ()=>{
+  DND_FROM = null;
+  document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+});
     }
   });
 }
 
 
-inp.addEventListener('input', ()=>{
-  // wenn Freitag in aktueller Woche gesperrt, dann nix
-  const m = metaFromEl(inp);
-  if (m.year === YEAR && m.kw === KW && fourChk.checked && Number(inp.dataset.day) === 4) return;
-  showSuggestFor(inp);
-});
-inp.addEventListener('blur', ()=>{
-  clearTimeout(blurTimer);
-  blurTimer = setTimeout(hideSuggest, 140);
-});
 
 
     /* ===== Meta pro Grid (wichtig für 2 Tabellen!) ===== */
@@ -729,16 +737,14 @@ document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
           return;
         }
 
-if (payload.source === 'klein'){
-  const text = (payload.value || '').trim();
-  tgt.value = text;
-  await saveCellForEl(tgt, targetRow, targetDay, text);
-  applyColors();
-  return;
-}
-
-      });
-    });
+  if (payload.source === 'klein'){
+    const text = (payload.value || '').trim();
+    tgt.value = text;
+    await saveCellForEl(tgt, targetRow, targetDay, text);
+    applyColors();
+    return;
+  }
+}); // <- WICHTIG: dieser Abschluss muss da sein
 
     document.addEventListener('mouseup', endFill);
     document.addEventListener('mouseleave', endFill);
