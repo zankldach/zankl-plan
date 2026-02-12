@@ -12,27 +12,27 @@
   .toolbar select, .toolbar button, .toolbar input[type="checkbox"] { padding:6px 8px; font-size:14px; }
   .toolbar .badge { display:inline-block; padding:4px 8px; background:#eef2f6; border-radius:999px; font-size:12px; color:#334155; }
 
-  #weekTable {
+  .planner {
     width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;
     background:#fff; border:1px solid #d9dee5; border-radius:8px; overflow:hidden;
     box-shadow:0 3px 12px rgba(0,0,0,0.06);
   }
-  #weekTable thead th {
+  .planner thead th {
     position:sticky; top:0; z-index:3; background:#0b57d0; color:#fff; padding:8px 6px; font-weight:700;
     border-bottom:1px solid rgba(255,255,255,0.2); text-align:center;
   }
-  #weekTable thead th:first-child,
-  #weekTable tbody td:first-child {
+  .planner thead th:first-child,
+  .planner tbody td:first-child {
     position:sticky; left:0; z-index:2; background:#f7f9fc; font-weight:600; width:180px; text-align:left;
   }
-  #weekTable tbody td { border-top:1px solid #eef2f6; border-right:1px solid #eef2f6; padding:0 6px; height:54px; vertical-align:middle; }
-  #weekTable tbody tr:nth-child(even) td:first-child { background:#f1f5fb; }
-  #weekTable tbody tr:hover td { background:#fbfdff; }
-  #weekTable textarea.cell {
+  .planner tbody td { border-top:1px solid #eef2f6; border-right:1px solid #eef2f6; padding:0 6px; height:54px; vertical-align:middle; }
+  .planner tbody tr:nth-child(even) td:first-child { background:#f1f5fb; }
+  .planner tbody tr:hover td { background:#fbfdff; }
+  .planner textarea.cell {
     width:100%; height:46px; padding:4px 6px; border:none; background:transparent;
     text-align:center; font-size:13px; outline:none; resize:vertical; line-height:1.2;
   }
-  #weekTable textarea.cell:focus { outline:2px solid #7db3ff; background:#fff; border-radius:6px; }
+  .planner textarea.cell:focus { outline:2px solid #7db3ff; background:#fff; border-radius:6px; }
 
   .drag-over { outline:2px dashed #2196f3; outline-offset:-4px; background:#eef7ff !important; }
   .paint-select { outline:2px dashed #fb923c; outline-offset:-4px; background:#fff7ed !important; }
@@ -120,6 +120,7 @@
 <div class="layout">
   <!-- Wochenplan -->
   <div class="plan-wrap">
+    <div class="week-grid" data-week-grid data-year="{{ year }}" data-kw="{{ kw }}" data-standort="{{ standort }}">
     <table class="planner" id="weekTable">
       <thead>
         <tr>
@@ -150,6 +151,50 @@
       </tbody>
     </table>
   </div>
+<hr style="margin:16px 0; border:none; border-top:1px solid rgba(0,0,0,0.15);">
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin:6px 0 10px;">
+  <div style="font-weight:700;">
+    Nächste Woche: KW {{ next_kw }} / {{ next_year }}
+  </div>
+  <div style="opacity:.75; font-size:12px;">
+    Ziehen = verschieben · STRG+Ziehen = kopieren
+  </div>
+</div>
+
+<div class="plan-wrap">
+  <div class="week-grid" data-week-grid data-year="{{ next_year }}" data-kw="{{ next_kw }}" data-standort="{{ standort }}">
+    <table class="planner" id="weekTableNext">
+      <thead>
+        <tr>
+          <th>Mitarbeiter / Tag</th>
+          {% for day in next_days %}
+            <th>{{ day.label }}<br><small>{{ day.date }}</small></th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in next_grid %}
+          {% set r = loop.index0 %}
+          <tr>
+            <td>
+              {% if employees and employees|length > r and employees[r] %}
+                {{ employees[r].name }}
+              {% else %}Unbenannt{% endif %}
+            </td>
+            {% for cell in row %}
+              {% set d = loop.index0 %}
+              <td data-row="{{ r }}" data-day="{{ d }}" class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
+                <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+                {% if d == 4 %}<span class="hint"></span>{% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
   <!-- Sidebar: Kleinbaustellen -->
   <div>
@@ -220,18 +265,18 @@ document.addEventListener('DOMContentLoaded', () => {
        4‑Tage‑Woche UI
        ======================= */
     function cacheFridayTexts(){
-      const vals = Array.from(document.querySelectorAll('#weekTable td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
+      const vals = Array.from(document.querySelectorAll('.planner td[data-day="4"] textarea.cell')).map(inp => inp.value || "");
       localStorage.setItem(`fridayCache:${planKey}`, JSON.stringify(vals));
     }
     function restoreFridayFromCache(){
       const raw = localStorage.getItem(`fridayCache:${planKey}`); if (!raw) return;
       const cache = JSON.parse(raw);
-      document.querySelectorAll('#weekTable td[data-day="4"] textarea.cell').forEach((inp, idx)=>{
+      document.querySelectorAll('.planner td[data-day="4"] textarea.cell').forEach((inp, idx)=>{
         if (!inp.value && cache && typeof cache[idx] === 'string') inp.value = cache[idx];
       });
     }
     function applyFourDayWeekUI(flag){
-      document.querySelectorAll('#weekTable td[data-day="4"]').forEach(td=>{
+      document.querySelectorAll('.planner td[data-day="4"]').forEach(td=>{
         const ta = td.querySelector('textarea.cell');
         const hint = td.querySelector('.hint');
         if (flag) {
@@ -278,11 +323,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return { bg:`hsla(${h}, ${s}%, ${l}%, 0.65)`, border:`hsl(${h}, ${s}%, ${Math.max(40, l-25)}%)` };
     }
     function applyColors(){
-      document.querySelectorAll('#weekTable textarea.cell').forEach(inp=>{
+      document.querySelectorAll('.planner textarea.cell').forEach(inp=>{
         const c = colorFor(inp.value);
         if (c){ inp.style.background=c.bg; inp.style.border=`1px solid ${c.border}`; inp.style.borderRadius='6px'; }
         else { inp.style.background='transparent'; inp.style.border='none'; }
       });
+    }
+    // --- NEU: Metadaten (KW/Jahr/Standort) aus dem nächstgelegenen Grid-Container holen ---
+    function metaFromEl(el){
+      const grid = el.closest('[data-week-grid]');
+      if (!grid) return { year: YEAR, kw: KW, standort: CURLOC };
+      return {
+        year: parseInt(grid.dataset.year || YEAR, 10),
+        kw: parseInt(grid.dataset.kw || KW, 10),
+        standort: grid.dataset.standort || CURLOC
+      };
     }
 
     /* =======================
@@ -294,12 +349,15 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const res = await fetch('/api/week/set-cell',{
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            row:Number(row), day:Number(day), value: value ?? "",
-            kw: parseInt(kwSel?.value ?? '{{ kw }}', 10),
-            year: parseInt(yearSel?.value ?? '{{ year }}', 10),
-            standort: CURLOC
-          })
+      const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+
+      body: JSON.stringify({
+        row:Number(row), day:Number(day), value: value ?? "",
+        kw: m.kw,
+        year: m.year,
+        standort: m.standort
+      })
+
         });
         if (!res.ok){ console.warn('Save HTTP-Fehler:', res.status); return false; }
         const r = await res.json().catch(()=>({ok:true}));
@@ -313,12 +371,15 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const res = await fetch('/api/week/batch',{
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            year: parseInt(yearSel?.value ?? '{{ year }}', 10),
-            kw: parseInt(kwSel?.value ?? '{{ kw }}', 10),
-            standort: CURLOC,
-            updates
-          })
+      const m = metaFromEl(document.activeElement) || {year:YEAR, kw:KW, standort:CURLOC};
+
+      body: JSON.stringify({
+        year: m.year,
+        kw: m.kw,
+        standort: m.standort,
+        updates
+      })
+
         });
         if (!res.ok){ console.warn('Batch HTTP-Fehler:', res.status); return false; }
         const r = await res.json().catch(()=>({ok:true}));
@@ -331,8 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
        Bereichs-Füllen (Shift)
        ======================= */
     const fillState = { active:false, row:null, startDay:null, lastDay:null, value:"" };
-    function getCell(row, day){ return document.querySelector(`#weekTable textarea.cell[data-row="${row}"][data-day="${day}"]`); }
-    function getTd(row, day){ return document.querySelector(`#weekTable td[data-row="${row}"][data-day="${day}"]`); }
+    function getCell(row, day){ return document.querySelector(`.planner textarea.cell[data-row="${row}"][data-day="${day}"]`); }
+    function getTd(row, day){ return document.querySelector(`.planner td[data-row="${row}"][data-day="${day}"]`); }
+
     function paintRange(row, d1, d2, on=true){
       const [from,to] = d1<=d2 ? [d1,d2] : [d2,d1];
       for (let d=from; d<=to; d++){
@@ -364,8 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
     /* =======================
        DnD & Eingabe-Events im Grid
        ======================= */
-    const inputs = document.querySelectorAll('#weekTable textarea.cell');
-    const cells  = document.querySelectorAll('#weekTable td');
+    const inputs = document.querySelectorAll('.planner textarea.cell');
+    const cells  = document.querySelectorAll('.planner td');
     /* =======================
        Autocomplete: "Name, Ort" aus Jahresplanung (nur aktuelles YEAR)
        ======================= */
@@ -614,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Paint-Select Interaktion
-    document.querySelectorAll('#weekTable td').forEach(td=>{
+    document.querySelectorAll('.plannere td').forEach(td=>{
       const row = Number(td.dataset.row), day = Number(td.dataset.day);
       const ta = td.querySelector('textarea.cell');
       td.addEventListener('mousedown', (e)=>{
@@ -673,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyColors();
 
             if (!DND_COPY && (srcR !== targetRow || srcD !== targetDay)) {
-              const srcTa = document.querySelector(`#weekTable textarea.cell[data-row="${srcR}"][data-day="${srcD}"]`);
+              const srcTa = document.querySelector(`.planner textarea.cell[data-row="${srcR}"][data-day="${srcD}"]`);
               if (srcTa) {
                 srcTa.value = '';
                 await saveCell(srcR, srcD, '');
@@ -854,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
        ======================= */
     let SELECTED = { row: null, day: null };
     function clearSelected(){
-      document.querySelectorAll('#weekTable td.cell-selected').forEach(td => td.classList.remove('cell-selected'));
+      document.querySelectorAll('.planner td.cell-selected').forEach(td => td.classList.remove('cell-selected'));
       SELECTED = { row:null, day:null };
     }
     document.addEventListener('keydown', async (ev)=>{
@@ -862,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ev.key === 'Delete' || ev.key === 'Backspace'){
         ev.preventDefault();
         if (FOUR_DAY && Number(SELECTED.day) === 4) return;
-        const ta = document.querySelector(`#weekTable textarea.cell[data-row="${SELECTED.row}"][data-day="${SELECTED.day}"]`);
+        const ta = document.querySelector(`.planner textarea.cell[data-row="${SELECTED.row}"][data-day="${SELECTED.day}"]`);
         if (ta){
           ta.value = '';
           await saveCell(SELECTED.row, SELECTED.day, '');
