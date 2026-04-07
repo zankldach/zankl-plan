@@ -130,7 +130,7 @@
                 {% for cell in row %}
                   {% set d = loop.index0 %}
                   <td data-row="{{ r }}" data-day="{{ d }}" class="{% if four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-                    <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+                    <textarea class="cell" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
                   </td>
                 {% endfor %}
               </tr>
@@ -175,7 +175,7 @@
                 {% for cell in row %}
                   {% set d = loop.index0 %}
                   <td data-row="{{ r }}" data-day="{{ d }}" class="{% if next_four_day_week and d == 4 %}cell-friday-locked{% endif %}">
-                    <textarea class="cell" draggable="true" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
+                    <textarea class="cell" data-row="{{ r }}" data-day="{{ d }}" rows="2">{{ cell.text if cell and cell.text is defined else '' }}</textarea>
                   </td>
                 {% endfor %}
               </tr>
